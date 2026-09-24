@@ -61,7 +61,7 @@ describe("insights", () => {
   });
 
   it("never shows more than the requested number of insights", () => {
-    const res = generateInsights({ analyses: analyses({ traits: { earlyDeathRisk: 1 } }), dataSource: "synthetic" }, 2);
+    const res = generateInsights({ analyses: analyses({ traits: { earlyDeathRisk: 1 } }), dataSource: "synthetic" }, { maxVisible: 2 });
     expect(res.insights.length).toBeLessThanOrEqual(2);
   });
 

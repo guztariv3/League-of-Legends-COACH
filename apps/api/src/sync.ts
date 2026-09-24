@@ -1,6 +1,6 @@
 import { analyzeMatch, ANALYSIS_VERSION } from "@coach/analysis";
 import { normalizeMatch } from "@coach/domain";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { schema, type Db } from "./db/index.js";
 import type { MatchSource } from "./sources.js";
 
@@ -84,6 +84,7 @@ export class SyncService {
         await this.ingest(account, matchId);
         this.progress.get(accountId)!.done++;
       }
+      await this.reanalyze(account);
 
       await this.db.update(schema.riotAccounts)
         .set({ syncStatus: "ok", lastSyncedAt: new Date() })
@@ -109,6 +110,37 @@ export class SyncService {
       if (linked.size > 0 || page.length < PAGE_SIZE) break;
     }
     return fresh.slice(0, MAX_INCREMENTAL);
+  }
+
+  /**
+   * Adds current-version analyses for stored games analysed under an older
+   * ANALYSIS_VERSION. Older rows are kept untouched (historical truth is
+   * immutable); queries read the current version.
+   */
+  private async reanalyze(account: typeof schema.riotAccounts.$inferSelect): Promise<void> {
+    const missing = await this.db
+      .select({ matchId: schema.accountMatches.matchId })
+      .from(schema.accountMatches)
+      .leftJoin(
+        schema.matchAnalyses,
+        and(
+          eq(schema.matchAnalyses.matchId, schema.accountMatches.matchId),
+          eq(schema.matchAnalyses.puuid, account.puuid),
+          eq(schema.matchAnalyses.analysisVersion, ANALYSIS_VERSION),
+        ),
+      )
+      .where(and(eq(schema.accountMatches.accountId, account.id), isNull(schema.matchAnalyses.matchId)));
+    for (const { matchId } of missing) {
+      const [raw] = await this.db.select().from(schema.rawMatches).where(eq(schema.rawMatches.matchId, matchId));
+      if (!raw) continue;
+      const [tl] = await this.db.select().from(schema.rawTimelines).where(eq(schema.rawTimelines.matchId, matchId));
+      const analysis = analyzeMatch(normalizeMatch(raw.payload as Parameters<typeof normalizeMatch>[0]), (tl?.payload ?? null) as Parameters<typeof analyzeMatch>[1], account.puuid);
+      if (analysis) {
+        await this.db.insert(schema.matchAnalyses)
+          .values({ matchId, puuid: account.puuid, analysisVersion: ANALYSIS_VERSION, data: analysis })
+          .onConflictDoNothing();
+      }
+    }
   }
 
   private async ingest(account: typeof schema.riotAccounts.$inferSelect, matchId: string): Promise<void> {

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router";
 import { api } from "../api";
 import { ErrorNotice, Loading, pct, SyntheticBadge } from "../components/ui";
 import { useLoad } from "../session";
@@ -33,8 +34,8 @@ export function Champions() {
       </div>
       <ul className="grid grid-2" style={{ listStyle: "none", padding: 0, margin: 0 }}>
         {list.map((c) => (
-          <li key={c.key} className="tile">
-            <div className="row">
+          <li key={c.key}>
+            <Link to={`/champions/${encodeURIComponent(c.name)}`} className="tile row" style={{ textDecoration: "none", color: "inherit" }}>
               <div>
                 <div className="match-title">{c.name}</div>
                 <div className="tile-note">{c.title} · {c.tags.join(", ")}</div>
@@ -50,7 +51,7 @@ export function Champions() {
                   <div className="tile-note">Sin partidas</div>
                 )}
               </div>
-            </div>
+            </Link>
           </li>
         ))}
       </ul>

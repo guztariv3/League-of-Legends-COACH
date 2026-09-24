@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { Link } from "react-router";
+import { Goals } from "../components/Goals";
 import { api } from "../api";
 import { ErrorNotice, InsightView, Loading, MatchItem, modeLabel, num, pct, roleLabel, StatTile, SyntheticBadge } from "../components/ui";
 import { useLoad, useSession } from "../session";
@@ -10,7 +12,10 @@ import { useLoad, useSession } from "../session";
 export function Dashboard() {
   const { me } = useSession();
   const syncKey = me?.accounts.map((a) => `${a.id}:${a.sync.status}`).join(",");
-  const { data, error, loading } = useLoad(() => api.dashboard(), [syncKey]);
+  const [version, setVersion] = useState(0);
+  const { data, error, loading } = useLoad(() => api.dashboard(), [syncKey, version]);
+  const goals = useLoad(() => api.goals(), [syncKey, version]);
+  const reload = () => setVersion((v) => v + 1);
 
   if (loading && !data) return <Loading />;
   if (error) return <ErrorNotice error={error} />;
@@ -57,6 +62,17 @@ export function Dashboard() {
         </section>
       )}
 
+      {goals.data && (goals.data.goals.length > 0 || goals.data.suggestions.length > 0) && (
+        <section className="card stack" aria-labelledby="goals-h">
+          <div className="row">
+            <h2 id="goals-h" style={{ margin: 0 }}>Tus objetivos</h2>
+            <span className="spacer" />
+            <Link to="/profile#goals">Gestionar</Link>
+          </div>
+          <Goals data={goals.data} onChange={reload} compact />
+        </section>
+      )}
+
       <div className="grid grid-2">
         <section className="card stack" aria-labelledby="insights-h">
           <h2 id="insights-h">Lo que más importa ahora</h2>
@@ -65,7 +81,17 @@ export function Dashboard() {
               Todavía no tengo suficiente información fiable para sacar conclusiones. Con más partidas analizadas empezaré a detectar patrones.
             </p>
           ) : (
-            data.insights.map((i) => <InsightView key={i.id} insight={i} />)
+            data.insights.map((i) => (
+              <InsightView key={i.id} insight={i}>
+                <button
+                  className="btn btn-ghost"
+                  style={{ padding: "4px 0", fontSize: "0.8rem", color: "var(--text-muted)" }}
+                  onClick={async () => { await api.feedback(i.id, i.title); reload(); }}
+                >
+                  No me resulta útil
+                </button>
+              </InsightView>
+            ))
           )}
         </section>
 

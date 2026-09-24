@@ -200,3 +200,23 @@ describe("sync regressions", () => {
     expect(sr.body.matches.every((m: any) => m.queue === "Ranked Solo/Duo")).toBe(true);
   }, 60_000);
 });
+
+describe("analysis versioning", () => {
+  it("adds current-version analyses for games stored under an older version, keeping the old rows", async () => {
+    const { schema } = await import("./db/index.js");
+    const { and, eq } = await import("drizzle-orm");
+    const { ANALYSIS_VERSION } = await import("@coach/analysis");
+    const cookie = await login("Versioned");
+    const { body } = await call("/accounts", { method: "POST", cookie, body: JSON.stringify({ gameName: "Versioner", tagLine: "EUW", platform: "euw1" }) });
+    await ctx.sync.start(body.account.id);
+    const [acc] = await database.db.select().from(schema.riotAccounts).where(eq(schema.riotAccounts.id, body.account.id));
+    const [row] = await database.db.select().from(schema.matchAnalyses).where(eq(schema.matchAnalyses.puuid, acc!.puuid));
+    // Pretend this game was only analysed by an older version.
+    await database.db.update(schema.matchAnalyses).set({ analysisVersion: ANALYSIS_VERSION - 1 })
+      .where(and(eq(schema.matchAnalyses.matchId, row!.matchId), eq(schema.matchAnalyses.puuid, acc!.puuid)));
+    await ctx.sync.start(body.account.id);
+    const versions = (await database.db.select().from(schema.matchAnalyses)
+      .where(and(eq(schema.matchAnalyses.matchId, row!.matchId), eq(schema.matchAnalyses.puuid, acc!.puuid)))).map((r) => r.analysisVersion).sort();
+    expect(versions).toEqual([ANALYSIS_VERSION - 1, ANALYSIS_VERSION]);
+  }, 60_000);
+});

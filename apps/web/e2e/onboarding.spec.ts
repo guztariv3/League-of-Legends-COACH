@@ -20,7 +20,8 @@ test("onboarding → dashboard → matches → match detail → settings", async
   await page.screenshot({ path: `test-results/dashboard-${info.project.name}.png`, fullPage: true });
 
   await page.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: "Partidas" }).click();
-  await expect(page.getByText(/^\d+ partidas$/)).toBeVisible();
+  await expect(page).toHaveURL(/\/matches$/);
+  await expect(page.locator('p[aria-live="polite"]', { hasText: /^\d+ partidas/ })).toBeVisible();
   await page.getByLabel("Resultado").selectOption("win");
   await expect(page).toHaveURL(/result=win/);
   await page.getByLabel("Modo").selectOption("summoners_rift");

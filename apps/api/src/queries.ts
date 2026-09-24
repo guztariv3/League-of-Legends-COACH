@@ -36,6 +36,8 @@ export async function analysesFor(db: Db, accounts: Account[]): Promise<AccountA
 export interface MatchFilters {
   accountId?: string;
   champion?: string;
+  /** Lane opponent champion (Summoner's Rift). */
+  opponent?: string;
   role?: string;
   result?: "win" | "loss";
   patch?: string;
@@ -51,6 +53,7 @@ export function applyFilters(list: AccountAnalysis[], f: MatchFilters): AccountA
     (a) =>
       (!f.accountId || a.accountId === f.accountId) &&
       (!f.champion || a.championName.toLowerCase() === f.champion.toLowerCase()) &&
+      (!f.opponent || (a.laneOpponentChampion ?? "").toLowerCase() === f.opponent.toLowerCase()) &&
       (!f.role || a.role === f.role) &&
       (!f.result || (f.result === "win") === a.win) &&
       (!f.patch || a.patch === f.patch) &&

@@ -31,6 +31,8 @@ export interface PlayerTraits {
   csPerMin: number;
   /** 0..1, how likely the player is to die before minute 14. */
   earlyDeathRisk: number;
+  /** Optional champion on which the player takes much more early risk (champion-specific pattern). */
+  riskyChampion?: string;
 }
 
 export interface GenerateOptions {
@@ -265,7 +267,8 @@ function generateGame(
       const killerTeam = rng.chance(pMyTeam) ? playerTeam : playerTeam === 100 ? 200 : 100;
       const victims = players.filter((p) => p.teamId !== killerTeam);
       let victim = rng.pick(victims);
-      if (killerTeam !== playerTeam && minute < 14 && rng.chance(traits.earlyDeathRisk * 0.35)) victim = me;
+      const risk = me.champ.id === traits.riskyChampion ? Math.min(1, traits.earlyDeathRisk + 0.8) : traits.earlyDeathRisk;
+      if (killerTeam !== playerTeam && minute < 14 && rng.chance(risk * 0.35)) victim = me;
       const killer = rng.pick(players.filter((p) => p.teamId === killerTeam));
       const assisters = players
         .filter((p) => p.teamId === killerTeam && p !== killer)

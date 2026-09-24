@@ -9,9 +9,10 @@ import {
 } from "@coach/domain";
 
 /** Bump whenever per-match analysis output changes. Old rows keep their version (history is immutable). */
-export const ANALYSIS_VERSION = 1;
+export const ANALYSIS_VERSION = 2;
 
 const EARLY_GAME_MS = 14 * 60_000;
+const MID_GAME_MS = 15 * 60_000;
 
 export interface MatchAnalysis {
   analysisVersion: number;
@@ -44,6 +45,10 @@ export interface MatchAnalysis {
   /** Deaths before 14:00; requires the timeline. */
   earlyDeaths: number | null;
   laneOpponentChampion: string | null;
+  /** Team total gold minus enemy team total gold at 15:00 (game-state proxy). v2+ */
+  teamGoldDiff15: number | null;
+  /** Deaths from 15:00 onwards; requires the timeline and a game lasting past 15:00. v2+ */
+  deathsAfter15: number | null;
   hasTimeline: boolean;
 }
 
@@ -62,6 +67,25 @@ export function analyzeMatch(match: NormalizedMatch, timeline: RawTimeline | nul
     earlyDeaths = timeline.info.frames
       .flatMap((f) => f.events)
       .filter((e) => e.type === "CHAMPION_KILL" && e["victimId"] === me.participantId && e.timestamp < EARLY_GAME_MS)
+      .length;
+  }
+
+  let teamGoldDiff15: number | null = null;
+  let deathsAfter15: number | null = null;
+  if (timeline && sr && match.durationSec > MID_GAME_MS / 1000) {
+    const frame = timeline.info.frames.find((f) => Math.round(f.timestamp / timeline.info.frameInterval) === 15);
+    if (frame) {
+      let diff = 0;
+      for (const p of match.participants) {
+        const g = frame.participantFrames[String(p.participantId)]?.totalGold;
+        if (g === undefined) { diff = NaN; break; }
+        diff += p.teamId === me.teamId ? g : -g;
+      }
+      teamGoldDiff15 = Number.isFinite(diff) ? diff : null;
+    }
+    deathsAfter15 = timeline.info.frames
+      .flatMap((f) => f.events)
+      .filter((e) => e.type === "CHAMPION_KILL" && e["victimId"] === me.participantId && e.timestamp >= MID_GAME_MS)
       .length;
   }
 
@@ -97,6 +121,8 @@ export function analyzeMatch(match: NormalizedMatch, timeline: RawTimeline | nul
     goldDiff15: gd(15),
     earlyDeaths,
     laneOpponentChampion: opp?.championName ?? null,
+    teamGoldDiff15,
+    deathsAfter15,
     hasTimeline: timeline !== null,
   };
 }

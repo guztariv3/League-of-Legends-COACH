@@ -1,7 +1,7 @@
 import { explainInsight, type AiProvider, type ExplanationLevel } from "@coach/ai";
 import { mean, summarize } from "@coach/analysis";
 import { isPlatformId, normalizeMatch, PLATFORMS, queueLabel, type RawMatch, type RawTimeline } from "@coach/domain";
-import { generateInsights, matchHeadline } from "@coach/insights";
+import { matchHeadline } from "@coach/insights";
 import type { KnowledgeRegistry } from "@coach/knowledge";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
@@ -12,6 +12,8 @@ import { schema, type Db } from "./db/index.js";
 import { analysesFor, applyFilters, userAccounts, type AccountAnalysis } from "./queries.js";
 import type { MatchSource } from "./sources.js";
 import { SyncService } from "./sync.js";
+import { makeServices, Preferences } from "./services.js";
+import { personalRoutes } from "./personal.js";
 
 export interface AppDeps {
   cfg: Config;
@@ -21,15 +23,13 @@ export interface AppDeps {
   aiProviders: AiProvider[];
 }
 
-const Preferences = z.object({
-  level: z.enum(["beginner", "intermediate", "advanced", "expert"]).default("intermediate"),
-  language: z.enum(["es", "en"]).default("es"),
-});
-type Preferences = z.infer<typeof Preferences>;
+
 
 export function createApp(deps: AppDeps) {
   const { cfg, db, source, knowledge } = deps;
   const sync = new SyncService(db, source);
+  const services = makeServices(db, source);
+  const { prefsFor, profileAnalyses, insightsFor } = services;
   const app = new Hono<AuthVars>().basePath("/api");
   const secureCookies = cfg.env === "production";
 
@@ -74,11 +74,6 @@ export function createApp(deps: AppDeps) {
   const authed = new Hono<AuthVars>();
   authed.use("*", requireUser(db));
 
-  const prefsFor = async (userId: string): Promise<Preferences> => {
-    const [row] = await db.select().from(schema.preferences).where(eq(schema.preferences.userId, userId));
-    return Preferences.parse(row?.data ?? {});
-  };
-
   const accountView = (a: Awaited<ReturnType<typeof userAccounts>>[number]) => ({
     id: a.id,
     riotId: `${a.gameName}#${a.tagLine}`,
@@ -103,8 +98,12 @@ export function createApp(deps: AppDeps) {
     return c.json({ ok: true });
   });
 
+  /** Partial update: only the fields sent are changed. */
   authed.put("/preferences", async (c) => {
-    const parsed = Preferences.safeParse(await c.req.json().catch(() => null));
+    const body = await c.req.json().catch(() => null);
+    if (!body || typeof body !== "object") return c.json({ error: "invalid_body" }, 400);
+    const current = await prefsFor(c.get("userId"));
+    const parsed = Preferences.safeParse({ ...current, ...body, memory: { ...current.memory, ...(body.memory ?? {}) } });
     if (!parsed.success) return c.json({ error: "invalid_body" }, 400);
     await db.insert(schema.preferences).values({ userId: c.get("userId"), data: parsed.data })
       .onConflictDoUpdate({ target: schema.preferences.userId, set: { data: parsed.data } });
@@ -191,11 +190,6 @@ export function createApp(deps: AppDeps) {
 
   // analysis views
 
-  const profileAnalyses = async (userId: string) => {
-    const accounts = (await userAccounts(db, userId)).filter((a) => a.includeInProfile);
-    return { accounts, analyses: await analysesFor(db, accounts) };
-  };
-
   const averages = (list: AccountAnalysis[]) => {
     const usable = list.filter((a) => a.analyzable);
     return { deathsPerMin: mean(usable.map((a) => a.deathsPerMin)) || 0, kda: mean(usable.map((a) => a.kda)) || 0 };
@@ -224,9 +218,8 @@ export function createApp(deps: AppDeps) {
   });
 
   authed.get("/dashboard", async (c) => {
-    const { accounts, analyses } = await profileAnalyses(c.get("userId"));
+    const { accounts, analyses, insights, insufficientData } = await insightsFor(c.get("userId"));
     const avg = averages(analyses);
-    const { insights, insufficientData } = generateInsights({ analyses, dataSource: source.kind });
     return c.json({
       dataSource: source.kind,
       syncing: accounts.some((a) => a.syncStatus === "syncing"),
@@ -246,6 +239,7 @@ export function createApp(deps: AppDeps) {
     const filtered = applyFilters(all, {
       accountId: q.accountId,
       champion: q.champion,
+      opponent: q.opponent,
       role: q.role,
       result: q.result === "win" || q.result === "loss" ? q.result : undefined,
       patch: q.patch,
@@ -351,8 +345,7 @@ export function createApp(deps: AppDeps) {
     const parsed = z.object({ insightId: z.string() }).safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "invalid_body" }, 400);
     const userId = c.get("userId");
-    const { analyses } = await profileAnalyses(userId);
-    const insight = generateInsights({ analyses, dataSource: source.kind }).insights.find((i) => i.id === parsed.data.insightId);
+    const insight = (await insightsFor(userId, 10)).insights.find((i) => i.id === parsed.data.insightId);
     if (!insight) {
       return c.json({ text: "No tengo suficiente información fiable para explicar esto ahora mismo.", source: "deterministic" });
     }
@@ -360,6 +353,7 @@ export function createApp(deps: AppDeps) {
     return c.json(await explainInsight(deps.aiProviders, { insight, level: prefs.level as ExplanationLevel, language: prefs.language }));
   });
 
+  authed.route("/", personalRoutes({ db, source, knowledge, services }));
   app.route("/", authed);
   return { app, sync };
 }

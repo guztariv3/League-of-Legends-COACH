@@ -3,13 +3,13 @@ import { api } from "../api";
 import { ErrorNotice, Loading, MatchItem, modeLabel, roleLabel } from "../components/ui";
 import { useLoad } from "../session";
 
-const FILTERS = ["champion", "role", "result", "mode", "patch", "maxDuration"] as const;
+const FILTERS = ["champion", "opponent", "role", "result", "mode", "patch", "maxDuration", "limit"] as const;
 
 /** Match Center: filters in one row, simple list, detail on demand. */
 export function Matches() {
   const [params, setParams] = useSearchParams();
   const query = Object.fromEntries(FILTERS.flatMap((k) => (params.get(k) ? [[k, params.get(k)!]] : [])));
-  const { data, error, loading } = useLoad(() => api.matches({ ...query, limit: "100" }), [params.toString()]);
+  const { data, error, loading } = useLoad(() => api.matches({ limit: "100", ...query }), [params.toString()]);
 
   const set = (k: string, v: string) => {
     const next = new URLSearchParams(params);
@@ -40,6 +40,13 @@ export function Matches() {
         {select("mode", "Modo", (data?.facets.modes ?? []).map((m) => [m, modeLabel[m] ?? m]))}
         {select("patch", "Parche", (data?.facets.patches ?? []).map((p) => [p, p]))}
         {select("maxDuration", "Duración", [["25", "≤ 25 min"], ["30", "≤ 30 min"], ["40", "≤ 40 min"]])}
+        {params.get("opponent") && (
+          <span className="badge" style={{ alignSelf: "flex-end", marginBottom: 10 }}>
+            contra {params.get("opponent")}
+            <button className="btn-ghost" style={{ border: 0, background: "none", color: "inherit", cursor: "pointer" }} aria-label="Quitar rival" onClick={() => set("opponent", "")}>✕</button>
+          </span>
+        )}
+        {params.get("limit") && <span className="badge" style={{ alignSelf: "flex-end", marginBottom: 10 }}>últimas {params.get("limit")}</span>}
         {params.toString() && (
           <button className="btn btn-ghost" style={{ alignSelf: "flex-end" }} onClick={() => setParams({}, { replace: true })}>Limpiar</button>
         )}
@@ -47,7 +54,7 @@ export function Matches() {
 
       {loading && !data ? <Loading /> : error ? <ErrorNotice error={error} /> : data && (
         <>
-          <p className="tile-note" style={{ margin: 0 }} aria-live="polite">{data.total} partidas</p>
+          <p className="tile-note" style={{ margin: 0 }} aria-live="polite">{data.total} partidas{data.matches.length < data.total ? ` · mostrando ${data.matches.length}` : ""}</p>
           {data.matches.length ? (
             <ul className="match-list">{data.matches.map((m) => <MatchItem key={m.matchId} m={m} />)}</ul>
           ) : (

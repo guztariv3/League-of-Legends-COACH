@@ -6,6 +6,9 @@ import { Coach } from "./components/Coach";
 import { CoachAvatar } from "./components/CoachAvatar";
 import { Loading } from "./components/ui";
 import { Champions } from "./pages/Champions";
+import { ChampionDetail } from "./pages/ChampionDetail";
+import { Profile } from "./pages/Profile";
+import { SearchBox } from "./components/SearchBox";
 import { Dashboard } from "./pages/Dashboard";
 import { MatchDetail } from "./pages/MatchDetail";
 import { Matches } from "./pages/Matches";
@@ -40,7 +43,9 @@ function Layout() {
             <NavLink to="/" end>Inicio</NavLink>
             <NavLink to="/matches">Partidas</NavLink>
             <NavLink to="/champions">Campeones</NavLink>
+            <NavLink to="/profile">Perfil</NavLink>
           </nav>
+          <SearchBox />
           <NavLink to="/settings" className="btn btn-ghost">Ajustes</NavLink>
         </header>
         <main id="main">
@@ -70,6 +75,8 @@ function App() {
         <Route path="matches" element={<Matches />} />
         <Route path="matches/:matchId" element={<MatchDetail />} />
         <Route path="champions" element={<Champions />} />
+        <Route path="champions/:name" element={<ChampionDetail />} />
+        <Route path="profile" element={<Profile />} />
         <Route path="settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

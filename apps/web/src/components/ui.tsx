@@ -64,6 +64,7 @@ export function InsightView({ insight, children }: { insight: Insight; children?
           <dd>{pct(insight.confidence)}</dd>
         </dl>
       </details>
+      {insight.review && <p className="tile-note" style={{ margin: "6px 0 0" }}>Para revisar: {insight.review}</p>}
       {children}
     </article>
   );

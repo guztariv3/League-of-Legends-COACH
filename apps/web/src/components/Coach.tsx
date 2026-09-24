@@ -52,6 +52,8 @@ export function Coach() {
   }, [me, syncing, onDashboard]);
 
   useEffect(() => { if (coachHint && !muted) setOpen(true); }, [coachHint, muted]);
+  // Navigating closes the bubble: the Coach should never follow the player around covering content.
+  useEffect(() => { setOpen(false); setExplanation(null); }, [pathname]);
 
   if (!me) return null;
 
@@ -82,6 +84,11 @@ export function Coach() {
               <button className="btn btn-ghost" onClick={explain} disabled={thinking}>{thinking ? "Pensando…" : "¿Por qué?"}</button>
             )}
             <button className="btn btn-ghost" onClick={dismiss}>Entendido</button>
+            {!syncing && !coachHint && insight && (
+              <button className="btn btn-ghost" onClick={async () => { await api.feedback(insight.id, insight.title); setInsight(null); setOpen(false); setExplanation(null); }}>
+                No me sirve
+              </button>
+            )}
             <button className="btn btn-ghost" onClick={toggleMute}>{muted ? "Activar avisos" : "Silenciar"}</button>
           </div>
         </div>

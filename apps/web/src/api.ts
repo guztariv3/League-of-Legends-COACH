@@ -20,9 +20,12 @@ export interface Account {
   sync: { status: "never" | "syncing" | "ok" | "error"; error: string | null; lastSyncedAt: string | null; progress: { done: number; total: number } | null };
 }
 
+export type MemoryCategory = "focus" | "correction" | "note";
+
 export interface Preferences {
   level: "beginner" | "intermediate" | "advanced" | "expert";
   language: "es" | "en";
+  memory: Record<MemoryCategory, boolean>;
 }
 
 export interface Me {
@@ -41,6 +44,8 @@ export interface Insight {
   evidence: { label: string; value: string }[];
   sampleSize: number;
   matchIds: string[];
+  metric?: string;
+  review?: string;
 }
 
 export interface MatchRow {
@@ -119,6 +124,83 @@ export interface ChampionList {
   champions: { id: string; key: number; name: string; title: string; tags: string[]; personal: { games: number; wins: number } }[];
 }
 
+export interface Dimension {
+  id: string;
+  label: string;
+  headline: string;
+  metrics: { label: string; value: string }[];
+  sampleSize: number;
+  confidence: number;
+  trend: "improving" | "declining" | "stable" | "unknown";
+}
+
+export interface StateBucket {
+  state: "ahead" | "even" | "behind";
+  games: number;
+  wins: number;
+  winRate: number;
+  interval: { low: number; high: number };
+  lateDeathsPerMin: number | null;
+}
+
+export interface Profile {
+  profiles: { mode: Mode; mainRole: string | null; games: number; dimensions: Dimension[] }[];
+  gameState: StateBucket[];
+}
+
+export interface Goal {
+  id: string;
+  metric: string;
+  target: number;
+  title: string;
+  note: string | null;
+  source: "coach" | "user";
+  createdAt: string;
+  progress: { games: number; met: number; rate: number; baselineRate: number; status: "collecting" | "in_progress" | "consolidated"; summary: string };
+}
+
+export interface GoalSuggestion {
+  metric: string;
+  target: number;
+  title: string;
+  reason: string;
+}
+
+export interface GoalsResponse {
+  goals: Goal[];
+  suggestions: GoalSuggestion[];
+  max: number;
+  metrics: { id: string; label: string }[];
+}
+
+export interface MemoryItem {
+  id: string;
+  category: MemoryCategory;
+  content: string;
+  ref: string | null;
+  createdAt: string;
+}
+
+export interface SearchResult {
+  type: "champion" | "matchup" | "matches" | "profile" | "insight";
+  title: string;
+  subtitle?: string;
+  href: string;
+}
+
+export interface ChampionDetail {
+  champion: { id: string; key: number; name: string; title: string; tags: string[] } | null;
+  knowledgeVersion: string | null;
+  personal: {
+    games: number;
+    wins: number;
+    interval: { low: number; high: number };
+    comparisons: { label: string; value: string; others: string | null; verdict: "better" | "worse" | "similar"; sample: number }[];
+    opponents: { opponent: string; games: number; wins: number }[];
+    recent: { matchId: string; win: boolean; kills: number; deaths: number; assists: number; startedAt: number; mode: Mode }[];
+  };
+}
+
 export class ApiError extends Error {
   constructor(readonly status: number, readonly code: string, message: string) {
     super(message);
@@ -152,5 +234,20 @@ export const api = {
   champions: () => request<ChampionList>("/champions"),
   explain: (insightId: string) =>
     request<{ text: string; source: "ai" | "deterministic" }>("/coach/explain", { method: "POST", body: JSON.stringify({ insightId }) }),
-  savePreferences: (p: Preferences) => request<Preferences>("/preferences", { method: "PUT", body: JSON.stringify(p) }),
+  savePreferences: (p: Partial<Preferences>) => request<Preferences>("/preferences", { method: "PUT", body: JSON.stringify(p) }),
+  profile: () => request<Profile>("/profile"),
+  goals: () => request<GoalsResponse>("/goals"),
+  createGoal: (metric: string, source: "coach" | "user", target?: number) =>
+    request<{ goal: { id: string; title: string } }>("/goals", { method: "POST", body: JSON.stringify({ metric, source, target }) }),
+  rejectGoal: (metric: string) => request<{ ok: true }>("/goals/reject", { method: "POST", body: JSON.stringify({ metric }) }),
+  closeGoal: (id: string, status: "achieved" | "archived") => request<{ ok: true }>(`/goals/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
+  memory: () => request<{ categories: Preferences["memory"]; items: MemoryItem[] }>("/memory"),
+  addNote: (content: string) => request<{ item: MemoryItem }>("/memory", { method: "POST", body: JSON.stringify({ category: "note", content }) }),
+  setFocus: (metric: string) => request<{ item: MemoryItem }>("/memory", { method: "POST", body: JSON.stringify({ category: "focus", metric }) }),
+  deleteMemory: (id: string) => request<{ ok: true }>(`/memory/${id}`, { method: "DELETE" }),
+  clearMemory: (category?: MemoryCategory) => request<{ ok: true }>(`/memory${category ? `?category=${category}` : ""}`, { method: "DELETE" }),
+  feedback: (insightId: string, title: string) =>
+    request<{ ok: true; stored: boolean }>("/coach/feedback", { method: "POST", body: JSON.stringify({ insightId, title }) }),
+  search: (q: string) => request<{ results: SearchResult[] }>(`/search?q=${encodeURIComponent(q)}`),
+  champion: (name: string) => request<ChampionDetail>(`/champions/${encodeURIComponent(name)}`),
 };

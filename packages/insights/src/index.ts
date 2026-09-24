@@ -1,4 +1,7 @@
-import { compareMeans, mean, type MatchAnalysis } from "@coach/analysis";
+import { compareMeans, gameStateOf, mean, patternScope, sampleConfidence, type MatchAnalysis } from "@coach/analysis";
+import type { GoalMetric } from "./goals.js";
+
+export * from "./goals.js";
 
 /**
  * Insight pipeline (the single "decision engine"):
@@ -7,7 +10,7 @@ import { compareMeans, mean, type MatchAnalysis } from "@coach/analysis";
  * Deterministic by design: the LLM may later rephrase an insight, but never
  * decides whether it exists, its priority or its epistemic kind.
  */
-export const INSIGHTS_VERSION = 1;
+export const INSIGHTS_VERSION = 2;
 
 /** fact = directly observed · observation = pattern across games · hypothesis = interpretation. */
 export type InsightKind = "fact" | "observation" | "hypothesis";
@@ -33,6 +36,10 @@ export interface Insight {
   sampleSize: number;
   /** Match ids backing the insight, for drill-down. */
   matchIds: string[];
+  /** Measurable metric this insight is about (links it to goals and focus). */
+  metric?: GoalMetric;
+  /** What to look at when reviewing games: a suggestion, never an order. */
+  review?: string;
 }
 
 export interface InsightContext {
@@ -53,9 +60,8 @@ interface Candidate extends Omit<Insight, "priority" | "confidence"> {
  * stronger than what was measured.
  */
 export function confidenceFor(c: Pick<Candidate, "sampleSize" | "completeness" | "kind">): number {
-  const sample = 1 - Math.exp(-c.sampleSize / 12); // ≈0.56 at 10 games, ≈0.92 at 30
   const kindCap = c.kind === "fact" ? 1 : c.kind === "observation" ? 0.9 : 0.7;
-  return Math.round(Math.min(kindCap, sample * (0.4 + 0.6 * c.completeness)) * 100) / 100;
+  return Math.round(Math.min(kindCap, sampleConfidence(c.sampleSize, c.completeness)) * 100) / 100;
 }
 
 export const MIN_CONFIDENCE = 0.45;
@@ -83,17 +89,33 @@ const earlyDeaths: Detector = (_ctx, usable) => {
   const lossRateHeavy = heavy.filter((a) => !a.win).length / Math.max(1, heavy.length);
   const light = withTl.filter((a) => (a.earlyDeaths ?? 0) < 2);
   const lossRateLight = light.filter((a) => !a.win).length / Math.max(1, light.length);
+  // Global habit or tied to one champion? (brief §80)
+  const scope = patternScope(withTl, (a) => (a.earlyDeaths === null ? null : a.earlyDeaths >= 2));
+  const scopeText =
+    scope.scope === "champion"
+      ? ` Se concentra sobre todo en ${scope.champion}; con tus otros campeones ocurre bastante menos.`
+      : scope.scope === "global"
+        ? " Ocurre con varios de tus campeones, así que parece un hábito general más que algo del campeón."
+        : "";
   return {
     id: "early-deaths",
     kind: "observation",
-    title: `Mueres 2 o más veces antes del minuto 14 en ${heavy.length} de ${withTl.length} partidas`,
+    title:
+      scope.scope === "champion"
+        ? `Con ${scope.champion} mueres 2 o más veces antes del minuto 14 mucho más que con el resto`
+        : `Mueres 2 o más veces antes del minuto 14 en ${heavy.length} de ${withTl.length} partidas`,
     detail:
       `En esas partidas perdiste el ${pct(lossRateHeavy)}; en el resto, el ${pct(lossRateLight)}. ` +
-      "Es una correlación, no prueba que las muertes causen la derrota, pero merece revisarlo.",
+      "Es una correlación, no prueba que las muertes causen la derrota, pero merece revisarlo." +
+      scopeText,
     evidence: [
       { label: "Partidas con timeline (SR)", value: String(withTl.length) },
+      { label: "Con 2+ muertes antes del 14", value: String(heavy.length) },
       { label: "Media de muertes tempranas", value: fmt(mean(withTl.map((a) => a.earlyDeaths ?? 0))) },
+      ...scope.perChampion.slice(0, 3).map((c) => ({ label: c.championName, value: `${c.hits} de ${c.games}` })),
     ],
+    metric: "earlyDeaths",
+    review: "Abre esas partidas y mira las muertes antes del 14: qué información tenías del jungla rival y cuánta vida y recursos te quedaban.",
     sampleSize: withTl.length,
     matchIds: heavy.map((a) => a.matchId),
     impact: 0.8,
@@ -101,8 +123,11 @@ const earlyDeaths: Detector = (_ctx, usable) => {
   };
 };
 
+const ROLE_ES: Record<string, string> = { TOP: "top", JUNGLE: "jungla", MIDDLE: "mid", BOTTOM: "ADC", UTILITY: "support" };
+
 function trendDetector(
   id: string,
+  goalMetric: GoalMetric,
   metric: (a: MatchAnalysis) => number | null,
   name: string,
   unit: string,
@@ -123,8 +148,8 @@ function trendDetector(
       id,
       kind: "observation",
       title: improved
-        ? `Tu ${name} ha mejorado en tus últimas 10 partidas de ${mainRole}`
-        : `Tu ${name} ha bajado en tus últimas 10 partidas de ${mainRole}`,
+        ? `Tu ${name} ha mejorado en tus últimas 10 partidas de ${ROLE_ES[mainRole ?? ""] ?? mainRole}`
+        : `Tu ${name} ha bajado en tus últimas 10 partidas de ${ROLE_ES[mainRole ?? ""] ?? mainRole}`,
       detail: `Pasa de ${fmt(cmp.b)}${unit} a ${fmt(cmp.a)}${unit}. El cambio supera la variación normal entre partidas, pero puede deberse a otros factores (campeón, parche o rivales).`,
       evidence: [
         { label: "Últimas 10", value: `${fmt(cmp.a)}${unit}` },
@@ -135,9 +160,60 @@ function trendDetector(
       matchIds: recent.map((x) => x.a.matchId),
       impact: improved ? 0.5 : 0.7,
       completeness: values.length / Math.max(1, sameRole.length),
+      metric: goalMetric,
     };
   };
 }
+
+/** Leads that end in defeat (brief §34): a fact, with the counts. */
+const lostLeads: Detector = (_ctx, usable) => {
+  const ahead = usable.filter((a) => gameStateOf(a) === "ahead");
+  if (ahead.length < 8) return null;
+  const lost = ahead.filter((a) => !a.win);
+  if (lost.length < 3 || lost.length / ahead.length < 0.3) return null;
+  return {
+    id: "lost-leads",
+    kind: "fact",
+    title: `Has perdido ${lost.length} de ${ahead.length} partidas en las que tu equipo iba por delante al minuto 15`,
+    detail: "Ir por delante al 15 significa una ventaja de oro del equipo de al menos 1500. Revisar qué pasó después puede enseñar mucho.",
+    evidence: [
+      { label: "Partidas por delante al 15", value: String(ahead.length) },
+      { label: "Perdidas", value: String(lost.length) },
+    ],
+    sampleSize: ahead.length,
+    matchIds: lost.map((a) => a.matchId),
+    impact: 0.7,
+    completeness: 1,
+    review: "En esas partidas, fíjate en tus muertes a partir del 15 y en qué objetivos se perdieron justo después.",
+  };
+};
+
+/** Does the player die more after 15:00 when ahead than in even games? (observation) */
+const lateDeathsWhenAhead: Detector = (_ctx, usable) => {
+  const rate = (a: MatchAnalysis) =>
+    a.deathsAfter15 !== null && a.durationSec > 15 * 60 ? a.deathsAfter15 / ((a.durationSec - 15 * 60) / 60) : null;
+  const ahead = usable.filter((a) => gameStateOf(a) === "ahead").map(rate).filter((x): x is number => x !== null);
+  const even = usable.filter((a) => gameStateOf(a) === "even").map(rate).filter((x): x is number => x !== null);
+  const cmp = compareMeans(ahead, even);
+  if (!cmp.consolidated || cmp.diff <= 0) return null;
+  return {
+    id: "late-deaths-ahead",
+    kind: "observation",
+    title: "Cuando tu equipo va por delante, mueres más a partir del minuto 15 que en partidas igualadas",
+    detail: `${fmt(cmp.a, 2)} muertes por minuto por delante frente a ${fmt(cmp.b, 2)} en partidas igualadas. Puede ser una forma de arriesgar de más con ventaja, aunque también influyen el campeón y la partida.`,
+    evidence: [
+      { label: "Por delante (muertes/min tras el 15)", value: fmt(cmp.a, 2) },
+      { label: "Igualadas (muertes/min tras el 15)", value: fmt(cmp.b, 2) },
+      { label: "Partidas por delante / igualadas", value: `${ahead.length} / ${even.length}` },
+    ],
+    sampleSize: ahead.length + even.length,
+    matchIds: [],
+    impact: 0.65,
+    completeness: 1,
+    metric: "deathsPerMin",
+    review: "Busca en esas partidas las muertes tras el 15: ¿estabas lejos de tu equipo o sin visión?",
+  };
+};
 
 const championPool: Detector = (_ctx, usable) => {
   if (usable.length < 10) return null;
@@ -166,8 +242,10 @@ function mode<T>(xs: T[]): T | undefined {
 
 const DETECTORS: Detector[] = [
   earlyDeaths,
-  trendDetector("cs-trend", (a) => a.csPerMin, "CS por minuto", "", true),
-  trendDetector("gold10-trend", (a) => a.goldDiff10, "diferencia de oro al minuto 10", " de oro", true),
+  trendDetector("cs-trend", "csPerMin", (a) => a.csPerMin, "CS por minuto", "", true),
+  trendDetector("gold10-trend", "goldDiff10", (a) => a.goldDiff10, "diferencia de oro al minuto 10", " de oro", true),
+  lostLeads,
+  lateDeathsWhenAhead,
   championPool,
 ];
 
@@ -179,7 +257,16 @@ export interface InsightResult {
   insufficientData: boolean;
 }
 
-export function generateInsights(ctx: InsightContext, maxVisible = 3): InsightResult {
+export interface InsightOptions {
+  maxVisible?: number;
+  /** The player's chosen focus (brief §110): matching insights go first; others are not hidden. */
+  focus?: GoalMetric | null;
+  /** Insight ids the player marked as not useful (Coach memory → corrections). */
+  dismissed?: string[];
+}
+
+export function generateInsights(ctx: InsightContext, opts: InsightOptions = {}): InsightResult {
+  const { maxVisible = 3, focus = null, dismissed = [] } = opts;
   const usable = ctx.analyses.filter((a) => a.analyzable).sort((a, b) => b.startedAt - a.startedAt);
   if (usable.length < 5) return { insights: [], insufficientData: true };
 
@@ -194,8 +281,13 @@ export function generateInsights(ctx: InsightContext, maxVisible = 3): InsightRe
 
   const order: Record<Priority, number> = { critical: 0, important: 1, info: 2, suppressed: 3 };
   const visible = all
-    .filter((i) => i.priority !== "suppressed")
-    .sort((a, b) => order[a.priority] - order[b.priority] || b.confidence - a.confidence)
+    .filter((i) => i.priority !== "suppressed" && !dismissed.includes(i.id))
+    .sort(
+      (a, b) =>
+        Number(b.metric !== undefined && b.metric === focus) - Number(a.metric !== undefined && a.metric === focus) ||
+        order[a.priority] - order[b.priority] ||
+        b.confidence - a.confidence,
+    )
     .slice(0, maxVisible);
 
   return { insights: visible, insufficientData: visible.length === 0 };

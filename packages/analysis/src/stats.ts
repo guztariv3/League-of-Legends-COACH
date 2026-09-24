@@ -48,3 +48,25 @@ export function compareMeans(a: number[], b: number[], minN = 8): MeanComparison
     consolidated: a.length >= minN && b.length >= minN && Number.isFinite(t) && Math.abs(t) >= 2,
   };
 }
+
+/** Confidence contributed by sample size and data completeness (0..1). ≈0.56 at 10 samples, ≈0.92 at 30. */
+export function sampleConfidence(n: number, completeness = 1): number {
+  return (1 - Math.exp(-n / 12)) * (0.4 + 0.6 * Math.max(0, Math.min(1, completeness)));
+}
+
+/** Two-proportion z statistic (pooled). NaN when either side is empty. */
+export function twoProportionZ(x1: number, n1: number, x2: number, n2: number): number {
+  if (!n1 || !n2) return NaN;
+  const p = (x1 + x2) / (n1 + n2);
+  const se = Math.sqrt(p * (1 - p) * (1 / n1 + 1 / n2));
+  return se > 0 ? (x1 / n1 - x2 / n2) / se : NaN;
+}
+
+export function quantile(xs: number[], q: number): number {
+  if (!xs.length) return NaN;
+  const s = [...xs].sort((a, b) => a - b);
+  const pos = (s.length - 1) * q;
+  const lo = Math.floor(pos);
+  const hi = Math.ceil(pos);
+  return s[lo]! + (s[hi]! - s[lo]!) * (pos - lo);
+}

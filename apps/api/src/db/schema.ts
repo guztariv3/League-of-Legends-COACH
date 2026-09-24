@@ -1,4 +1,4 @@
-import { boolean, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, doublePrecision, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 /**
  * Data layers are kept separate (docs/02-arquitectura.md §5):
@@ -87,4 +87,29 @@ export const knowledgeBundles = pgTable("knowledge_bundles", {
 export const preferences = pgTable("preferences", {
   userId: uuid("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
   data: jsonb("data").notNull(),
+});
+
+/** Goals (brief §52). status: active | achieved | archived | rejected (rejected = declined suggestion). */
+export const goals = pgTable("goals", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  metric: text("metric").notNull(),
+  target: doublePrecision("target").notNull(),
+  /** Share of pre-goal games that already met the target. */
+  baselineRate: doublePrecision("baseline_rate").notNull(),
+  status: text("status").$type<"active" | "achieved" | "archived" | "rejected">().notNull(),
+  source: text("source").$type<"coach" | "user">().notNull(),
+  note: text("note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Coach memory (brief §48): small, categorised, fully user-controlled. */
+export const coachMemory = pgTable("coach_memory", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  category: text("category").$type<"focus" | "correction" | "note">().notNull(),
+  content: text("content").notNull(),
+  /** Metric id (focus) or insight id (correction). */
+  ref: text("ref"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
