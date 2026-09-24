@@ -11,8 +11,10 @@ export function Matches() {
   const query = Object.fromEntries(FILTERS.flatMap((k) => (params.get(k) ? [[k, params.get(k)!]] : [])));
   const { data, error, loading } = useLoad(() => api.matches({ limit: "100", ...query }), [params.toString()]);
 
+  // Build from the live URL, not `params` (or setParams' `prev`, also taken from the last render):
+  // two filter changes before a re-render would otherwise drop the earlier one.
   const set = (k: string, v: string) => {
-    const next = new URLSearchParams(params);
+    const next = new URLSearchParams(window.location.search);
     if (v) next.set(k, v); else next.delete(k);
     setParams(next, { replace: true });
   };
