@@ -25,7 +25,9 @@ test("onboarding → dashboard → matches → match detail → settings", async
   await page.getByLabel("Resultado").selectOption("win");
   await expect(page).toHaveURL(/result=win/);
   await page.getByLabel("Modo").selectOption("summoners_rift");
-
+  await expect(page).toHaveURL(/mode=summoners_rift/);
+  // Wait until the list reflects the filters (every visible game is a win) before opening one.
+  await expect(page.locator(".match .match-bar.loss")).toHaveCount(0);
   await page.locator(".match").first().click();
   await expect(page.getByRole("link", { name: "← Partidas" })).toBeVisible();
   await expect(page.getByText("Victoria")).toBeVisible();

@@ -90,3 +90,21 @@ describe("RiotClient", () => {
     await expect(client.getMatchIds("xx9", "p")).rejects.toMatchObject({ kind: "bad_request" });
   });
 });
+
+describe("spectator-v5", () => {
+  it("uses the platform host and returns null when not in game", async () => {
+    const urls: string[] = [];
+    const client = new RiotClient({ apiKey: "k", fetch: async (url) => { urls.push(String(url)); return json({}, 404); } });
+    expect(await client.getActiveGame("euw1", "p-1")).toBeNull();
+    expect(urls[0]).toBe("https://euw1.api.riotgames.com/lol/spectator/v5/active-games/by-summoner/p-1");
+  });
+
+  it("parses a game where some fields are missing", async () => {
+    const client = new RiotClient({
+      apiKey: "k",
+      fetch: async () => json({ gameId: 1, gameMode: "CLASSIC", mapId: 11, participants: [{ teamId: 100, championId: 1, puuid: null }] }),
+    });
+    const g = await client.getActiveGame("kr", "p");
+    expect(g?.participants[0]?.puuid).toBeNull();
+  });
+});

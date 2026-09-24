@@ -21,7 +21,9 @@
     "hono": "^4.13.9",
     "pg": "^8.23.0",
     "tsx": "^4.23.15",
-    "zod": "^4.6.5"
+    "zod": "^4.6.5",
+    "@coach/draft": "workspace:*",
+    "@coach/review": "workspace:*"
   },
   "devDependencies": {
     "@types/pg": "^8.23.1"

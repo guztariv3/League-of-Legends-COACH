@@ -18,6 +18,9 @@
   --gold: #e3b964; /* highlights, sparingly */
   /* data viz (validated with the dataviz skill against --surface-1) */
   --series-1: #3987e5;
+  /* teams on the review map (validated pair, dataviz skill); always paired with shape */
+  --team-ally: #3987e5;
+  --team-enemy: #d95926;
   --grid: #2a3246;
   /* status: always paired with icon + label */
   --good: #4cc38a;
@@ -229,3 +232,26 @@ tr.me td { color: var(--accent); font-weight: 600; }
 @media (max-width: 640px) {
   .search { order: 4; flex: 1 1 100%; }
 }
+
+/* match review */
+.review-layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr); gap: var(--space-4); align-items: start; }
+.review-map { width: 100%; height: auto; display: block; border-radius: var(--radius-m); }
+/* No interpolation between frames: we do not know the paths players took between minutes. */
+.legend { gap: var(--space-4); font-size: 0.8rem; color: var(--text-secondary); margin-top: 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.timeline-markers { position: relative; height: 26px; border-bottom: 1px solid var(--border); }
+.timeline-marker {
+  position: absolute; top: 0; transform: translateX(-50%); width: 22px; height: 22px; border-radius: 50%;
+  border: 2px solid var(--surface-1); font: 700 12px/1 var(--font); cursor: pointer; color: #0b0e14; padding: 0;
+}
+.timeline-marker.selected { outline: 2px solid var(--text-primary); outline-offset: 1px; }
+.moment-error.timeline-marker { background: var(--bad); }
+.moment-opportunity.timeline-marker { background: var(--warn); }
+.moment-good.timeline-marker { background: var(--good); }
+.moment-card { text-align: left; font: inherit; color: inherit; cursor: pointer; display: flex; flex-direction: column; gap: 6px; border-left: 4px solid var(--border-strong); }
+.moment-card.selected { border-color: var(--accent); }
+.moment-card.moment-error, .moment-detail.moment-error { border-left-color: var(--bad); }
+.moment-card.moment-opportunity, .moment-detail.moment-opportunity { border-left-color: var(--warn); }
+.moment-card.moment-good, .moment-detail.moment-good { border-left-color: var(--good); }
+.moment-detail { border-left: 4px solid var(--border-strong); }
+@media (max-width: 860px) { .review-layout { grid-template-columns: 1fr; } }

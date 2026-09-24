@@ -161,6 +161,7 @@ describe("sync regressions", () => {
       matchIds: async (_p: string, _u: string, count: number, start: number) => visible.slice(start, start + count).map((g) => g.match.metadata.matchId),
       match: async (_p: string, id: string) => byId.get(id)!.match,
       timeline: async (_p: string, id: string) => byId.get(id)!.timeline,
+      activeGame: async () => null,
     };
     const [user] = await database.db.insert(schema.users).values({ displayName: "gap-user" }).returning();
     const [acc] = await database.db.insert(schema.riotAccounts).values({

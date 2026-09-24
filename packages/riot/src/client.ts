@@ -20,6 +20,29 @@ export const RiotAccount = z.object({
 });
 export type RiotAccount = z.infer<typeof RiotAccount>;
 
+/**
+ * spectator-v5 CurrentGameInfo (subset). Only available once the game has
+ * started (loading screen), so it never exposes champion-select data.
+ * Fields vary (bots, privacy settings), so most are optional.
+ */
+export const RiotActiveGame = z.looseObject({
+  gameId: z.number(),
+  gameMode: z.string(),
+  mapId: z.number(),
+  gameQueueConfigId: z.number().optional(),
+  gameStartTime: z.number().optional(),
+  participants: z.array(
+    z.looseObject({
+      puuid: z.string().nullish(),
+      teamId: z.number(),
+      championId: z.number(),
+      riotId: z.string().nullish(),
+      bot: z.boolean().optional(),
+    }),
+  ),
+});
+export type RiotActiveGame = z.infer<typeof RiotActiveGame>;
+
 export interface RiotClientOptions {
   apiKey: string;
   fetch?: typeof fetch;
@@ -90,6 +113,12 @@ export class RiotClient {
   async getTimeline(platform: string, matchId: string): Promise<RawTimeline | null> {
     const route = this.platform(platform).matchRoute;
     return this.get(route, "match.timeline", `/lol/match/v5/matches/${encodeURIComponent(matchId)}/timeline`, RawTimeline, { nullOn404: true });
+  }
+
+  /** Current game for a player; null when they are not in a game. */
+  async getActiveGame(platform: string, puuid: string): Promise<RiotActiveGame | null> {
+    const route = this.platform(platform).id;
+    return this.get(route, "spectator.active-game", `/lol/spectator/v5/active-games/by-summoner/${encodeURIComponent(puuid)}`, RiotActiveGame, { nullOn404: true });
   }
 
   private async get<T>(

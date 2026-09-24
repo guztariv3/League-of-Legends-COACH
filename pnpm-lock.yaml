@@ -29,12 +29,18 @@ importers:
       '@coach/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@coach/draft':
+        specifier: workspace:*
+        version: link:../../packages/draft
       '@coach/insights':
         specifier: workspace:*
         version: link:../../packages/insights
       '@coach/knowledge':
         specifier: workspace:*
         version: link:../../packages/knowledge
+      '@coach/review':
+        specifier: workspace:*
+        version: link:../../packages/review
       '@coach/riot':
         specifier: workspace:*
         version: link:../../packages/riot
@@ -120,6 +126,22 @@ importers:
         specifier: ^4.6.5
         version: 4.6.5
 
+  packages/draft:
+    dependencies:
+      '@coach/analysis':
+        specifier: workspace:*
+        version: link:../analysis
+      '@coach/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@coach/knowledge':
+        specifier: workspace:*
+        version: link:../knowledge
+    devDependencies:
+      '@coach/synthetic':
+        specifier: workspace:*
+        version: link:../synthetic
+
   packages/insights:
     dependencies:
       '@coach/analysis':
@@ -141,6 +163,16 @@ importers:
       zod:
         specifier: ^4.6.5
         version: 4.6.5
+
+  packages/review:
+    dependencies:
+      '@coach/domain':
+        specifier: workspace:*
+        version: link:../domain
+    devDependencies:
+      '@coach/synthetic':
+        specifier: workspace:*
+        version: link:../synthetic
 
   packages/riot:
     dependencies:

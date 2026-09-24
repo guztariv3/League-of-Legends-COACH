@@ -8,6 +8,8 @@ import { Loading } from "./components/ui";
 import { Champions } from "./pages/Champions";
 import { ChampionDetail } from "./pages/ChampionDetail";
 import { Profile } from "./pages/Profile";
+import { Game } from "./pages/Game";
+import { MatchReview } from "./pages/MatchReview";
 import { SearchBox } from "./components/SearchBox";
 import { Dashboard } from "./pages/Dashboard";
 import { MatchDetail } from "./pages/MatchDetail";
@@ -43,6 +45,7 @@ function Layout() {
             <NavLink to="/" end>Inicio</NavLink>
             <NavLink to="/matches">Partidas</NavLink>
             <NavLink to="/champions">Campeones</NavLink>
+            <NavLink to="/game">Antes de jugar</NavLink>
             <NavLink to="/profile">Perfil</NavLink>
           </nav>
           <SearchBox />
@@ -74,6 +77,8 @@ function App() {
         <Route index element={<Dashboard />} />
         <Route path="matches" element={<Matches />} />
         <Route path="matches/:matchId" element={<MatchDetail />} />
+        <Route path="matches/:matchId/review" element={<MatchReview />} />
+        <Route path="game" element={<Game />} />
         <Route path="champions" element={<Champions />} />
         <Route path="champions/:name" element={<ChampionDetail />} />
         <Route path="profile" element={<Profile />} />

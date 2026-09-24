@@ -14,7 +14,15 @@ const DDragonChampionFile = z.object({
   version: z.string(),
   data: z.record(
     z.string(),
-    z.looseObject({ id: z.string(), key: z.string(), name: z.string(), title: z.string(), tags: z.array(z.string()) }),
+    z.looseObject({
+      id: z.string(),
+      key: z.string(),
+      name: z.string(),
+      title: z.string(),
+      tags: z.array(z.string()),
+      // Riot's own 0–10 ratings in Data Dragon; used only as approximate signals.
+      info: z.object({ attack: z.number(), defense: z.number(), magic: z.number(), difficulty: z.number() }).optional(),
+    }),
   ),
 });
 
@@ -29,6 +37,8 @@ export interface Champion {
   name: string;
   title: string;
   tags: string[];
+  /** Data Dragon 0–10 ratings (approximate; absent in some bundles). */
+  info?: { attack: number; defense: number; magic: number; difficulty: number };
 }
 
 export interface Item {
@@ -91,7 +101,7 @@ export async function fetchBundle(source: KnowledgeSource, version?: string): Pr
     version: v,
     source: source.kind,
     champions: Object.values(champs.data).map((c) => ({
-      id: c.id, key: Number(c.key), name: c.name, title: c.title, tags: c.tags,
+      id: c.id, key: Number(c.key), name: c.name, title: c.title, tags: c.tags, ...(c.info ? { info: c.info } : {}),
     })),
     items: Object.entries(items.data).map(([id, i]) => ({ id: Number(id), name: i.name, goldTotal: i.gold.total })),
   };

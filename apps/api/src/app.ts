@@ -14,6 +14,7 @@ import type { MatchSource } from "./sources.js";
 import { SyncService } from "./sync.js";
 import { makeServices, Preferences } from "./services.js";
 import { personalRoutes } from "./personal.js";
+import { gameRoutes } from "./game.js";
 
 export interface AppDeps {
   cfg: Config;
@@ -354,6 +355,7 @@ export function createApp(deps: AppDeps) {
   });
 
   authed.route("/", personalRoutes({ db, source, knowledge, services }));
+  authed.route("/", gameRoutes({ db, source, knowledge, services }));
   app.route("/", authed);
   return { app, sync };
 }

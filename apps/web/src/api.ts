@@ -201,6 +201,86 @@ export interface ChampionDetail {
   };
 }
 
+export type MomentCategory = "error" | "opportunity" | "good" | "event";
+
+export interface KeyMoment {
+  id: string;
+  t: number;
+  category: MomentCategory;
+  kind: "fact" | "observation" | "hypothesis";
+  confidence: number;
+  title: string;
+  detail: string;
+  evidence: { label: string; value: string }[];
+  goldSwing: number;
+  position: { x: number; y: number } | null;
+}
+
+export interface MatchReview {
+  matchId: string;
+  me: number;
+  durationSec: number;
+  participants: { id: number; championName: string; teamId: number; role: string; isMe: boolean; isAlly: boolean }[];
+  frames: { minute: number; positions: { id: number; x: number; y: number }[]; teamGoldDiff: number }[];
+  events: { t: number; type: "kill" | "objective" | "structure"; label: string; position: { x: number; y: number } | null; side: "ally" | "enemy"; myInvolvement: "killer" | "victim" | "assist" | null }[];
+  moments: KeyMoment[];
+  highlights: string[];
+  limits: string[];
+}
+
+export type ReviewResponse = { available: true; dataSource: "riot" | "synthetic"; review: MatchReview } | { available: false; message: string };
+
+export interface DraftPoint {
+  id: string;
+  kind: "fact" | "observation" | "hypothesis";
+  title: string;
+  detail: string;
+  weight: number;
+}
+
+export interface Composition {
+  champions: { id: string; name: string; tags: string[] }[];
+  frontline: number;
+  classes: Record<string, number>;
+  magicShare: number | null;
+  unrated: number;
+}
+
+export interface DraftAnalysis {
+  ally: Composition;
+  enemy: Composition;
+  keyPoints: DraftPoint[];
+  morePoints: DraftPoint[];
+  personal: { withChampion: { games: number; wins: number }; vsOpponent: { games: number; wins: number } | null };
+  unknownChampions: string[];
+  limits: string[];
+}
+
+export interface ScoutedPlayer {
+  riotId: string | null;
+  championId: string;
+  championName: string;
+  available: boolean;
+  games: number;
+  wins: number;
+  gamesOnChampion: number;
+  winsOnChampion: number;
+  mainRole: string | null;
+  avgKda: number | null;
+  smallSample: boolean;
+  headline: string;
+}
+
+export interface ScoutResult {
+  inGame: boolean;
+  simulated?: boolean;
+  message?: string;
+  myChampion?: { id: string; name: string };
+  allies?: { id: string; name: string }[];
+  enemies?: ScoutedPlayer[];
+  draft?: DraftAnalysis;
+}
+
 export class ApiError extends Error {
   constructor(readonly status: number, readonly code: string, message: string) {
     super(message);
@@ -250,4 +330,8 @@ export const api = {
     request<{ ok: true; stored: boolean }>("/coach/feedback", { method: "POST", body: JSON.stringify({ insightId, title }) }),
   search: (q: string) => request<{ results: SearchResult[] }>(`/search?q=${encodeURIComponent(q)}`),
   champion: (name: string) => request<ChampionDetail>(`/champions/${encodeURIComponent(name)}`),
+  review: (matchId: string) => request<ReviewResponse>(`/matches/${encodeURIComponent(matchId)}/review`),
+  draft: (input: { myChampion: string; allies: string[]; enemies: string[]; laneOpponent?: string }) =>
+    request<DraftAnalysis>("/draft", { method: "POST", body: JSON.stringify(input) }),
+  scout: () => request<ScoutResult>("/game/scout"),
 };
