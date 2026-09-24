@@ -221,3 +221,18 @@ describe("analysis versioning", () => {
     expect(versions).toEqual([ANALYSIS_VERSION - 1, ANALYSIS_VERSION]);
   }, 60_000);
 });
+
+describe("knowledge schema upgrades", () => {
+  it("re-ingests a stored bundle of the same game version when the parser gained fields", async () => {
+    const { schema } = await import("./db/index.js");
+    const { eq } = await import("drizzle-orm");
+    const { fetchBundle, KNOWLEDGE_SCHEMA_VERSION } = await import("@coach/knowledge");
+    const fresh = await fetchBundle(syntheticKnowledge());
+    // Simulate an older stored bundle: same version, no schemaVersion, no info ratings.
+    const old = { ...fresh, schemaVersion: undefined, champions: fresh.champions.map(({ info: _i, ...c }) => c) };
+    await database.db.update(schema.knowledgeBundles).set({ payload: old }).where(eq(schema.knowledgeBundles.version, fresh.version));
+    const reg = await bootKnowledge(database.db, syntheticKnowledge());
+    expect(reg.active()?.schemaVersion).toBe(KNOWLEDGE_SCHEMA_VERSION);
+    expect(reg.active()?.champions[0]?.info).toBeDefined();
+  });
+});

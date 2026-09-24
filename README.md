@@ -3,7 +3,7 @@
 Aplicación web + desktop de análisis y coaching personal para League of Legends.
 Hace el trabajo complejo por dentro y muestra solo lo que el jugador necesita.
 
-**Estado:** Fases 1 y 2 completas sobre datos sintéticos. Ver [docs/05-fase1.md](docs/05-fase1.md) y [docs/06-fase2.md](docs/06-fase2.md).
+**Estado:** Fases 1–3 completas sobre datos sintéticos. Ver [docs/05-fase1.md](docs/05-fase1.md), [docs/06-fase2.md](docs/06-fase2.md) y [docs/07-fase3.md](docs/07-fase3.md).
 
 ## Arranque rápido
 
@@ -22,7 +22,7 @@ La configuración opcional está en [.env.example](.env.example). Sin `RIOT_API_
 ```
 apps/api      API (Hono + Drizzle, Postgres/PGlite)
 apps/web      Web app (React + Vite)
-packages/     domain · synthetic · riot · knowledge · analysis · insights · ai
+packages/     domain · synthetic · riot · knowledge · analysis · insights · ai · review · draft
 docs/         auditoría, investigación, arquitectura, roadmap, decisiones, fase 1
 ```
 
@@ -35,6 +35,7 @@ docs/         auditoría, investigación, arquitectura, roadmap, decisiones, fas
 | [docs/04-decisiones.md](docs/04-decisiones.md) | Decisiones, simplificaciones y riesgos |
 | [docs/05-fase1.md](docs/05-fase1.md) | Fase 1: núcleo, limitaciones y quality gate |
 | [docs/06-fase2.md](docs/06-fase2.md) | Fase 2: perfil, objetivos, memoria, búsqueda |
+| [docs/07-fase3.md](docs/07-fase3.md) | Fase 3: revisión de partida, draft, scouting |
 
 ---
 

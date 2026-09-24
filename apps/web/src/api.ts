@@ -273,6 +273,8 @@ export interface ScoutedPlayer {
 
 export interface ScoutResult {
   inGame: boolean;
+  /** Riot ID of the linked account that is in the game. */
+  account?: string;
   simulated?: boolean;
   message?: string;
   myChampion?: { id: string; name: string };

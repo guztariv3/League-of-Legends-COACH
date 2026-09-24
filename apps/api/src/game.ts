@@ -51,10 +51,16 @@ export function gameRoutes({ db, source, knowledge, services }: { db: Db; source
   r.get("/game/scout", async (c) => {
     const accounts = (await userAccounts(db, c.get("userId"))).filter((a) => a.includeInProfile);
     const accountId = c.req.query("accountId");
-    const account = accountId ? accounts.find((a) => a.id === accountId) : accounts[0];
-    if (!account) return c.json({ error: "not_found" }, 404);
+    const candidates = accountId ? accounts.filter((a) => a.id === accountId) : accounts;
+    if (!candidates.length) return c.json({ error: "not_found" }, 404);
     const { analyses } = await services.profileAnalyses(c.get("userId"));
-    return c.json(await scoutActiveGame({ db, source, knowledge }, account, analyses));
+    // Try each linked account: the player may be in game on any of them.
+    let last = null;
+    for (const account of candidates) {
+      last = await scoutActiveGame({ db, source, knowledge }, account, analyses);
+      if (last.inGame) return c.json({ ...last, account: `${account.gameName}#${account.tagLine}` });
+    }
+    return c.json(last);
   });
 
   return r;

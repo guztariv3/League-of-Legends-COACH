@@ -38,3 +38,14 @@ describe("knowledge pipeline", () => {
     expect(reg.champion(9001)?.name).toBe("Aurelith");
   });
 });
+
+describe("re-ingesting the active version", () => {
+  it("keeps the active bundle when a same-version re-ingest fails validation", async () => {
+    const reg = new KnowledgeRegistry();
+    const good = await fetchBundle(syntheticSource());
+    reg.install(good);
+    const broken: KnowledgeBundle = { ...good, champions: [] };
+    expect(reg.install(broken).ok).toBe(false);
+    expect(reg.active()?.champions.length).toBe(good.champions.length);
+  });
+});

@@ -17,7 +17,7 @@ No se avanza a una fase si la anterior no pasa su quality gate (tests, revisión
 ## Fase 2 — Personalización ✅ sobre datos sintéticos (ver `06-fase2.md`)
 Perfil del jugador (dimensiones con evidencia), patrones entre partidas, objetivos (1–3, opt-in), Coach contextual en cualquier pantalla, memoria editable, búsqueda.
 
-## Fase 3 — Análisis avanzado
+## Fase 3 — Análisis avanzado ✅ sobre datos sintéticos (ver `07-fase3.md`; combat engine pospuesto)
 Match Review basado en timeline (mapa por minuto, marcadores, clasificación de decisiones), análisis de draft (solo campeones), scouting desde la pantalla de carga, análisis de composición. Combat Engine limitado a cálculos validados (D-06).
 
 ## Fase 4 — Live (desktop)

@@ -78,3 +78,34 @@ describe("scouting", () => {
     expect(body.draft.keyPoints.length).toBeLessThanOrEqual(3);
   }, 60_000);
 });
+
+describe("scouting with several accounts", () => {
+  it("finds the game on whichever linked account is playing", async () => {
+    const base = syntheticSource(() => Date.UTC(2026, 5, 1));
+    const playing = new Set<string>();
+    // Only the account whose PUUID is in `playing` is in a game.
+    const source = { ...base, activeGame: (platform: string, puuid: string) => (playing.has(puuid) ? base.activeGame(platform, puuid) : Promise.resolve(null)) };
+    const knowledge = await bootKnowledge(database.db, syntheticKnowledge());
+    const app = createApp({ cfg: loadConfig({ NODE_ENV: "test" }), db: database.db, source, knowledge, aiProviders: [] });
+    const req = async (path: string, init: RequestInit & { cookie?: string } = {}) => {
+      const headers = new Headers(init.headers);
+      if (init.body) headers.set("Content-Type", "application/json");
+      if (init.cookie) headers.set("Cookie", init.cookie);
+      const res = await app.app.request(`/api${path}`, { ...init, headers });
+      return (await res.json()) as any;
+    };
+    const login = await app.app.request("/api/auth/dev-login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayName: "MultiScout" }) });
+    const cookie = login.headers.get("set-cookie")!.split(";")[0]!;
+    const a = await req("/accounts", { method: "POST", cookie, body: JSON.stringify({ gameName: "MainAcc", tagLine: "EUW", platform: "euw1" }) });
+    const b = await req("/accounts", { method: "POST", cookie, body: JSON.stringify({ gameName: "SmurfAcc", tagLine: "EUW", platform: "euw1" }) });
+    await app.sync.start(a.account.id);
+    await app.sync.start(b.account.id);
+
+    expect((await req("/game/scout", { cookie })).inGame).toBe(false);
+    const puuid = (await base.resolveAccount("euw1", "SmurfAcc", "EUW"))!.puuid;
+    playing.add(puuid);
+    const res = await req("/game/scout", { cookie });
+    expect(res.inGame).toBe(true);
+    expect(res.account).toBe("SmurfAcc#EUW");
+  }, 60_000);
+});

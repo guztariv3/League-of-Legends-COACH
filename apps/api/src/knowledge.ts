@@ -14,9 +14,13 @@ export async function bootKnowledge(db: Db, source: KnowledgeSource): Promise<Kn
 
   try {
     const bundle = await fetchBundle(source);
-    if (bundle.version !== registry.active()?.version) {
+    const current = registry.active();
+    // Re-ingest when the game version changes or when the parser now extracts more fields.
+    if (bundle.version !== current?.version || (current.schemaVersion ?? 1) < (bundle.schemaVersion ?? 1)) {
       const result = registry.install(bundle);
-      if (result.ok && active) {
+      // A failed re-ingest of the active version must not mark that version as rejected.
+      if (!result.ok && bundle.version === current?.version) return registry;
+      if (result.ok && active && active.version !== bundle.version) {
         await db.update(schema.knowledgeBundles).set({ status: "retired" }).where(eq(schema.knowledgeBundles.version, active.version));
       }
       await db

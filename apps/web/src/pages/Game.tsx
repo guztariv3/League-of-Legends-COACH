@@ -77,6 +77,7 @@ function LiveGame() {
           <div className="stack">
             <p style={{ margin: 0 }}>
               Juegas <strong>{d.myChampion!.name}</strong> con {d.allies!.map((a) => a.name).join(", ")}.
+              {d.account && <span className="tile-note"> Cuenta: {d.account}</span>}
             </p>
             <Points draft={d.draft!} />
           </div>

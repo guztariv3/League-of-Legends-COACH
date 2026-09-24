@@ -47,8 +47,17 @@ export interface Item {
   goldTotal: number;
 }
 
+/**
+ * Version of the *parsed* bundle shape. Bump when fetchBundle starts extracting
+ * new fields, so stored bundles of the same game version get re-ingested.
+ * v2: champion `info` ratings.
+ */
+export const KNOWLEDGE_SCHEMA_VERSION = 2;
+
 export interface KnowledgeBundle {
   version: string;
+  /** Parser version that produced this bundle (absent = 1). */
+  schemaVersion?: number;
   source: "ddragon" | "synthetic";
   champions: Champion[];
   items: Item[];
@@ -99,6 +108,7 @@ export async function fetchBundle(source: KnowledgeSource, version?: string): Pr
   }
   return {
     version: v,
+    schemaVersion: KNOWLEDGE_SCHEMA_VERSION,
     source: source.kind,
     champions: Object.values(champs.data).map((c) => ({
       id: c.id, key: Number(c.key), name: c.name, title: c.title, tags: c.tags, ...(c.info ? { info: c.info } : {}),
@@ -150,7 +160,8 @@ export class KnowledgeRegistry {
   install(bundle: KnowledgeBundle): ValidationResult {
     const result = validateBundle(bundle, this.active());
     if (!result.ok) {
-      this.bundles.set(bundle.version, { bundle, status: "rejected", errors: result.errors });
+      // Never overwrite the active bundle's entry with a rejected re-ingest of the same version.
+      if (this.active()?.version !== bundle.version) this.bundles.set(bundle.version, { bundle, status: "rejected", errors: result.errors });
       return result;
     }
     const prev = this.active();
