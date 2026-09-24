@@ -1,0 +1,29 @@
+{
+  "name": "@coach/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts"
+  },
+  "dependencies": {
+    "@coach/ai": "workspace:*",
+    "@coach/analysis": "workspace:*",
+    "@coach/domain": "workspace:*",
+    "@coach/insights": "workspace:*",
+    "@coach/knowledge": "workspace:*",
+    "@coach/riot": "workspace:*",
+    "@coach/synthetic": "workspace:*",
+    "@electric-sql/pglite": "^0.5.8",
+    "@hono/node-server": "^2.1.1",
+    "drizzle-orm": "^0.45.3",
+    "hono": "^4.13.9",
+    "pg": "^8.23.0",
+    "tsx": "^4.23.15",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1"
+  }
+}
