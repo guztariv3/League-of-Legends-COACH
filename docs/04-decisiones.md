@@ -1,6 +1,6 @@
 # Decisiones, simplificaciones y riesgos
 
-Estado: **P** = propuesta pendiente de aprobación · **A** = aceptada (D-01 a D-06 aprobadas el 2026-09-24).
+Estado: **P** = propuesta pendiente de aprobación · **A** = aceptada (D-01 a D-08 aprobadas el 2026-09-24).
 
 ## Decisiones que requieren aprobación (sección 118)
 
@@ -12,8 +12,8 @@ Estado: **P** = propuesta pendiente de aprobación · **A** = aceptada (D-01 a D
 | D-04 | **Stack:** TypeScript + pnpm, React/Vite, Hono, Postgres/Drizzle, Tauri v2 (pg-boss pospuesto; ver `05-fase1.md`). | Ver `02-arquitectura.md`. | A |
 | D-05 | **"Replay" = Match Review sobre el timeline de match-v5** (resolución de ~1 min, eventos exactos). No es vídeo ni movimiento continuo, y se indica así en la UI. | No existe API de replays ni parser oficial de .rofl. | A |
 | D-06 | **Combat/teamfight simulation pospuesto y limitado.** Solo cálculos con datos validados (stats base, resistencias, % de mitigación). Sin simulaciones de combos ni teamfights con números hasta tener una fuente fiable de valores de habilidades. | Data Dragon tiene valores de habilidades incompletos y CommunityDragon no es oficial. Regla: no fingir precisión. | A |
-| D-07 | **Modelo LLM por defecto y coste.** Propuesta: `claude-opus-5` para análisis post-game y chat, y opcionalmente un modelo más barato (`claude-haiku-4-5`) para explicaciones cortas. Configurable. | Afecta directamente al coste. | P |
-| D-08 | **Hosting.** Pendiente de elegir proveedor (contenedor + Postgres gestionado). | Coste. Se decidirá antes del primer despliegue. | P |
+| D-07 | **Modelo LLM: `claude-opus-5`** para las explicaciones del Coach (esfuerzo bajo, fallbacks del servidor ante rechazos). Configurable con `AI_MODEL`. Sin clave de IA, el Coach usa texto determinista. Nunca se usa IA durante la partida. | Decidido por el usuario. | A |
+| D-08 | **Hosting: Render** (Frankfurt) con un contenedor Docker (API + web, mismo origen) y Postgres gestionado; **GitHub Releases** para las actualizaciones firmadas del escritorio. Ver `10-despliegue.md`. | Precio fijo y bajo (unos 13 $/mes al empezar), backups gestionados, infraestructura como código (`render.yaml`) y portable gracias a Docker. Fly.io (unos 38 $/mes solo el Postgres gestionado) y Railway (coste variable) quedan como alternativas. | A |
 
 ## Simplificaciones aplicadas (sección 3)
 

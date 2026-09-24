@@ -30,3 +30,28 @@ export async function minimizeWindow(): Promise<void> {
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
   await getCurrentWindow().minimize();
 }
+
+export interface UpdateInfo {
+  version: string;
+  notes: string | null;
+}
+
+/** Signed update available from the release feed (null in dev builds or when up to date). */
+export async function checkUpdate(): Promise<UpdateInfo | null> {
+  if (!inTauri) return null;
+  try {
+    return await invoke<UpdateInfo | null>("check_update");
+  } catch {
+    return null; // offline or feed unavailable: never bother the player about it
+  }
+}
+
+/** Downloads, verifies and installs, then restarts. On failure the current version stays installed. */
+export async function installUpdate(): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await invoke("install_update");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}

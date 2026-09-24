@@ -1,0 +1,63 @@
+name: Desktop release
+
+# Push a tag like `desktop-v0.2.0` (matching apps/desktop/src-tauri/tauri.conf.json "version").
+# Builds signed installers + updater artifacts and uploads them to a DRAFT GitHub Release.
+# Nothing reaches players until the draft is published (validate → activate).
+on:
+  push:
+    tags: ["desktop-v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            args: ""
+          - platform: macos-latest
+            args: "--target universal-apple-darwin"
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require signing secrets
+        shell: bash
+        run: |
+          # An updater build without its public key refuses to start, so never build one half-configured.
+          test -n "${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}" || { echo "Missing TAURI_SIGNING_PRIVATE_KEY secret"; exit 1; }
+          test -n "${{ secrets.TAURI_UPDATER_PUBKEY }}" || { echo "Missing TAURI_UPDATER_PUBKEY secret"; exit 1; }
+      - name: Updater config (public key + feed)
+        shell: bash
+        run: |
+          cat > apps/desktop/src-tauri/tauri.updater.json <<JSON
+          { "bundle": { "createUpdaterArtifacts": true },
+            "plugins": { "updater": {
+              "pubkey": "${{ secrets.TAURI_UPDATER_PUBKEY }}",
+              "endpoints": ["https://github.com/${{ github.repository }}/releases/latest/download/latest.json"] } } }
+          JSON
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - run: pnpm install --frozen-lockfile
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: apps/desktop
+          tauriScript: pnpm tauri
+          args: ${{ matrix.args }} --features updater --config src-tauri/tauri.updater.json
+          tagName: ${{ github.ref_name }}
+          releaseName: "Kairos Coach ${{ github.ref_name }}"
+          releaseBody: "Borrador: prueba los instaladores antes de publicar. Al publicar, las apps instaladas recibirán la actualización."
+          releaseDraft: true
+          includeUpdaterJson: true

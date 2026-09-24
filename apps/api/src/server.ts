@@ -3,7 +3,7 @@ import { serve } from "@hono/node-server";
 import { anthropicProvider, type AiProvider } from "@coach/ai";
 import { dataDragonSource, syntheticSource as syntheticKnowledge } from "@coach/knowledge";
 import { RiotClient } from "@coach/riot";
-import { createApp } from "./app.js";
+import { createSite } from "./site.js";
 import { dataSource, loadConfig } from "./config.js";
 import { openDatabase } from "./db/index.js";
 import { bootKnowledge } from "./knowledge.js";
@@ -20,6 +20,9 @@ const aiProviders: AiProvider[] = cfg.anthropicApiKey
   ? [anthropicProvider({ apiKey: cfg.anthropicApiKey, model: cfg.aiModel })]
   : [];
 
-const { app } = createApp({ cfg, db, source, knowledge, aiProviders });
-serve({ fetch: app.fetch, port: cfg.port });
-console.log(`[api] listening on :${cfg.port} · data=${mode} · ai=${aiProviders.length ? "on" : "off"} · knowledge=${knowledge.active()?.version ?? "none"}`);
+const { site } = createSite({ cfg, db, source, knowledge, aiProviders });
+serve({ fetch: site.fetch, port: cfg.port });
+console.log(
+  `[api] listening on :${cfg.port} · env=${cfg.env} · data=${mode} · ai=${aiProviders.length ? `on (${cfg.aiModel ?? "claude-opus-5"})` : "off"}` +
+    ` · web=${cfg.webDist ? "served" : "separate"} · gate=${cfg.prototypePassword ? "on" : "off"} · knowledge=${knowledge.active()?.version ?? "none"}`,
+);

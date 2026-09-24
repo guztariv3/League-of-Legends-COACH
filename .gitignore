@@ -11,3 +11,4 @@ playwright-report/
 # desktop
 apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/gen/
+apps/desktop/src-tauri/tauri.updater.json

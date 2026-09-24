@@ -2,7 +2,7 @@ import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { DEFAULT_CONTROLS, LiveEngine, type Delivery, type EngineTick, type Intensity, type LiveControls } from "@coach/live";
 import { CoachAvatar } from "@coach/ui";
-import { inTauri, minimizeWindow, readLoad, readSnapshot } from "./bridge";
+import { checkUpdate, inTauri, installUpdate, minimizeWindow, readLoad, readSnapshot, type UpdateInfo } from "./bridge";
 import "./live.css";
 
 const CONTROLS_KEY = "live.controls";
@@ -32,6 +32,8 @@ function LiveWindow() {
   const [mode, setMode] = useState<Mode>("waiting");
   const [tick, setTick] = useState<EngineTick | null>(null);
   const [message, setMessage] = useState<(Delivery & { shownAt: number }) | null>(null);
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  const [updateState, setUpdateState] = useState<"idle" | "installing" | "failed">("idle");
   const controlsRef = useRef(controls);
   controlsRef.current = controls;
 
@@ -88,6 +90,9 @@ function LiveWindow() {
     if (age > (message.compact ? 12 : 25) || (mode === "demo" && age > 60)) setMessage(null);
   }, [tick, message, mode]);
 
+  // Updates are checked at start-up and offered only outside a game (the game always comes first).
+  useEffect(() => { void checkUpdate().then(setUpdate); }, []);
+
   const set = (patch: Partial<LiveControls>) => setControls((c) => ({ ...c, ...patch }));
   const me = tick?.state.me;
   const minutes = tick ? tick.state.time / 60 : 0;
@@ -106,6 +111,25 @@ function LiveWindow() {
         <button className="btn" aria-pressed={controls.focus} onClick={() => set({ focus: !controls.focus })}>Enfoque</button>
         {inTauri && <button className="btn" onClick={() => void minimizeWindow()} aria-label="Ocultar ventana">Ocultar</button>}
       </div>
+
+      {update && mode !== "live" && (
+        <div className="message compact" role="status">
+          {updateState === "failed" ? (
+            <div>No se pudo instalar la actualización; sigues con la versión actual.</div>
+          ) : (
+            <div className="bar">
+              <span>Versión {update.version} disponible.</span>
+              <span className="spacer" />
+              <button className="btn btn-primary" disabled={updateState === "installing"} onClick={async () => {
+                setUpdateState("installing");
+                const r = await installUpdate();
+                if (!r.ok) setUpdateState("failed");
+              }}>{updateState === "installing" ? "Instalando…" : "Instalar y reiniciar"}</button>
+              <button className="btn" onClick={() => setUpdate(null)}>Más tarde</button>
+            </div>
+          )}
+        </div>
+      )}
 
       <section className="stage" aria-live="polite">
         {message && !controls.muted ? (
