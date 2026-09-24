@@ -1,6 +1,7 @@
 import type { AnalysisMode, Role } from "@coach/domain";
 import type { MatchAnalysis } from "./match.js";
-import { compareMeans, mean, sampleConfidence, twoProportionZ, wilson } from "./stats.js";
+import { findInflection, LONG_METRICS, MIN_SIDE, type LongMetricId } from "./longitudinal.js";
+import { mean, sampleConfidence, twoProportionZ, wilson } from "./stats.js";
 
 /**
  * Player profile (the internal "Player DNA", brief §45–46): contextual
@@ -83,21 +84,33 @@ function values(list: MatchAnalysis[], pick: (a: MatchAnalysis) => number | null
   return list.map(pick).filter((v): v is number => v !== null && Number.isFinite(v));
 }
 
-/** Recent 10 vs the rest, newest-first input. Only "consolidated" changes count as a trend. */
-function trendOf(list: MatchAnalysis[], pick: (a: MatchAnalysis) => number | null, higherIsBetter: boolean): Trend {
-  const v = values(list, pick);
-  if (v.length < 16) return "unknown";
-  const cmp = compareMeans(v.slice(0, 10), v.slice(10));
-  if (!cmp.consolidated) return "stable";
-  return (cmp.diff > 0) === higherIsBetter ? "improving" : "declining";
+/**
+ * Trend = a permutation-tested inflection point (longitudinal.ts) whose
+ * "after" segment reaches the present. It is the same definition used by the
+ * Coach's insights, so the profile and the Coach never disagree.
+ */
+function trendOf(list: MatchAnalysis[], metric: LongMetricId | null): Trend {
+  if (!metric) return "unknown";
+  const values = list.filter((a) => LONG_METRICS[metric].pick(a) !== null);
+  if (values.length < 2 * MIN_SIDE) return "unknown";
+  const inf = findInflection(list, metric);
+  return inf ? (inf.direction === "improved" ? "improving" : "declining") : "stable";
 }
+
+const TREND_METRIC: Partial<Record<Dimension["id"], LongMetricId>> = {
+  lane: "goldDiff10",
+  farm: "csPerMin",
+  vision: "visionPerMin",
+  risk: "deathsPerMin",
+  teamfight: "killParticipation",
+};
 
 function metricDimension(
   id: Dimension["id"],
   label: string,
   list: MatchAnalysis[],
   pick: (a: MatchAnalysis) => number | null,
-  higherIsBetter: boolean,
+  _higherIsBetter: boolean,
   describe: (avg: number) => string,
   extra: (v: number[]) => { label: string; value: string }[] = () => [],
 ): Dimension | null {
@@ -111,7 +124,7 @@ function metricDimension(
     metrics: extra(v),
     sampleSize: v.length,
     confidence: Math.round(sampleConfidence(v.length, v.length / Math.max(1, list.length)) * 100) / 100,
-    trend: trendOf(list, pick, higherIsBetter),
+    trend: list[0]?.mode === "summoners_rift" ? trendOf(list, TREND_METRIC[id] ?? null) : "unknown",
   };
 }
 

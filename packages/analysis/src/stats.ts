@@ -35,7 +35,7 @@ export interface MeanComparison {
  * large enough and the difference clears Welch's t ≥ 2, so ordinary variance is
  * not reported as a real change.
  */
-export function compareMeans(a: number[], b: number[], minN = 8): MeanComparison {
+export function compareMeans(a: number[], b: number[], minN = 8, tMin = 2): MeanComparison {
   const ma = mean(a);
   const mb = mean(b);
   const se = Math.sqrt(variance(a) / a.length + variance(b) / b.length);
@@ -45,7 +45,7 @@ export function compareMeans(a: number[], b: number[], minN = 8): MeanComparison
     b: mb,
     diff: ma - mb,
     t,
-    consolidated: a.length >= minN && b.length >= minN && Number.isFinite(t) && Math.abs(t) >= 2,
+    consolidated: a.length >= minN && b.length >= minN && Number.isFinite(t) && Math.abs(t) >= tMin,
   };
 }
 

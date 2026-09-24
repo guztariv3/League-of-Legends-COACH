@@ -1,4 +1,4 @@
-import { compareMeans, gameStateOf, mean, patternScope, sampleConfidence, type MatchAnalysis } from "@coach/analysis";
+import { compareMeans, detectAnomalies, findInflections, gameStateOf, LONG_METRICS, mean, patternScope, sampleConfidence, type MatchAnalysis } from "@coach/analysis";
 import type { GoalMetric } from "./goals.js";
 
 export * from "./goals.js";
@@ -10,7 +10,7 @@ export * from "./goals.js";
  * Deterministic by design: the LLM may later rephrase an insight, but never
  * decides whether it exists, its priority or its epistemic kind.
  */
-export const INSIGHTS_VERSION = 2;
+export const INSIGHTS_VERSION = 3;
 
 /** fact = directly observed · observation = pattern across games · hypothesis = interpretation. */
 export type InsightKind = "fact" | "observation" | "hypothesis";
@@ -123,47 +123,53 @@ const earlyDeaths: Detector = (_ctx, usable) => {
   };
 };
 
-const ROLE_ES: Record<string, string> = { TOP: "top", JUNGLE: "jungla", MIDDLE: "mid", BOTTOM: "ADC", UTILITY: "support" };
+/**
+ * Consolidated changes over time (permutation-tested inflection points, brief
+ * §54, §71). This replaces the older "last 10 vs rest" trend detectors, which
+ * used a weaker test.
+ */
+const DATE = new Intl.DateTimeFormat("es-ES", { day: "numeric", month: "short" });
 
-function trendDetector(
-  id: string,
-  goalMetric: GoalMetric,
-  metric: (a: MatchAnalysis) => number | null,
-  name: string,
-  unit: string,
-  higherIsBetter: boolean,
-): Detector {
-  return (_ctx, usable) => {
-    const sr = usable.filter((a) => a.mode === "summoners_rift");
-    const mainRole = mode(sr.map((a) => a.role));
-    const sameRole = sr.filter((a) => a.role === mainRole);
-    const values = sameRole.map((a) => ({ a, v: metric(a) })).filter((x): x is { a: MatchAnalysis; v: number } => x.v !== null);
-    if (values.length < 16) return null;
-    const recent = values.slice(0, 10);
-    const before = values.slice(10);
-    const cmp = compareMeans(recent.map((x) => x.v), before.map((x) => x.v));
-    if (!cmp.consolidated) return null;
-    const improved = higherIsBetter ? cmp.diff > 0 : cmp.diff < 0;
-    return {
-      id,
-      kind: "observation",
-      title: improved
-        ? `Tu ${name} ha mejorado en tus últimas 10 partidas de ${ROLE_ES[mainRole ?? ""] ?? mainRole}`
-        : `Tu ${name} ha bajado en tus últimas 10 partidas de ${ROLE_ES[mainRole ?? ""] ?? mainRole}`,
-      detail: `Pasa de ${fmt(cmp.b)}${unit} a ${fmt(cmp.a)}${unit}. El cambio supera la variación normal entre partidas, pero puede deberse a otros factores (campeón, parche o rivales).`,
-      evidence: [
-        { label: "Últimas 10", value: `${fmt(cmp.a)}${unit}` },
-        { label: `Anteriores ${before.length}`, value: `${fmt(cmp.b)}${unit}` },
-        { label: "Estadístico t (Welch)", value: fmt(cmp.t, 2) },
-      ],
-      sampleSize: values.length,
-      matchIds: recent.map((x) => x.a.matchId),
-      impact: improved ? 0.5 : 0.7,
-      completeness: values.length / Math.max(1, sameRole.length),
-      metric: goalMetric,
-    };
+const consolidatedChange: Detector = (_ctx, usable) => {
+  const inf = findInflections(usable)[0];
+  if (!inf) return null;
+  const digits = LONG_METRICS[inf.metric].digits;
+  const f = (x: number) => x.toFixed(digits);
+  return {
+    id: `change-${inf.metric}`,
+    kind: inf.kind,
+    title: `Tu ${inf.label} ${inf.direction === "improved" ? "ha mejorado" : "ha bajado"} de forma consolidada desde el ${DATE.format(inf.at)}`,
+    detail: `De ${f(inf.before.mean)} a ${f(inf.after.mean)}. ${inf.context.join(" ")}`,
+    evidence: [
+      { label: "Antes", value: `${f(inf.before.mean)} (${inf.before.n} partidas)` },
+      { label: "Después", value: `${f(inf.after.mean)} (${inf.after.n} partidas)` },
+      ...(inf.sameChampion ? [{ label: `Solo con ${inf.sameChampion.champion}`, value: `${f(inf.sameChampion.before)} → ${f(inf.sameChampion.after)}` }] : []),
+    ],
+    sampleSize: inf.before.n + inf.after.n,
+    matchIds: [],
+    impact: inf.direction === "declined" ? 0.75 : 0.55,
+    completeness: 1,
+    metric: inf.metric,
   };
-}
+};
+
+/** Recent games far outside the player's usual range (anomalies, brief §81); only sustained ones are reported. */
+const recentShift: Detector = (_ctx, usable) => {
+  const a = detectAnomalies(usable).find((x) => x.verdict === "possible_change");
+  if (!a) return null;
+  return {
+    id: `shift-${a.metric}-${a.direction}`,
+    kind: "observation",
+    title: `Tus últimas partidas se salen de lo habitual en ${a.label} (${a.direction === "better" ? "para bien" : "para mal"})`,
+    detail: a.explanation,
+    evidence: [{ label: "Tu valor habitual (mediana)", value: a.baseline.toFixed(2) }, { label: "Partidas afectadas", value: `${a.count} de 5` }],
+    sampleSize: a.count,
+    matchIds: a.matchIds,
+    impact: a.direction === "worse" ? 0.6 : 0.45,
+    completeness: 1,
+    metric: a.metric,
+  };
+};
 
 /** Leads that end in defeat (brief §34): a fact, with the counts. */
 const lostLeads: Detector = (_ctx, usable) => {
@@ -242,8 +248,8 @@ function mode<T>(xs: T[]): T | undefined {
 
 const DETECTORS: Detector[] = [
   earlyDeaths,
-  trendDetector("cs-trend", "csPerMin", (a) => a.csPerMin, "CS por minuto", "", true),
-  trendDetector("gold10-trend", "goldDiff10", (a) => a.goldDiff10, "diferencia de oro al minuto 10", " de oro", true),
+  consolidatedChange,
+  recentShift,
   lostLeads,
   lateDeathsWhenAhead,
   championPool,

@@ -24,3 +24,10 @@ describe("search with champion ids that differ from display names", () => {
     expect(search("mis ultimas 5 partidas con wukong", index).find((r) => r.type === "matches")!.href).toBe("/matches?champion=MonkeyKing&limit=5");
   });
 });
+
+describe("search: evolution topics", () => {
+  it("links evolution and adaptation questions to the profile", () => {
+    expect(search("¿estoy mejorando?", index).some((r) => r.href === "/profile#evolution")).toBe(true);
+    expect(search("como me adapto", index).some((r) => r.href === "/profile#adaptation")).toBe(true);
+  });
+});

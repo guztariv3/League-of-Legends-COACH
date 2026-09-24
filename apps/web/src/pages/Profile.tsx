@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "react-router";
 import { api, type Dimension, type MemoryCategory, type MemoryItem } from "../api";
 import { Goals } from "../components/Goals";
+import { DecisionHistory, EvolutionSection } from "../components/Evolution";
 import { ErrorNotice, Loading, modeLabel, pct, roleLabel } from "../components/ui";
 import { useLoad, useSession } from "../session";
 
@@ -95,6 +96,8 @@ export function Profile() {
         </section>
       )}
 
+      <EvolutionSection />
+
       <section className="card stack" aria-labelledby="h-goals" id="goals">
         <h2 id="h-goals">Objetivos</h2>
         {goals.data ? <Goals data={goals.data} onChange={bump} /> : goals.error ? <ErrorNotice error={goals.error} /> : <Loading />}
@@ -181,6 +184,8 @@ function CoachMemory({ onChange, metrics }: { onChange: () => void; metrics: { i
       ) : (
         <p className="page-sub" style={{ margin: 0 }}>El Coach todavía no ha guardado nada.</p>
       )}
+
+      <DecisionHistory />
 
       <details className="layer">
         <summary>Controlar qué recuerda el Coach</summary>

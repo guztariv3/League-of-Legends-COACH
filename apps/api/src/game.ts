@@ -45,7 +45,12 @@ export function gameRoutes({ db, source, knowledge, services }: { db: Db; source
     }).safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "invalid_body" }, 400);
     const { analyses } = await services.profileAnalyses(c.get("userId"));
-    return c.json(analyzeDraft(parsed.data, knowledge.active()?.champions ?? [], analyses));
+    const draft = analyzeDraft(parsed.data, knowledge.active()?.champions ?? [], analyses);
+    await services.logDecision({
+      userId: c.get("userId"), kind: "draft", title: `Preparación con ${parsed.data.myChampion}`,
+      context: { input: parsed.data, keyPoints: draft.keyPoints.map((p) => p.title) }, decision: "none",
+    });
+    return c.json(draft);
   });
 
   r.get("/game/scout", async (c) => {

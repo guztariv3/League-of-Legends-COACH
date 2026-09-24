@@ -101,6 +101,8 @@ export const goals = pgTable("goals", {
   source: text("source").$type<"coach" | "user">().notNull(),
   note: text("note"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  /** When the goal was marked achieved or archived. */
+  closedAt: timestamp("closed_at", { withTimezone: true }),
 });
 
 /** Coach memory (brief §48): small, categorised, fully user-controlled. */
@@ -111,5 +113,21 @@ export const coachMemory = pgTable("coach_memory", {
   content: text("content").notNull(),
   /** Metric id (focus) or insight id (correction). */
   ref: text("ref"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Recommendation → context → player decision (brief §40, §79). Outcomes are
+ * shown next to it later, but never as proof that following (or ignoring)
+ * the recommendation caused them.
+ */
+export const recommendationLog = pgTable("recommendation_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  kind: text("kind").$type<"goal_suggestion" | "insight" | "draft">().notNull(),
+  ref: text("ref"),
+  title: text("title").notNull(),
+  context: jsonb("context").notNull().default({}),
+  decision: text("decision").$type<"accepted" | "rejected" | "dismissed" | "none">(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

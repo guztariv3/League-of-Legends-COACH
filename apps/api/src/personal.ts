@@ -85,6 +85,12 @@ export function personalRoutes({ db, knowledge, services }: { db: Db; source: Ma
     const [goal] = await db.insert(schema.goals).values({
       userId, metric: parsed.data.metric, target, baselineRate, status: "active", source: parsed.data.source, note: parsed.data.note ?? null,
     }).returning();
+    if (parsed.data.source === "coach") {
+      await services.logDecision({
+        userId, kind: "goal_suggestion", ref: goal!.id, title: describeTarget({ metric: parsed.data.metric, target }),
+        context: { metric: parsed.data.metric, target, baselineRate, games: analyses.length }, decision: "accepted",
+      });
+    }
     return c.json({ goal: { id: goal!.id, title: describeTarget({ metric: parsed.data.metric, target }) } }, 201);
   });
 
@@ -92,6 +98,10 @@ export function personalRoutes({ db, knowledge, services }: { db: Db; source: Ma
     const parsed = z.object({ metric: z.enum(metricKeys) }).safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "invalid_body" }, 400);
     await db.insert(schema.goals).values({ userId: c.get("userId"), metric: parsed.data.metric, target: 0, baselineRate: 0, status: "rejected", source: "coach" });
+    await services.logDecision({
+      userId: c.get("userId"), kind: "goal_suggestion", ref: parsed.data.metric,
+      title: `Objetivo sugerido: ${GOAL_METRICS[parsed.data.metric].label}`, context: { metric: parsed.data.metric }, decision: "rejected",
+    });
     return c.json({ ok: true });
   });
 
@@ -99,7 +109,7 @@ export function personalRoutes({ db, knowledge, services }: { db: Db; source: Ma
     const id = c.req.param("id");
     const parsed = z.object({ status: z.enum(["achieved", "archived"]) }).safeParse(await c.req.json().catch(() => null));
     if (!uuidOk(id) || !parsed.success) return c.json({ error: "invalid_body" }, 400);
-    const updated = await db.update(schema.goals).set({ status: parsed.data.status })
+    const updated = await db.update(schema.goals).set({ status: parsed.data.status, closedAt: new Date() })
       .where(and(eq(schema.goals.id, id), eq(schema.goals.userId, c.get("userId")))).returning();
     return updated.length ? c.json({ ok: true }) : c.json({ error: "not_found" }, 404);
   });
@@ -180,6 +190,7 @@ export function personalRoutes({ db, knowledge, services }: { db: Db; source: Ma
       userId, category: "correction", ref: parsed.data.insightId,
       content: `No me resulta útil: ${parsed.data.title ?? parsed.data.insightId}`,
     });
+    await services.logDecision({ userId, kind: "insight", ref: parsed.data.insightId, title: parsed.data.title ?? parsed.data.insightId, decision: "dismissed" });
     return c.json({ ok: true, stored: true });
   });
 

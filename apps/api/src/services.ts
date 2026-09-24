@@ -51,7 +51,23 @@ export function makeServices(db: Db, source: MatchSource) {
   const activeGoals = (userId: string) =>
     db.select().from(schema.goals).where(and(eq(schema.goals.userId, userId), eq(schema.goals.status, "active")));
 
-  return { prefsFor, profileAnalyses, insightOptions, insightsFor, activeGoals };
+  /** Records a recommendation and what the player decided; failures never block the user action. */
+  const logDecision = async (entry: {
+    userId: string;
+    kind: "goal_suggestion" | "insight" | "draft";
+    ref?: string | null;
+    title: string;
+    context?: Record<string, unknown>;
+    decision: "accepted" | "rejected" | "dismissed" | "none";
+  }) => {
+    try {
+      await db.insert(schema.recommendationLog).values({ ...entry, ref: entry.ref ?? null, context: entry.context ?? {} });
+    } catch (err) {
+      console.warn("[history] could not record decision", err);
+    }
+  };
+
+  return { prefsFor, profileAnalyses, insightOptions, insightsFor, activeGoals, logDecision };
 }
 
 export type Services = ReturnType<typeof makeServices>;

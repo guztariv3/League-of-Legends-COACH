@@ -25,6 +25,8 @@ test("profile, goals, memory, search and champion page", async ({ page }, info) 
   await page.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: "Perfil" }).click();
   await expect(page.getByRole("heading", { name: "Tu perfil" })).toBeVisible();
   await expect(page.getByText("Fase de líneas").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Tu evolución" })).toBeVisible();
+  await page.getByText(/Ver línea temporal/).click().catch(() => {});
   await page.screenshot({ path: `test-results/profile-${info.project.name}.png`, fullPage: true });
 
   // Create a goal
@@ -41,6 +43,10 @@ test("profile, goals, memory, search and champion page", async ({ page }, info) 
   await expect(page.getByText("Juego con mando")).toBeVisible();
   await page.getByRole("button", { name: "Olvidar: Juego con mando" }).click();
   await expect(page.getByText("Juego con mando")).toHaveCount(0);
+
+  // Decision history (hedged, no causality)
+  await page.getByText(/Historial de recomendaciones y decisiones/).click();
+  await expect(page.getByText(/no demuestra que la recomendación lo causara/)).toBeVisible();
 
   // Champion page personal layer
   await page.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: "Campeones" }).click();

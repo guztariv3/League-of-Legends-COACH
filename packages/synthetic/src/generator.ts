@@ -33,6 +33,13 @@ export interface PlayerTraits {
   earlyDeathRisk: number;
   /** Optional champion on which the player takes much more early risk (champion-specific pattern). */
   riskyChampion?: string;
+  /**
+   * Optional real change in the player: games newer than `fromIndex` (index 0 = newest)
+   * get these deltas. Used to test inflection-point detection.
+   */
+  improvement?: { fromIndex: number; csPerMinDelta?: number; earlyDeathRiskDelta?: number };
+  /** Optional extra early risk when the lane opponent's primary class is `tag` (adaptability tests). */
+  riskVsClass?: { tag: string; delta: number };
 }
 
 export interface GenerateOptions {
@@ -47,6 +54,8 @@ export interface GenerateOptions {
   scenarios?: Partial<Record<Scenario, number>>;
   /** Epoch ms of the most recent game. */
   now?: number;
+  /** Games newer than this index are on the newer synthetic patch (default: half). */
+  patchSplitIndex?: number;
 }
 
 export interface SyntheticGame {
@@ -157,11 +166,20 @@ function hashSeed(...parts: (string | number)[]): number {
 
 function generateGame(
   opts: GenerateOptions,
-  traits: PlayerTraits,
+  baseTraits: PlayerTraits,
   index: number,
   scenario: Scenario,
   startedAt: number,
 ): SyntheticGame {
+  const imp = baseTraits.improvement;
+  const traits: PlayerTraits =
+    imp && index < imp.fromIndex
+      ? {
+          ...baseTraits,
+          csPerMin: baseTraits.csPerMin + (imp.csPerMinDelta ?? 0),
+          earlyDeathRisk: Math.max(0, Math.min(1, baseTraits.earlyDeathRisk + (imp.earlyDeathRiskDelta ?? 0))),
+        }
+      : baseTraits;
   const rng = new Rng(mulberry32(hashSeed(opts.seed, opts.puuid, index)));
   const isAram = scenario === "aram";
   const isOther = scenario === "unsupported_mode";
@@ -214,6 +232,8 @@ function generateGame(
     });
   }
   const me = players.find((p) => p.puuid === opts.puuid)!;
+  const laneOpp = players.find((p) => p.teamId !== me.teamId && p.role !== null && p.role === me.role);
+  const classRisk = traits.riskVsClass && laneOpp?.champ.tags[0] === traits.riskVsClass.tag ? traits.riskVsClass.delta : 0;
 
   // Per-minute simulation
   type Frame = RawTimeline["info"]["frames"][number];
@@ -267,7 +287,7 @@ function generateGame(
       const killerTeam = rng.chance(pMyTeam) ? playerTeam : playerTeam === 100 ? 200 : 100;
       const victims = players.filter((p) => p.teamId !== killerTeam);
       let victim = rng.pick(victims);
-      const risk = me.champ.id === traits.riskyChampion ? Math.min(1, traits.earlyDeathRisk + 0.8) : traits.earlyDeathRisk;
+      const risk = Math.min(1, (me.champ.id === traits.riskyChampion ? traits.earlyDeathRisk + 0.8 : traits.earlyDeathRisk) + classRisk);
       if (killerTeam !== playerTeam && minute < 14 && rng.chance(risk * 0.35)) victim = me;
       const killer = rng.pick(players.filter((p) => p.teamId === killerTeam));
       const assisters = players
@@ -331,7 +351,7 @@ function generateGame(
       gameDuration: durationSec,
       gameEndTimestamp: startedAt + durationSec * 1000,
       gameMode: isAram ? "ARAM" : isOther ? "SYNTHETIC_OTHER" : "CLASSIC",
-      gameVersion: index < opts.count / 2 ? "0.2.100.1" : "0.1.100.1",
+      gameVersion: index < (opts.patchSplitIndex ?? opts.count / 2) ? "0.2.100.1" : "0.1.100.1",
       mapId: isAram ? 12 : isOther ? 0 : 11,
       queueId: isAram ? 450 : isOther ? 0 : 420,
       platformId: opts.platform.toUpperCase(),

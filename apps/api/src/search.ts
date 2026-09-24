@@ -119,6 +119,13 @@ export function search(raw: string, index: SearchIndex): SearchResult[] {
     if (dim) out.push({ type: "profile", title: dim.label, subtitle: dim.headline, href: `/profile#${id}` });
   }
 
+  if (/\b(evolucion|progreso|mejorando|mejorado|empeorando|cambio|improv\w*|progress)\b/.test(q)) {
+    out.push({ type: "profile", title: "Tu evolución", subtitle: "Cambios consolidados y línea temporal", href: "/profile#evolution" });
+  }
+  if (/\b(adapt\w*)\b/.test(q)) {
+    out.push({ type: "profile", title: "Cómo te adaptas", subtitle: "Según el rival y el estado de la partida", href: "/profile#adaptation" });
+  }
+
   const words = q.split(/\s+/).filter((w) => w.length >= 4);
   for (const i of index.insights) {
     if (words.some((w) => norm(i.title).includes(w))) out.push({ type: "insight", title: i.title, href: "/" });

@@ -283,6 +283,43 @@ export interface ScoutResult {
   draft?: DraftAnalysis;
 }
 
+export interface Inflection {
+  metric: string;
+  label: string;
+  at: number;
+  before: { mean: number; n: number };
+  after: { mean: number; n: number };
+  direction: "improved" | "declined";
+  attribution: "player" | "environment_possible" | "unclear";
+  kind: "observation" | "hypothesis";
+  context: string[];
+}
+
+export interface Evolution {
+  inflections: Inflection[];
+  anomalies: { metric: string; label: string; direction: "better" | "worse"; count: number; verdict: "variance" | "possible_change"; explanation: string }[];
+  timeline: { at: number; type: "inflection" | "champion_shift" | "patch"; title: string; detail: string }[];
+  adaptation: {
+    byOpponentClass: AdaptationContext[];
+    lead: AdaptationContext | null;
+  };
+  games: number;
+}
+
+export interface AdaptationContext {
+  id: string;
+  label: string;
+  games: number;
+  verdict: "insufficient" | "over" | "no_clear_difference";
+  detail: string;
+  metrics: { label: string; here: string; elsewhere: string }[];
+}
+
+export interface DecisionHistory {
+  note: string;
+  items: { id: string; kind: "goal_suggestion" | "insight" | "draft"; title: string; decision: "accepted" | "rejected" | "dismissed" | "none" | null; createdAt: string; outcome: string | null }[];
+}
+
 export class ApiError extends Error {
   constructor(readonly status: number, readonly code: string, message: string) {
     super(message);
@@ -336,4 +373,7 @@ export const api = {
   draft: (input: { myChampion: string; allies: string[]; enemies: string[]; laneOpponent?: string }) =>
     request<DraftAnalysis>("/draft", { method: "POST", body: JSON.stringify(input) }),
   scout: () => request<ScoutResult>("/game/scout"),
+  evolution: () => request<Evolution>("/evolution"),
+  history: () => request<DecisionHistory>("/history"),
+  clearHistory: () => request<{ ok: true }>("/history", { method: "DELETE" }),
 };
