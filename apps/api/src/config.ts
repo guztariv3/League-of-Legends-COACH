@@ -9,6 +9,8 @@ export interface Config {
   aiModel?: string;
   /** Allowed browser origin for state-changing requests. */
   webOrigin: string;
+  /** Development login must be switched on explicitly (DEV_LOGIN=1); it is never available in production. */
+  devLogin: boolean;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -22,6 +24,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     anthropicApiKey: env.ANTHROPIC_API_KEY || undefined,
     aiModel: env.AI_MODEL || undefined,
     webOrigin: env.WEB_ORIGIN ?? "http://localhost:5173",
+    devLogin: mode !== "production" && (env.DEV_LOGIN === "1" || mode === "test"),
   };
 }
 
@@ -33,8 +36,9 @@ export function dataSource(cfg: Config): DataSource {
 
 /**
  * Decision D-01: until RSO is approved, the only login is the development
- * login, and it is refused in production.
+ * login. It is opt-in (DEV_LOGIN=1) and always refused in production, so a
+ * deployment that forgets NODE_ENV does not open it by accident.
  */
 export function devLoginAllowed(cfg: Config): boolean {
-  return cfg.env !== "production";
+  return cfg.devLogin && cfg.env !== "production";
 }

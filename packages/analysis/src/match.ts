@@ -18,6 +18,7 @@ export interface MatchAnalysis {
   matchId: string;
   puuid: string;
   mode: AnalysisMode;
+  queueId: number;
   /** false for remakes and unsupported modes; such games are shown but never aggregated. */
   analyzable: boolean;
   patch: string;
@@ -74,6 +75,7 @@ export function analyzeMatch(match: NormalizedMatch, timeline: RawTimeline | nul
     matchId: match.matchId,
     puuid,
     mode: match.mode,
+    queueId: match.queueId,
     analyzable: !match.remake && match.mode !== "unsupported",
     patch: match.patch,
     startedAt: match.startedAt,

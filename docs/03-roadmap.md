@@ -4,7 +4,7 @@ No se avanza a una fase si la anterior no pasa su quality gate (tests, revisión
 
 ## Fase 0 — Auditoría + investigación + arquitectura ✅ (este commit)
 
-## Fase 1 — Núcleo funcional (con datos sintéticos primero)
+## Fase 1 — Núcleo funcional (con datos sintéticos primero) ✅ sobre datos sintéticos (ver `05-fase1.md`)
 1. Monorepo, CI local (lint, typecheck, test) y hook de sesión.
 2. `synthetic/`: generador de partidas y timelines versionados (normales, extremos, datos faltantes, errores). Es la base de todos los tests.
 3. `riot/`: cliente con routing, rate limiter por región y caché, probado contra un mock. Se usa la API real en cuanto haya red y key.

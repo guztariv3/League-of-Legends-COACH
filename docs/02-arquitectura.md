@@ -26,7 +26,7 @@ Principios: un solo lenguaje (TypeScript) donde sea posible, pocas piezas, una s
 | Frontend | React + Vite + TypeScript, CSS con tokens (sin framework UI pesado) | La misma SPA funciona en la web y dentro de Tauri. No hay necesidad real de SSR (app privada tras login). |
 | API | Hono sobre Node 22 | Ligero, tipado y portable a otros runtimes. |
 | BD | PostgreSQL + Drizzle ORM (migraciones versionadas) | Relacional con JSONB para los datos crudos de Riot. |
-| Jobs / cola | pg-boss (sobre Postgres) | Evita añadir Redis. Una sola pieza de infraestructura. |
+| Jobs / cola | Fase 1: runner en proceso (una instancia). pg-boss sobre Postgres cuando haya más de una instancia. | Evita añadir Redis. Una sola pieza de infraestructura. |
 | Desktop | Tauri v2 | Mínimo consumo de CPU y RAM. El lector live está en Rust, fuera del hilo de UI. |
 | Validación | Zod (compartido entre API, web y desktop) | Un único esquema para datos de Riot y contratos. |
 | Tests | Vitest (unit/integración), Playwright (E2E), datasets sintéticos versionados | — |

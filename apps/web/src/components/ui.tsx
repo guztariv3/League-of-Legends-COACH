@@ -79,7 +79,7 @@ export function MatchItem({ m }: { m: MatchRow }) {
             {m.championName} <span className="visually-hidden">{m.analyzable ? (m.win ? "victoria" : "derrota") : "sin análisis"}</span>
           </span>
           <span className="match-meta">
-            {modeLabel[m.mode]} · {roleLabel[m.role] ?? m.role} · {duration(m.durationSec)} · {ago(m.startedAt)}
+            {m.queue} · {roleLabel[m.role] ?? m.role} · {duration(m.durationSec)} · {ago(m.startedAt)}
           </span>
           {m.headline && <span className="match-headline">{m.headline}</span>}
         </span>

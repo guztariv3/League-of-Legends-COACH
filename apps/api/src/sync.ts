@@ -4,9 +4,11 @@ import { and, eq, inArray } from "drizzle-orm";
 import { schema, type Db } from "./db/index.js";
 import type { MatchSource } from "./sources.js";
 
-/** First sync pulls the last 50 games (brief §14); later syncs are incremental. */
+/** First sync pulls the last 50 games (brief §14); later syncs page back until they reach known games. */
 export const INITIAL_SYNC_COUNT = 50;
-export const INCREMENTAL_SYNC_COUNT = 20;
+export const PAGE_SIZE = 100;
+/** Safety cap for one incremental sync; anything older is picked up by the next one. */
+export const MAX_INCREMENTAL = 300;
 
 export interface SyncProgress {
   done: number;
@@ -28,52 +30,85 @@ export class SyncService {
     return this.progress.get(accountId);
   }
 
-  /** Starts a sync unless one is already running; resolves when it finishes. */
+  isRunning(accountId: string): boolean {
+    return this.running.has(accountId);
+  }
+
+  /**
+   * Marks accounts as syncing before a request returns, so clients that read the
+   * status right after the call see "syncing" and start polling.
+   */
+  async markSyncing(accountIds: string[]): Promise<void> {
+    if (!accountIds.length) return;
+    await this.db.update(schema.riotAccounts)
+      .set({ syncStatus: "syncing", syncError: null })
+      .where(inArray(schema.riotAccounts.id, accountIds));
+  }
+
+  /** Starts a sync unless one is already running. The returned promise never rejects. */
   start(accountId: string): Promise<void> {
     const existing = this.running.get(accountId);
     if (existing) return existing;
-    const job = this.run(accountId).finally(() => {
-      this.running.delete(accountId);
-      this.progress.delete(accountId);
-    });
+    const job = this.run(accountId)
+      .catch((err) => console.error(`[sync] ${accountId} failed:`, err))
+      .finally(() => {
+        this.running.delete(accountId);
+        this.progress.delete(accountId);
+      });
     this.running.set(accountId, job);
     return job;
   }
 
-  private async run(accountId: string): Promise<void> {
-    const [account] = await this.db.select().from(schema.riotAccounts).where(eq(schema.riotAccounts.id, accountId));
-    if (!account) return;
-    await this.db.update(schema.riotAccounts).set({ syncStatus: "syncing", syncError: null }).where(eq(schema.riotAccounts.id, accountId));
-
+  private async setError(accountId: string, err: unknown): Promise<void> {
     try {
-      const first = account.lastSyncedAt === null;
-      const startTime = first ? undefined : Math.floor(account.lastSyncedAt!.getTime() / 1000) - 3600;
-      const ids = await this.source.matchIds(account.platform, account.puuid, first ? INITIAL_SYNC_COUNT : INCREMENTAL_SYNC_COUNT, startTime);
+      await this.db.update(schema.riotAccounts)
+        .set({ syncStatus: "error", syncError: err instanceof Error ? err.message : String(err) })
+        .where(eq(schema.riotAccounts.id, accountId));
+    } catch (dbErr) {
+      console.error(`[sync] could not record error for ${accountId}:`, dbErr);
+    }
+  }
 
-      const linked = ids.length
-        ? new Set(
-            (await this.db.select({ id: schema.accountMatches.matchId }).from(schema.accountMatches)
-              .where(and(eq(schema.accountMatches.accountId, accountId), inArray(schema.accountMatches.matchId, ids))))
-              .map((r) => r.id),
-          )
-        : new Set<string>();
-      const todo = ids.filter((id) => !linked.has(id));
+  private async run(accountId: string): Promise<void> {
+    try {
+      const [account] = await this.db.select().from(schema.riotAccounts).where(eq(schema.riotAccounts.id, accountId));
+      if (!account) return;
+      await this.markSyncing([accountId]);
+
+      const todo = account.lastSyncedAt === null
+        ? await this.source.matchIds(account.platform, account.puuid, INITIAL_SYNC_COUNT, 0)
+        : await this.newMatchIds(account);
       this.progress.set(accountId, { done: 0, total: todo.length });
 
       for (const matchId of todo) {
         await this.ingest(account, matchId);
-        const p = this.progress.get(accountId)!;
-        p.done++;
+        this.progress.get(accountId)!.done++;
       }
 
       await this.db.update(schema.riotAccounts)
         .set({ syncStatus: "ok", lastSyncedAt: new Date() })
         .where(eq(schema.riotAccounts.id, accountId));
     } catch (err) {
-      await this.db.update(schema.riotAccounts)
-        .set({ syncStatus: "error", syncError: err instanceof Error ? err.message : String(err) })
-        .where(eq(schema.riotAccounts.id, accountId));
+      await this.setError(accountId, err);
     }
+  }
+
+  /** Pages back from the newest game until it reaches games already linked (or the cap). */
+  private async newMatchIds(account: typeof schema.riotAccounts.$inferSelect): Promise<string[]> {
+    const startTime = Math.floor(account.lastSyncedAt!.getTime() / 1000) - 3600;
+    const fresh: string[] = [];
+    for (let start = 0; fresh.length < MAX_INCREMENTAL; start += PAGE_SIZE) {
+      const page = await this.source.matchIds(account.platform, account.puuid, PAGE_SIZE, start, startTime);
+      if (!page.length) break;
+      const linked = new Set(
+        (await this.db.select({ id: schema.accountMatches.matchId }).from(schema.accountMatches)
+          .where(and(eq(schema.accountMatches.accountId, account.id), inArray(schema.accountMatches.matchId, page))))
+          .map((r) => r.id),
+      );
+      fresh.push(...page.filter((id) => !linked.has(id)));
+      if (linked.size > 0 || page.length < PAGE_SIZE) break;
+    }
+    return fresh.slice(0, MAX_INCREMENTAL);
   }
 
   private async ingest(account: typeof schema.riotAccounts.$inferSelect, matchId: string): Promise<void> {

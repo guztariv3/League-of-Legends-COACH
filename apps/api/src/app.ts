@@ -139,6 +139,7 @@ export function createApp(deps: AppDeps) {
       verified: false, // D-01: ownership is only proven once RSO is available
       source: source.kind,
     }).returning();
+    await sync.markSyncing([account!.id]);
     void sync.start(account!.id);
     return c.json({ account: accountView({ ...account!, syncStatus: "syncing" }) }, 201);
   });
@@ -169,6 +170,7 @@ export function createApp(deps: AppDeps) {
   authed.post("/accounts/:id/sync", async (c) => {
     const acc = await ownAccount(c.get("userId"), c.req.param("id"));
     if (!acc) return c.json({ error: "not_found" }, 404);
+    await sync.markSyncing([acc.id]);
     void sync.start(acc.id);
     return c.json({ started: true }, 202);
   });
@@ -176,7 +178,13 @@ export function createApp(deps: AppDeps) {
   /** Sync on app open (brief §14): only accounts not synced in the last 10 minutes. */
   authed.post("/sync", async (c) => {
     const accounts = await userAccounts(db, c.get("userId"));
-    const stale = accounts.filter((a) => a.syncStatus !== "syncing" && (!a.lastSyncedAt || Date.now() - a.lastSyncedAt.getTime() > 10 * 60_000));
+    // A "syncing" account with no job in memory was interrupted (e.g. a server restart): resume it.
+    const stale = accounts.filter((a) =>
+      a.syncStatus === "syncing"
+        ? !sync.isRunning(a.id)
+        : !a.lastSyncedAt || Date.now() - a.lastSyncedAt.getTime() > 10 * 60_000,
+    );
+    await sync.markSyncing(stale.map((a) => a.id));
     for (const a of stale) void sync.start(a.id);
     return c.json({ started: stale.map((a) => a.id) }, 202);
   });
@@ -199,7 +207,7 @@ export function createApp(deps: AppDeps) {
     startedAt: a.startedAt,
     durationSec: a.durationSec,
     mode: a.mode,
-    queue: queueLabel(0, a.mode),
+    queue: queueLabel(a.queueId, a.mode),
     patch: a.patch,
     analyzable: a.analyzable,
     win: a.win,
@@ -264,7 +272,8 @@ export function createApp(deps: AppDeps) {
   authed.get("/matches/:matchId", async (c) => {
     const matchId = c.req.param("matchId");
     const accounts = await userAccounts(db, c.get("userId"));
-    const mine = (await analysesFor(db, accounts)).find((a) => a.matchId === matchId);
+    const all = await analysesFor(db, accounts);
+    const mine = all.find((a) => a.matchId === matchId);
     if (!mine) return c.json({ error: "not_found" }, 404);
     const [raw] = await db.select().from(schema.rawMatches).where(eq(schema.rawMatches.matchId, matchId));
     const [tl] = await db.select().from(schema.rawTimelines).where(eq(schema.rawTimelines.matchId, matchId));
@@ -295,7 +304,7 @@ export function createApp(deps: AppDeps) {
     return c.json({
       dataSource: raw!.source,
       analysis: mine,
-      headline: matchHeadline(mine, averages([mine])),
+      headline: matchHeadline(mine, averages(all)),
       teams: [100, 200].map((teamId) => ({
         teamId,
         win: match.participants.find((p) => p.teamId === teamId)?.win ?? false,
