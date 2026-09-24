@@ -1,0 +1,63 @@
+# Fase 4 · Live Coach (escritorio)
+
+Estado: **compila y se ha probado con partidas simuladas**. Este entorno no tiene League instalado, así que la lectura real de la API local del juego queda pendiente de probar en un PC con Windows o macOS.
+
+## Qué existe
+
+| Área | Implementación | Dónde |
+|---|---|---|
+| App de escritorio | Tauri v2: una ventana lateral independiente de 380×560, siempre encima, sin dibujar nada dentro del juego. Compila sin avisos en Linux (debug) y se ha comprobado que arranca bajo Xvfb. | `apps/desktop` |
+| Lectura del juego | La parte en Rust hace un GET de solo lectura a `https://127.0.0.1:2999/liveclientdata/allgamedata`, la API que publica el propio juego, con timeouts cortos (400 ms de conexión y 900 ms en total). Hay un test que comprueba que falla rápido si no hay partida. | `src-tauri/src/lib.rs` |
+| Game State central | Construido solo con lo que expone esa API: nivel, KDA, CS, objetos, posición declarada y eventos. No modela nada que no sea observable: ni cooldowns rivales, ni posiciones en el mapa, ni intenciones. | `packages/live/src/state.ts` |
+| Event intelligence | Tus picos de poder (niveles 6/11/16 y objetos grandes), picos de tu rival de línea (nivel 6 y objetos; el propio marcador del juego los muestra), objetivos conseguidos y progreso de tu enfoque (CS/min). | `signals.ts` |
+| Policy / Safety engine | Lista blanca de categorías y lista negra explícita: órdenes, definitivas rivales, hechizos de invocador rivales, predicción de intenciones, timers de objetivos y acceso a memoria o procesos. Además tiene un filtro de lenguaje imperativo ("ve", "gankea", "go", "buy"…). Lo bloqueado se registra internamente. | `policy.ts` |
+| Notificaciones | Como mucho un mensaje por actualización y separación mínima según intensidad (baja 90 s, normal 40 s, alta 20 s). Lo informativo nunca se encola. Lo importante espera a que termine una pelea (se detecta pelea con 2 o más kills en 15 s). Todo aviso con más de 60 s se descarta. | `notifier.ts` |
+| Modo Enfoque | Manual o automático (en peleas y en Modo seguro): solo lo importante, sin animaciones y en formato compacto. | idem |
+| Modo seguro | Con CPU ≥ 85 % o menos del 10 % de memoria libre: la consulta pasa de cada 2 s a cada 6 s, solo muestra lo importante y quita animaciones. Se restaura tras 6 muestras tranquilas seguidas. | `safe-mode.ts` + comando `system_load` |
+| Controles | Pausar, silenciar, Enfoque, ocultar (minimizar), intensidad y qué categorías pueden avisar. Se recuerdan localmente. | `apps/desktop/src/main.tsx` |
+| Demostración | Reproduce una partida sintética "como si fuera en vivo" para probar el Coach sin League. Siempre aparece etiquetada. Se carga solo cuando se pide, para que la ventana siga ligera. | `demo.ts`, `simulator.ts` |
+| Diseño compartido | El avatar y los tokens de diseño viven en `packages/ui` y los usan la web y el escritorio (sección 112). | `packages/ui` |
+
+Durante la partida no se usa IA ni Internet: los precios y nombres de los objetos vienen en los propios datos del juego (sección 88).
+
+## Compatibilidad con Riot y Vanguard
+
+- La app solo hace peticiones HTTPS de solo lectura a la API local oficial del juego. No lee memoria, no inyecta código, no dibuja overlays dentro del juego, no automatiza entradas y no toca procesos ni archivos protegidos.
+- El certificado local del juego lo firma la raíz de Riot, que no está en el almacén del sistema. Por eso ese único cliente acepta certificados no válidos, y solo lo usa para la URL fija de 127.0.0.1. **Pendiente:** fijar el `riotgames.pem` publicado por Riot cuando se pueda verificar (su portal está bloqueado desde este entorno).
+- La LCU (cliente de League) **no** se usa todavía. Integrar la selección de campeones requiere registrar ese uso ante Riot y respetar el anonimato (D-03); de momento el draft se prepara a mano en la web.
+
+## Actualizaciones (secciones 108–109)
+
+Diseño previsto, **no activado** porque depende de D-08 (hosting) y de una clave de firma:
+
+1. **Actualizar:** plugin oficial `tauri-plugin-updater`, con el manifiesto servido desde el hosting que se elija.
+2. **Validar:** cada paquete va firmado. La clave privada se guarda como secreto de CI y nunca en el repositorio; la app lleva solo la clave pública y rechaza paquetes con firma inválida.
+3. **Activar:** el instalador reemplaza la versión solo si descarga y firma son correctos. Si falla, se conserva la versión instalada y se informa.
+4. **Rollback:** el updater de Tauri no tiene rollback automático. Se hará publicando de nuevo la versión estable anterior en el manifiesto, y se documentará en el runbook de despliegue.
+
+El conocimiento del juego ya se actualiza con validación y rollback en el servidor (Fases 1 y 3).
+
+## Simplificaciones (sección 3)
+
+| Cambio | Por qué | Qué se conserva |
+|---|---|---|
+| Sin timers de objetivos en vivo | La política no está verificada (D-02, criterio conservador). | Aviso cuando se consigue un objetivo (desactivado por defecto). |
+| Sin hotkeys globales ni icono en la bandeja | Cada integración del sistema operativo es más superficie y más permisos; los controles de la ventana bastan por ahora. | Ocultar, pausar y silenciar. |
+| El enfoque se elige en la ventana, no se sincroniza con la web | La app de escritorio aún no tiene sesión con la API (pendiente de RSO, D-01). | Se sincronizará cuando exista el inicio de sesión real. |
+| Sin LLM en vivo | Latencia, coste y riesgo; el brief lo prioriza así (secciones 87–88). | Mensajes deterministas a partir de plantillas. |
+
+## Quality gate
+
+- Typecheck en verde, 103 tests unitarios y de integración, 6 E2E web, 1 E2E de la ventana de escritorio y 1 test de Rust.
+- `cargo build` sin avisos. La app arranca bajo Xvfb y sigue viva a los 10 s.
+- Revisión de código con la skill `code-review`: 3 bugs corregidos con tests. Se podían perder avisos importantes de la misma actualización; una segunda partida en la misma sesión quedaba casi muda; y los objetivos anteriores al arranque se anunciaban como nuevos.
+- Seguridad (manual): permisos mínimos (`core:default`, minimizar, siempre encima), CSP restrictiva, sin plugins de shell ni de sistema de archivos, y la excepción de certificado limitada a la URL local fija.
+- Revisión visual: se corrigió la burbuja del Coach, que tapaba la barra de controles con los ajustes abiertos.
+
+## Cómo probar
+
+```bash
+pnpm test:e2e:desktop                     # UI en modo demostración (navegador)
+cd apps/desktop && pnpm tauri dev         # app real (necesita las dependencias de Tauri del sistema)
+```
+En Windows o macOS, con una partida en curso, la ventana pasa sola de "Esperando partida" a "En partida".

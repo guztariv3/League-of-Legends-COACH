@@ -1,0 +1,17 @@
+{
+  "name": "@coach/insights",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@coach/domain": "workspace:*",
+    "@coach/analysis": "workspace:*"
+  },
+  "devDependencies": {
+    "@coach/synthetic": "workspace:*",
+    "@coach/domain": "workspace:*"
+  }
+}

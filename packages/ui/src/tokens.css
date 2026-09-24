@@ -1,0 +1,43 @@
+/* Kairos design tokens — shared by web and desktop (brief §112). Dark-first, original palette. */
+:root {
+  color-scheme: dark;
+  /* surfaces */
+  --bg: #0b0e14;
+  --surface-1: #141821;
+  --surface-2: #1b2130;
+  --surface-3: #242b3d;
+  --border: #2a3246;
+  --border-strong: #3a4560;
+  /* text */
+  --text-primary: #eef1f7;
+  --text-secondary: #b3bccf;
+  --text-muted: #8791a8;
+  /* brand */
+  --accent: #7fe3d6; /* arcane teal: the Coach's identity */
+  --accent-ink: #062320;
+  --gold: #e3b964; /* highlights, sparingly */
+  /* data viz (validated with the dataviz skill against --surface-1) */
+  --series-1: #3987e5;
+  /* teams on the review map (validated pair, dataviz skill); always paired with shape */
+  --team-ally: #3987e5;
+  --team-enemy: #d95926;
+  --grid: #2a3246;
+  /* status: always paired with icon + label */
+  --good: #4cc38a;
+  --bad: #f07178;
+  --warn: #e3b964;
+  /* type & space */
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Cinzel", Georgia, "Times New Roman", serif;
+  --radius-s: 6px;
+  --radius-m: 10px;
+  --radius-l: 16px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --shadow: 0 8px 30px rgb(0 0 0 / 0.35);
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
