@@ -19,7 +19,22 @@ Los precios salen de fuentes secundarias de septiembre de 2026 (las webs de los 
 - Contra **Postgres 16 real**: se aplican las 3 migraciones, funcionan login → vincular cuenta → sync de 50 partidas → dashboard, perfil, objetivos, evolución, historial y revisión de partida, y los datos sobreviven a un reinicio.
 - El gate del prototipo: `/api/health` queda abierto (lo usa Render) y todo lo demás pide contraseña. Hay cabeceras de seguridad (CSP, `nosniff`, `frame-ancestors 'none'`) y la ruta SPA sirve la app sin tocar `/api/*`.
 - El updater: si una build con updater no tiene clave pública, **se niega a arrancar**; con la configuración correcta arranca normalmente (probado con una clave de usar y tirar que no se guardó).
-- **No se ha desplegado** todavía: hace falta tu cuenta de Render.
+
+## Estado del despliegue
+
+**Desplegado en Render** el 24-09-2026 con el Blueprint (`render.yaml`, rama `main`): servicio web `kairos-coach` y Postgres `kairos-db` en Frankfurt.
+
+| Comprobación | Resultado | Cómo se comprobó |
+|---|---|---|
+| El servicio arranca | Sí | Log de arranque en Render |
+| Gate del prototipo activo | Sí (`gate=on`) | Log de arranque |
+| La web se sirve desde la API | Sí (`web=served`) | Log de arranque |
+| Datos reales de Riot (`data=riot`) | **Pendiente de confirmar** | Mirar la misma línea del log |
+| IA activa (`ai=on`) | **Pendiente de confirmar** (opcional) | Idem |
+
+Lo comprobó el propietario en el panel de Render. Desde el entorno de desarrollo no se puede verificar: su política de red bloquea `*.onrender.com`.
+
+Pendiente antes de abrirlo a más gente: rate limiting en los endpoints propios (ver `05-fase1.md`), validar con datos reales de Riot y sustituir el gate por RSO (D-01).
 
 ## Poner en marcha el prototipo en Render
 
