@@ -199,7 +199,12 @@ export function personalRoutes({ db, knowledge, services }: { db: Db; source: Ma
         matchups.set(k, (matchups.get(k) ?? 0) + 1);
       }
     }
-    const champions = [...new Set([...(knowledge.active()?.champions.map((ch) => ch.name) ?? []), ...playerChampions.keys()])];
+    // Match data uses Riot's champion id; the knowledge bundle provides the display name.
+    const known = knowledge.active()?.champions.map((ch) => ({ id: ch.id, name: ch.name })) ?? [];
+    const champions = [
+      ...known,
+      ...[...playerChampions.keys()].filter((id) => !known.some((k) => k.id === id)).map((id) => ({ id, name: id })),
+    ];
     const dimensions = buildProfile(analyses).flatMap((p) => p.dimensions.map((d) => ({ id: d.id, label: d.label, headline: d.headline })));
     return c.json({ results: search(q, { champions, playerChampions, matchups, dimensions, insights }) });
   });

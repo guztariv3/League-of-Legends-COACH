@@ -13,11 +13,17 @@ export interface SearchResult {
   href: string;
 }
 
+/** Riot's internal id (used in match data and filters) and the display name can differ, e.g. "MonkeyKing" / "Wukong". */
+export interface ChampionRef {
+  id: string;
+  name: string;
+}
+
 export interface SearchIndex {
-  champions: string[];
-  /** Games per champion for the player (used to rank and describe). */
+  champions: ChampionRef[];
+  /** Games per champion id for the player. */
   playerChampions: Map<string, number>;
-  /** Games per lane matchup "me|opponent". */
+  /** Games per lane matchup "myId|opponentId". */
   matchups: Map<string, number>;
   dimensions: { id: string; label: string; headline: string }[];
   insights: { id: string; title: string }[];
@@ -43,10 +49,23 @@ const TOPICS: [RegExp, string][] = [
   [/\b(campeones|pool|champions)\b/, "pool"],
 ];
 
-function findChampions(q: string, index: SearchIndex): string[] {
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Position of the first whole-word match of the champion's name or id in q, or -1. */
+function position(q: string, c: ChampionRef): number {
+  for (const form of [c.name, c.id]) {
+    const m = new RegExp(`\\b${escape(norm(form))}\\b`).exec(q);
+    if (m) return m.index;
+  }
+  return -1;
+}
+
+function findChampions(q: string, index: SearchIndex): ChampionRef[] {
   return index.champions
-    .filter((c) => new RegExp(`\\b${norm(c).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(q))
-    .sort((a, b) => q.indexOf(norm(a)) - q.indexOf(norm(b)));
+    .map((c) => ({ c, at: position(q, c) }))
+    .filter((x) => x.at >= 0)
+    .sort((a, b) => a.at - b.at)
+    .map((x) => x.c);
 }
 
 export function search(raw: string, index: SearchIndex): SearchResult[] {
@@ -61,13 +80,13 @@ export function search(raw: string, index: SearchIndex): SearchResult[] {
 
   // Matchup: "A vs B" / "A contra B"
   if (champs.length >= 2 && /\b(vs|versus|contra)\b/.test(q)) {
-    const [a, b] = champs as [string, string];
-    const n = index.matchups.get(`${a}|${b}`) ?? 0;
+    const [a, b] = champs as [ChampionRef, ChampionRef];
+    const n = index.matchups.get(`${a.id}|${b.id}`) ?? 0;
     out.push({
       type: "matchup",
-      title: `${a} contra ${b}`,
+      title: `${a.name} contra ${b.name}`,
       subtitle: n ? `${n} partidas tuyas en este enfrentamiento` : "No tienes partidas en este enfrentamiento",
-      href: `/matches?champion=${encodeURIComponent(a)}&opponent=${encodeURIComponent(b)}`,
+      href: `/matches?champion=${encodeURIComponent(a.id)}&opponent=${encodeURIComponent(b.id)}`,
     });
   }
 
@@ -76,7 +95,7 @@ export function search(raw: string, index: SearchIndex): SearchResult[] {
   if (wantsMatches) {
     const params = new URLSearchParams();
     const parts: string[] = [];
-    if (champs[0] && champs.length === 1) { params.set("champion", champs[0]); parts.push(`con ${champs[0]}`); }
+    if (champs[0] && champs.length === 1) { params.set("champion", champs[0].id); parts.push(`con ${champs[0].name}`); }
     if (role) { params.set("role", role[1]); parts.push(`de ${role[2]}`); }
     if (result) { params.set("result", result); parts.push(result === "win" ? "(victorias)" : "(derrotas)"); }
     if (aram) { params.set("mode", "aram"); parts.push("en ARAM"); }
@@ -88,10 +107,11 @@ export function search(raw: string, index: SearchIndex): SearchResult[] {
     });
   }
 
-  for (const c of champs.slice(0, 3)) {
-    const n = index.playerChampions.get(c) ?? 0;
-    out.push({ type: "champion", title: c, subtitle: n ? `${n} partidas tuyas` : "Sin partidas tuyas", href: `/champions/${encodeURIComponent(c)}` });
-  }
+  const championResult = (c: ChampionRef): SearchResult => {
+    const n = index.playerChampions.get(c.id) ?? 0;
+    return { type: "champion", title: c.name, subtitle: n ? `${n} partidas tuyas` : "Sin partidas tuyas", href: `/champions/${encodeURIComponent(c.id)}` };
+  };
+  for (const c of champs.slice(0, 3)) out.push(championResult(c));
 
   for (const [re, id] of TOPICS) {
     if (!re.test(q)) continue;
@@ -106,10 +126,7 @@ export function search(raw: string, index: SearchIndex): SearchResult[] {
 
   // Champion name typed partially (no whole-word match yet)
   if (!champs.length && q.length >= 3) {
-    for (const c of index.champions.filter((c) => norm(c).startsWith(q)).slice(0, 5)) {
-      const n = index.playerChampions.get(c) ?? 0;
-      out.push({ type: "champion", title: c, subtitle: n ? `${n} partidas tuyas` : "Sin partidas tuyas", href: `/champions/${encodeURIComponent(c)}` });
-    }
+    for (const c of index.champions.filter((c) => norm(c.name).startsWith(q) || norm(c.id).startsWith(q)).slice(0, 5)) out.push(championResult(c));
   }
 
   const seen = new Set<string>();

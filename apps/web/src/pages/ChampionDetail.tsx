@@ -30,6 +30,8 @@ export function ChampionDetail() {
   if (!data) return null;
   const { personal } = data;
   const champName = data.champion?.name ?? name;
+  // Filters use Riot's champion id (e.g. "MonkeyKing"), not the display name ("Wukong").
+  const champId = data.champion?.id ?? name;
 
   return (
     <div className="stack" style={{ gap: 20 }}>
@@ -82,7 +84,7 @@ export function ChampionDetail() {
               <ul className="stack" style={{ listStyle: "none", margin: 0, padding: 0, gap: 6 }}>
                 {personal.opponents.map((o) => (
                   <li key={o.opponent}>
-                    <Link className="tile row" style={{ textDecoration: "none", color: "inherit" }} to={`/matches?champion=${encodeURIComponent(champName)}&opponent=${encodeURIComponent(o.opponent)}`}>
+                    <Link className="tile row" style={{ textDecoration: "none", color: "inherit" }} to={`/matches?champion=${encodeURIComponent(champId)}&opponent=${encodeURIComponent(o.opponent)}`}>
                       <span>contra <strong>{o.opponent}</strong></span>
                       <span className="spacer" />
                       <span className="tile-note">{o.wins}/{o.games} victorias{o.games < 5 ? " · muestra pequeña" : ""}</span>

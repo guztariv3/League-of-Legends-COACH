@@ -14,7 +14,7 @@ No se avanza a una fase si la anterior no pasa su quality gate (tests, revisión
 7. UI: design system, Dashboard (3–5 bloques decididos por el sistema), Match Center con filtros y detalle básico.
 8. Análisis básico por modo (SR/ARAM) + Coach inicial (insights deterministas + explicación LLM opcional).
 
-## Fase 2 — Personalización
+## Fase 2 — Personalización ✅ sobre datos sintéticos (ver `06-fase2.md`)
 Perfil del jugador (dimensiones con evidencia), patrones entre partidas, objetivos (1–3, opt-in), Coach contextual en cualquier pantalla, memoria editable, búsqueda.
 
 ## Fase 3 — Análisis avanzado

@@ -3,7 +3,7 @@
 Aplicación web + desktop de análisis y coaching personal para League of Legends.
 Hace el trabajo complejo por dentro y muestra solo lo que el jugador necesita.
 
-**Estado:** Fase 1 completa sobre datos sintéticos. Ver [docs/05-fase1.md](docs/05-fase1.md).
+**Estado:** Fases 1 y 2 completas sobre datos sintéticos. Ver [docs/05-fase1.md](docs/05-fase1.md) y [docs/06-fase2.md](docs/06-fase2.md).
 
 ## Arranque rápido
 
@@ -33,7 +33,8 @@ docs/         auditoría, investigación, arquitectura, roadmap, decisiones, fas
 | [docs/02-arquitectura.md](docs/02-arquitectura.md) | Arquitectura y stack |
 | [docs/03-roadmap.md](docs/03-roadmap.md) | Fases |
 | [docs/04-decisiones.md](docs/04-decisiones.md) | Decisiones, simplificaciones y riesgos |
-| [docs/05-fase1.md](docs/05-fase1.md) | Qué hay construido, limitaciones y quality gate |
+| [docs/05-fase1.md](docs/05-fase1.md) | Fase 1: núcleo, limitaciones y quality gate |
+| [docs/06-fase2.md](docs/06-fase2.md) | Fase 2: perfil, objetivos, memoria, búsqueda |
 
 ---
 
