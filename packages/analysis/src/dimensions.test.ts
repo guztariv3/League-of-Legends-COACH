@@ -58,3 +58,12 @@ describe("cross-champion patterns", () => {
     expect(res.scope).toBe("global");
   });
 });
+
+describe("trend honesty", () => {
+  it("reports 'unknown' (not 'stable') when the main role has too few games to test", () => {
+    const mid = analyses({ count: 14, traits: { mainRole: "MIDDLE" } });
+    const top = analyses({ count: 12, seed: 99, traits: { mainRole: "TOP", mainChampions: ["Brannoc"] } }).map((a) => ({ ...a, matchId: `top-${a.matchId}` }));
+    const profile = buildProfile([...mid, ...top]).find((p) => p.mode === "summoners_rift")!;
+    for (const d of profile.dimensions.filter((x) => ["risk", "teamfight"].includes(x.id))) expect(d.trend).toBe("unknown");
+  });
+});

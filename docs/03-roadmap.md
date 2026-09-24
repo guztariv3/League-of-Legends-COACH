@@ -23,5 +23,5 @@ Match Review basado en timeline (mapa por minuto, marcadores, clasificación de 
 ## Fase 4 — Live (desktop) ✅ compilada y probada con partidas simuladas (ver `08-fase4.md`; updater pendiente de D-08)
 Tauri, lector de Live Client Data, pipeline local, Safe Mode, Focus Mode, controles (ocultar, pausar, silenciar, intensidad) y updater con rollback. Requiere confirmar la política de Riot vigente en ese momento.
 
-## Fase 5 — Inteligencia avanzada
+## Fase 5 — Inteligencia avanzada ✅ sobre datos sintéticos (ver `09-fase5.md`)
 Análisis longitudinal con tests estadísticos, puntos de inflexión, adaptabilidad y predicciones como hipótesis (solo post-game y pre-game), y What-if post-game donde haya evidencia suficiente.

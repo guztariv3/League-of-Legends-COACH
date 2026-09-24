@@ -129,6 +129,11 @@ function permutationP(v: number[], observed: number, seed: number): number {
   return (exceed + 1) / (PERMUTATIONS + 1);
 }
 
+/** Games that findInflection would actually test for this metric (main role, metric present). */
+export function testableGames(analyses: MatchAnalysis[], id: LongMetricId): number {
+  return series(analyses, id, mainRole(analyses)).length;
+}
+
 export function findInflection(analyses: MatchAnalysis[], id: LongMetricId): InflectionPoint | null {
   const role = mainRole(analyses);
   const pts = series(analyses, id, role);

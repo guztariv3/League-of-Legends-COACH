@@ -3,7 +3,7 @@
 Aplicación web + desktop de análisis y coaching personal para League of Legends.
 Hace el trabajo complejo por dentro y muestra solo lo que el jugador necesita.
 
-**Estado:** Fases 1–4 completas sobre datos sintéticos o simulados. Ver `docs/05`–`docs/08`.
+**Estado:** Fases 1–5 completas sobre datos sintéticos o simulados. Ver `docs/05`–`docs/09`. Siguiente paso: validar con datos reales de Riot.
 
 ## Arranque rápido
 
@@ -39,6 +39,7 @@ docs/         auditoría, investigación, arquitectura, roadmap, decisiones, fas
 | [docs/06-fase2.md](docs/06-fase2.md) | Fase 2: perfil, objetivos, memoria, búsqueda |
 | [docs/07-fase3.md](docs/07-fase3.md) | Fase 3: revisión de partida, draft, scouting |
 | [docs/08-fase4.md](docs/08-fase4.md) | Fase 4: Live Coach de escritorio, política, Modo seguro |
+| [docs/09-fase5.md](docs/09-fase5.md) | Fase 5: evolución, jugador vs entorno, adaptabilidad, historial |
 
 ---
 

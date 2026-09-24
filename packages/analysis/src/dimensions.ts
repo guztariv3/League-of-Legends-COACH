@@ -1,6 +1,6 @@
 import type { AnalysisMode, Role } from "@coach/domain";
 import type { MatchAnalysis } from "./match.js";
-import { findInflection, LONG_METRICS, MIN_SIDE, type LongMetricId } from "./longitudinal.js";
+import { findInflection, MIN_SIDE, testableGames, type LongMetricId } from "./longitudinal.js";
 import { mean, sampleConfidence, twoProportionZ, wilson } from "./stats.js";
 
 /**
@@ -91,8 +91,8 @@ function values(list: MatchAnalysis[], pick: (a: MatchAnalysis) => number | null
  */
 function trendOf(list: MatchAnalysis[], metric: LongMetricId | null): Trend {
   if (!metric) return "unknown";
-  const values = list.filter((a) => LONG_METRICS[metric].pick(a) !== null);
-  if (values.length < 2 * MIN_SIDE) return "unknown";
+  // Count exactly the games the test would use (main role only), so "stable" always means "tested, no change".
+  if (testableGames(list, metric) < 2 * MIN_SIDE) return "unknown";
   const inf = findInflection(list, metric);
   return inf ? (inf.direction === "improved" ? "improving" : "declining") : "stable";
 }
