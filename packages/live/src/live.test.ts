@@ -120,3 +120,47 @@ describe("degradation", () => {
     expect(tick.deliveries).toHaveLength(0);
   });
 });
+
+describe("review regressions", () => {
+  const cfg = { bigItemGold: 1000, spikeLevels: [6, 11, 16] };
+  const base = (t: number, myLevel: number, oppLevel: number, events: { EventID: number; EventName: string; EventTime: number }[] = []) => ({
+    activePlayer: { riotId: "Me#1" },
+    allPlayers: [
+      { championName: "A", riotId: "Me#1", team: "ORDER", level: myLevel, position: "MIDDLE", items: [] },
+      { championName: "B", riotId: "Opp#1", team: "CHAOS", level: oppLevel, position: "MIDDLE", items: [] },
+    ],
+    events: { Events: events },
+    gameData: { gameTime: t, gameMode: "CLASSIC" },
+  });
+
+  it("keeps a second important notice from the same update for later", () => {
+    const e = new LiveEngine(cfg);
+    e.tick(base(500, 5, 5), DEFAULT_CONTROLS, null);
+    const first = e.tick(base(502, 6, 6), DEFAULT_CONTROLS, null).deliveries;
+    expect(first).toHaveLength(1);
+    let second: Delivery[] = [];
+    for (let t = 504; t <= 560 && !second.length; t += 2) second = e.tick(base(t, 6, 6), DEFAULT_CONTROLS, null).deliveries;
+    expect(second).toHaveLength(1);
+    expect(second[0]!.signal.key).not.toBe(first[0]!.signal.key);
+  });
+
+  it("speaks normally in a second game within the same session", () => {
+    const e = new LiveEngine(cfg);
+    e.tick(base(1500, 5, 5), DEFAULT_CONTROLS, null);
+    expect(e.tick(base(1502, 6, 5), DEFAULT_CONTROLS, null).deliveries).toHaveLength(1);
+    // New game starts: clock goes back.
+    e.tick(base(10, 1, 1), DEFAULT_CONTROLS, null);
+    e.tick(base(500, 5, 5), DEFAULT_CONTROLS, null);
+    const again = e.tick(base(502, 6, 5), DEFAULT_CONTROLS, null).deliveries;
+    expect(again.map((d) => d.signal.key)).toContain("own-level-6");
+  });
+
+  it("does not announce objectives that happened before the Coach started", () => {
+    const e = new LiveEngine(cfg);
+    const controls = { ...DEFAULT_CONTROLS, categories: { ...DEFAULT_CONTROLS.categories, objective_taken: true } };
+    const old = [{ EventID: 1, EventName: "DragonKill", EventTime: 300, KillerName: "Opp#1" }];
+    e.tick(base(1200, 10, 10, old), controls, null); // Coach starts mid-game: prev state is empty
+    const d = e.tick(base(1202, 10, 10, old), controls, null).deliveries;
+    expect(d.filter((x) => x.signal.category === "objective_taken")).toHaveLength(0);
+  });
+});

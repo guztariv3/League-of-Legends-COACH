@@ -45,6 +45,7 @@ export class LiveEngine {
 
   reset(): void {
     this.state = emptyState();
+    this.notifier.reset();
   }
 
   tick(raw: unknown, controls: LiveControls, load: LoadSample | null): EngineTick {

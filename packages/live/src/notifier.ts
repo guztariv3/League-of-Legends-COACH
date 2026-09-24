@@ -56,6 +56,14 @@ export class Notifier {
   private held: LiveSignal[] = [];
   readonly policy = new PolicyEngine();
 
+  /** New game: forget timings, shown keys and held signals (the policy log is kept). */
+  reset(): void {
+    this.lastShown = -Infinity;
+    this.lastInfo = -Infinity;
+    this.seen.clear();
+    this.held = [];
+  }
+
   process(signals: LiveSignal[], state: GameState, controls: LiveControls, safeMode: boolean): Delivery[] {
     if (controls.paused) return [];
     const now = state.time;
@@ -75,19 +83,19 @@ export class Notifier {
       // Signals older than 60 s of game time are stale: drop them rather than show late.
       if (now - s.at > 60) { this.seen.add(s.key); continue; }
       if (s.priority === "info") {
-        if (focusOnly || now - this.lastInfo < GAP[controls.intensity].info || now - this.lastShown < GAP[controls.intensity].important) {
-          this.seen.add(s.key); // info is never queued
-          continue;
-        }
+        // Info is never queued: shown now if there is room, otherwise dropped.
+        const room = out.length === 0 && !focusOnly && now - this.lastInfo >= GAP[controls.intensity].info && now - this.lastShown >= GAP[controls.intensity].important;
+        this.seen.add(s.key);
+        if (!room) continue;
         this.lastInfo = now;
-      } else {
-        if (fight) { this.held.push(s); continue; } // wait until the fight is over
-        if (now - this.lastShown < GAP[controls.intensity].important) { this.held.push(s); continue; }
+      } else if (out.length > 0 || fight || now - this.lastShown < GAP[controls.intensity].important) {
+        // At most one message per update; important ones wait for the next free slot (or the end of a fight).
+        this.held.push(s);
+        continue;
       }
       this.seen.add(s.key);
       this.lastShown = now;
       out.push({ signal: s, compact: focusOnly });
-      break; // at most one message per update
     }
     return out;
   }

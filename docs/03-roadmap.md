@@ -20,7 +20,7 @@ Perfil del jugador (dimensiones con evidencia), patrones entre partidas, objetiv
 ## Fase 3 — Análisis avanzado ✅ sobre datos sintéticos (ver `07-fase3.md`; combat engine pospuesto)
 Match Review basado en timeline (mapa por minuto, marcadores, clasificación de decisiones), análisis de draft (solo campeones), scouting desde la pantalla de carga, análisis de composición. Combat Engine limitado a cálculos validados (D-06).
 
-## Fase 4 — Live (desktop)
+## Fase 4 — Live (desktop) ✅ compilada y probada con partidas simuladas (ver `08-fase4.md`; updater pendiente de D-08)
 Tauri, lector de Live Client Data, pipeline local, Safe Mode, Focus Mode, controles (ocultar, pausar, silenciar, intensidad) y updater con rollback. Requiere confirmar la política de Riot vigente en ese momento.
 
 ## Fase 5 — Inteligencia avanzada

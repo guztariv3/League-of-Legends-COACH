@@ -3,7 +3,7 @@
 Aplicación web + desktop de análisis y coaching personal para League of Legends.
 Hace el trabajo complejo por dentro y muestra solo lo que el jugador necesita.
 
-**Estado:** Fases 1–3 completas sobre datos sintéticos. Ver [docs/05-fase1.md](docs/05-fase1.md), [docs/06-fase2.md](docs/06-fase2.md) y [docs/07-fase3.md](docs/07-fase3.md).
+**Estado:** Fases 1–4 completas sobre datos sintéticos o simulados. Ver `docs/05`–`docs/08`.
 
 ## Arranque rápido
 
@@ -12,7 +12,8 @@ pnpm install
 pnpm dev:api     # API en :8787 (datos sintéticos + BD embebida si no hay .env)
 pnpm dev:web     # http://localhost:5173
 pnpm check       # typecheck + tests
-pnpm test:e2e    # Playwright
+pnpm test:e2e    # Playwright (web)
+pnpm test:e2e:desktop   # ventana del Live Coach (modo demostración)
 ```
 
 La configuración opcional está en [.env.example](.env.example). Sin `RIOT_API_KEY` todo funciona con datos sintéticos, claramente marcados en la UI.
@@ -22,7 +23,8 @@ La configuración opcional está en [.env.example](.env.example). Sin `RIOT_API_
 ```
 apps/api      API (Hono + Drizzle, Postgres/PGlite)
 apps/web      Web app (React + Vite)
-packages/     domain · synthetic · riot · knowledge · analysis · insights · ai · review · draft
+apps/desktop  Live Coach (Tauri v2)
+packages/     domain · synthetic · riot · knowledge · analysis · insights · ai · review · draft · live · ui
 docs/         auditoría, investigación, arquitectura, roadmap, decisiones, fase 1
 ```
 
@@ -36,6 +38,7 @@ docs/         auditoría, investigación, arquitectura, roadmap, decisiones, fas
 | [docs/05-fase1.md](docs/05-fase1.md) | Fase 1: núcleo, limitaciones y quality gate |
 | [docs/06-fase2.md](docs/06-fase2.md) | Fase 2: perfil, objetivos, memoria, búsqueda |
 | [docs/07-fase3.md](docs/07-fase3.md) | Fase 3: revisión de partida, draft, scouting |
+| [docs/08-fase4.md](docs/08-fase4.md) | Fase 4: Live Coach de escritorio, política, Modo seguro |
 
 ---
 

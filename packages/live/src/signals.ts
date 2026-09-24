@@ -83,7 +83,8 @@ export function detectSignals(prev: GameState, next: GameState, cfg: SignalConfi
     const killer = String((e as Record<string, unknown>)["KillerName"] ?? "");
     const allyNames = new Set([me.name, ...next.allies.map((a) => a.name)]);
     const side = killer ? (allyNames.has(killer) ? "Tu equipo" : "El equipo rival") : null;
-    out.push({ key: `obj-${e.EventID}`, category: "objective_taken", priority: "info", text: side ? `${side} ha conseguido ${what}.` : `Se ha conseguido ${what}.`, at });
+    // Stamped with the event's own time, so objectives from before the Coach started are dropped as stale.
+    out.push({ key: `obj-${e.EventID}`, category: "objective_taken", priority: "info", text: side ? `${side} ha conseguido ${what}.` : `Se ha conseguido ${what}.`, at: e.EventTime });
   }
 
   // Focus progress (the player's own goal), every 5 minutes from minute 10
