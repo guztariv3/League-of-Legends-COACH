@@ -14,7 +14,8 @@
     "dev:api": "pnpm --filter @coach/api dev",
     "dev:web": "pnpm --filter @coach/web dev",
     "build": "pnpm --filter @coach/web build",
-    "check": "pnpm typecheck && pnpm test"
+    "check": "pnpm typecheck && pnpm test",
+    "test:e2e:desktop": "pnpm --filter @coach/desktop e2e"
   },
   "devDependencies": {
     "@types/node": "^22.20.4",

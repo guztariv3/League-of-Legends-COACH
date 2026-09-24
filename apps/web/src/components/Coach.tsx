@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "react-router";
 import { api, type Insight } from "../api";
 import { useSession } from "../session";
-import { CoachAvatar, type Expression } from "./CoachAvatar";
+import { CoachAvatar, type Expression } from "@coach/ui";
 
 const MUTE_KEY = "coach.muted";
 const SEEN_KEY = "coach.seen";

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { api } from "../api";
-import { CoachAvatar } from "../components/CoachAvatar";
+import { CoachAvatar } from "@coach/ui";
 import { SyntheticBadge } from "../components/ui";
 import { useSession } from "../session";
 

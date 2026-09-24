@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Link, NavLink, Navigate, Outlet, Route, Routes } from "react-router";
 import { api } from "./api";
 import { Coach } from "./components/Coach";
-import { CoachAvatar } from "./components/CoachAvatar";
+import { CoachAvatar } from "@coach/ui";
 import { Loading } from "./components/ui";
 import { Champions } from "./pages/Champions";
 import { ChampionDetail } from "./pages/ChampionDetail";

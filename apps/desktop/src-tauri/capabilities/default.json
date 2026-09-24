@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Minimal permissions for the Live Coach window.",
+  "windows": ["live"],
+  "permissions": ["core:default", "core:window:allow-minimize", "core:window:allow-set-always-on-top"]
+}
