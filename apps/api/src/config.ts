@@ -9,8 +9,16 @@ export interface Config {
   aiModel?: string;
   /** Allowed browser origin for state-changing requests. */
   webOrigin: string;
-  /** Development login must be switched on explicitly (DEV_LOGIN=1); it is never available in production. */
+  /** Development login must be switched on explicitly (DEV_LOGIN=1). */
   devLogin: boolean;
+  /**
+   * Shared password that gates the whole site (HTTP Basic auth). It is the only
+   * way to open the development login in production, for the private prototype
+   * that Riot's production-key review requires before RSO exists (D-01, D-08).
+   */
+  prototypePassword?: string;
+  /** Built web app to serve from the same origin (production). */
+  webDist?: string;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -23,8 +31,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     riotApiKey: env.RIOT_API_KEY || undefined,
     anthropicApiKey: env.ANTHROPIC_API_KEY || undefined,
     aiModel: env.AI_MODEL || undefined,
-    webOrigin: env.WEB_ORIGIN ?? "http://localhost:5173",
-    devLogin: mode !== "production" && (env.DEV_LOGIN === "1" || mode === "test"),
+    // Render sets RENDER_EXTERNAL_URL for web services; used as the allowed origin when WEB_ORIGIN is not set.
+    webOrigin: env.WEB_ORIGIN ?? env.RENDER_EXTERNAL_URL ?? "http://localhost:5173",
+    devLogin: env.DEV_LOGIN === "1" || mode === "test",
+    prototypePassword: env.PROTOTYPE_PASSWORD || undefined,
+    webDist: env.WEB_DIST || undefined,
   };
 }
 
@@ -36,9 +47,11 @@ export function dataSource(cfg: Config): DataSource {
 
 /**
  * Decision D-01: until RSO is approved, the only login is the development
- * login. It is opt-in (DEV_LOGIN=1) and always refused in production, so a
- * deployment that forgets NODE_ENV does not open it by accident.
+ * login. It is opt-in (DEV_LOGIN=1). In production it additionally requires
+ * the whole site to be behind PROTOTYPE_PASSWORD, so a public deployment can
+ * never expose it.
  */
 export function devLoginAllowed(cfg: Config): boolean {
-  return cfg.devLogin && cfg.env !== "production";
+  if (!cfg.devLogin) return false;
+  return cfg.env !== "production" || Boolean(cfg.prototypePassword && cfg.prototypePassword.length >= 12);
 }

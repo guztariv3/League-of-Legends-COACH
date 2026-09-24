@@ -14,6 +14,7 @@ pnpm dev:web     # http://localhost:5173
 pnpm check       # typecheck + tests
 pnpm test:e2e    # Playwright (web)
 pnpm test:e2e:desktop   # ventana del Live Coach (modo demostración)
+docker build -t kairos .  # imagen de producción (API + web)
 ```
 
 La configuración opcional está en [.env.example](.env.example). Sin `RIOT_API_KEY` todo funciona con datos sintéticos, claramente marcados en la UI.
@@ -40,6 +41,7 @@ docs/         auditoría, investigación, arquitectura, roadmap, decisiones, fas
 | [docs/07-fase3.md](docs/07-fase3.md) | Fase 3: revisión de partida, draft, scouting |
 | [docs/08-fase4.md](docs/08-fase4.md) | Fase 4: Live Coach de escritorio, política, Modo seguro |
 | [docs/09-fase5.md](docs/09-fase5.md) | Fase 5: evolución, jugador vs entorno, adaptabilidad, historial |
+| [docs/10-despliegue.md](docs/10-despliegue.md) | Despliegue (Render), CI y actualizaciones firmadas del escritorio |
 
 ---
 

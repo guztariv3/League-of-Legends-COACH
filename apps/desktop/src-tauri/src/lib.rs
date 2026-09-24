@@ -50,6 +50,51 @@ fn system_load(state: tauri::State<'_, AppState>) -> LoadSample {
     LoadSample { cpu: sys.global_cpu_usage(), mem_available: sys.available_memory() as f64 / total }
 }
 
+#[derive(Serialize)]
+struct UpdateInfo {
+    version: String,
+    notes: Option<String>,
+}
+
+/// Checks the signed release feed. Returns `None` when there is nothing new or
+/// when this build was compiled without the `updater` feature (development).
+#[tauri::command]
+async fn check_update(app: tauri::AppHandle) -> Result<Option<UpdateInfo>, String> {
+    #[cfg(feature = "updater")]
+    {
+        use tauri_plugin_updater::UpdaterExt;
+        let updater = app.updater().map_err(|e| e.to_string())?;
+        let update = updater.check().await.map_err(|e| e.to_string())?;
+        return Ok(update.map(|u| UpdateInfo { version: u.version.clone(), notes: u.body.clone() }));
+    }
+    #[cfg(not(feature = "updater"))]
+    {
+        let _ = app;
+        Ok(None)
+    }
+}
+
+/// Downloads, verifies the signature and installs the update, then restarts.
+/// If anything fails, the installed version is left untouched and the error is returned.
+#[tauri::command]
+async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(feature = "updater")]
+    {
+        use tauri_plugin_updater::UpdaterExt;
+        let updater = app.updater().map_err(|e| e.to_string())?;
+        let Some(update) = updater.check().await.map_err(|e| e.to_string())? else {
+            return Err("no_update".into());
+        };
+        update.download_and_install(|_, _| {}, || {}).await.map_err(|e| e.to_string())?;
+        app.restart();
+    }
+    #[cfg(not(feature = "updater"))]
+    {
+        let _ = app;
+        Err("updates_disabled".into())
+    }
+}
+
 fn live_client() -> reqwest::Client {
     reqwest::Client::builder()
         // The game serves this local endpoint with a certificate signed by Riot's own
@@ -71,9 +116,12 @@ pub fn run() {
             .with_cpu(CpuRefreshKind::nothing().with_cpu_usage())
             .with_memory(MemoryRefreshKind::nothing().with_ram()),
     );
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(feature = "updater")]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    builder
         .manage(AppState { http: live_client(), sys: Mutex::new(sys) })
-        .invoke_handler(tauri::generate_handler![live_snapshot, system_load])
+        .invoke_handler(tauri::generate_handler![live_snapshot, system_load, check_update, install_update])
         .run(tauri::generate_context!())
         .expect("error while running Kairos desktop");
 }
