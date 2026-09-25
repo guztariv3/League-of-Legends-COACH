@@ -163,12 +163,12 @@ function LiveWindow() {
 
       {!rivals.link && mode === "waiting" && (
         <section className="connect-card" aria-labelledby="connect-h">
-          <h2 id="connect-h">Conecta con la web</h2>
+          <h2 id="connect-h">Conecta con la web (opcional)</h2>
           {showConnect ? (
             <ConnectForm link={rivals.link} problem={rivals.problem} onConnect={(l) => { rivals.connect(l); setShowConnect(false); }} onDisconnect={rivals.disconnect} />
           ) : (
             <>
-              <p className="quiet">Para ver a tus rivales en la pantalla de carga y los objetos que sueles hacer. Solo hace falta una vez.</p>
+              <p className="quiet">Opcional, si tienes cuenta en la web de KOI Master: añade tus rivales en la pantalla de carga y tu historial. Las sugerencias de objetos y el panel de partida funcionan sin conectar.</p>
               {rivals.problem && <p className="quiet" role="alert">{rivals.problem}</p>}
               <button className="btn btn-primary" onClick={() => setShowConnect(true)}>Conectar</button>
             </>
