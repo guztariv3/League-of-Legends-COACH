@@ -1,11 +1,11 @@
-import mapUrl from "../art/runeterra-map.svg";
+import forestUrl from "../art/rift-forest.svg";
 import { useSplash } from "../assets";
 
-/** Fixed page backdrop: the original Runeterra map, always present behind the app. */
+/** Fixed page backdrop: an original night forest in the mood of the client lobby. */
 export function World() {
   return (
     <div className="world" aria-hidden="true">
-      <div className="world-map" style={{ backgroundImage: `url(${mapUrl})` }} />
+      <div className="world-map" style={{ backgroundImage: `url(${forestUrl})` }} />
     </div>
   );
 }

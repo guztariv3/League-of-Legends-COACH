@@ -2,9 +2,9 @@ import { useEffect } from "react";
 import { Link, useParams } from "react-router";
 import { api } from "../api";
 import { GoldDiffChart } from "../components/GoldDiffChart";
-import { duration, ErrorNotice, Loading, modeLabel, num, pct, ResultBadge, roleLabel, StatTile, SyntheticBadge } from "../components/ui";
+import { duration, ErrorNotice, ItemRow, Loading, Loadout, modeLabel, num, pct, ResultBadge, roleLabel, StatTile, SyntheticBadge } from "../components/ui";
 import { useLoad, useSession } from "../session";
-import { ChampionIcon, ItemIcon, RuneIcon, SpellIcon } from "../assets";
+import { ChampionIcon } from "../assets";
 import { SplashBackdrop } from "../components/World";
 
 /** Conclusion first, then key numbers, then the curve, then both teams (progressive layers). */
@@ -75,45 +75,51 @@ export function MatchDetail() {
         </section>
       )}
 
-      <section className="grid grid-2">
-        {data.teams.map((t) => (
-          <div className="card" key={t.teamId}>
-            <h2>{t.win ? "Equipo ganador" : "Equipo perdedor"}</h2>
-            <div className="table-scroll">
-              <table>
-                <thead>
-                  <tr><th>Campeón</th><th>K/D/A</th><th>CS</th><th>Daño</th><th>Objetos</th></tr>
-                </thead>
-                <tbody>
-                  {t.players.map((p) => (
-                    <tr key={p.championName} className={p.isMe ? "me" : undefined}>
-                      <td>
-                        <div className="champ-cell">
-                          <ChampionIcon champion={p.championId} size={34} />
-                          <span className="stack-2">
-                            {p.spells.map((id) => <SpellIcon key={id} id={id} size={16} />)}
-                          </span>
-                          <span className="stack-2">
-                            {p.runes.keystone !== null && <RuneIcon id={p.runes.keystone} size={16} />}
-                            {p.runes.secondary !== null && <RuneIcon id={p.runes.secondary} size={16} />}
-                          </span>
-                          <span>
-                            {p.championName}{p.isMe && <span className="visually-hidden"> (tú)</span>}
-                            {p.riotId && <small>{p.riotId}</small>}
-                          </span>
-                        </div>
-                      </td>
-                      <td>{p.kills}/{p.deaths}/{p.assists}</td>
-                      <td>{p.cs}</td>
-                      <td>{p.damage.toLocaleString("es-ES")}</td>
-                      <td><span className="loadout">{p.items.map((it, i) => <ItemIcon key={`${it.id}-${i}`} id={it.id} size={22} />)}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      <section className="card scoreboard" aria-label="Marcador">
+        {data.teams.map((t, ti) => {
+          const k = t.players.reduce((n, p) => n + p.kills, 0);
+          const d = t.players.reduce((n, p) => n + p.deaths, 0);
+          const as = t.players.reduce((n, p) => n + p.assists, 0);
+          const gold = t.players.reduce((n, p) => n + p.gold, 0);
+          return (
+            <div className="sb-team" key={t.teamId}>
+              <div className={`sb-head ${t.win ? "is-win" : "is-loss"}`}>
+                <span className="sb-name">Equipo {ti + 1}</span>
+                <span className="sb-result">{t.win ? "Victoria" : "Derrota"}</span>
+                <span className="sb-total">{k} / {d} / {as}</span>
+                <span className="sb-gold">{gold.toLocaleString("es-ES")} oro</span>
+              </div>
+              <div className="table-scroll">
+                <table className="sb-table">
+                  <colgroup><col className="c-champ" /><col className="c-load" /><col className="c-items" /><col className="c-kda" /><col className="c-cs" /><col className="c-gold" /></colgroup>
+                  <thead className="visually-hidden">
+                    <tr><th>Campeón</th><th>Hechizos y runas</th><th>Objetos</th><th>K/D/A</th><th>CS</th><th>Oro</th></tr>
+                  </thead>
+                  <tbody>
+                    {t.players.map((p) => (
+                      <tr key={`${p.championName}-${p.riotId}`} className={p.isMe ? "me" : undefined}>
+                        <td>
+                          <div className="champ-cell">
+                            <ChampionIcon champion={p.championId} size={38} />
+                            <span>
+                              <span className="sb-player">{p.riotId?.split("#")[0] ?? p.championName}{p.isMe && <span className="visually-hidden"> (tú)</span>}</span>
+                              <small>{p.championName}</small>
+                            </span>
+                          </div>
+                        </td>
+                        <td><Loadout spells={p.spells} runes={p.runes} size={18} /></td>
+                        <td><ItemRow items={p.items.map((it) => it.id)} size={26} /></td>
+                        <td className="sb-kda">{p.kills} / {p.deaths} / {p.assists}</td>
+                        <td>{p.cs}</td>
+                        <td>{p.gold.toLocaleString("es-ES")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </section>
     </div>
   );

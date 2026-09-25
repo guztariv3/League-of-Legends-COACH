@@ -229,6 +229,27 @@ describe("analysis versioning", () => {
       .where(and(eq(schema.matchAnalyses.matchId, row!.matchId), eq(schema.matchAnalyses.puuid, acc!.puuid)))).map((r) => r.analysisVersion).sort();
     expect(versions).toEqual([ANALYSIS_VERSION - 1, ANALYSIS_VERSION]);
   }, 60_000);
+
+  it("re-analyses every account at startup without a sync, and the row carries the loadout", async () => {
+    const { schema } = await import("./db/index.js");
+    const { and, eq } = await import("drizzle-orm");
+    const { ANALYSIS_VERSION } = await import("@coach/analysis");
+    const cookie = await login("Booted");
+    const { body } = await call("/accounts", { method: "POST", cookie, body: JSON.stringify({ gameName: "Booted", tagLine: "EUW", platform: "euw1" }) });
+    await ctx.sync.start(body.account.id);
+    const [acc] = await database.db.select().from(schema.riotAccounts).where(eq(schema.riotAccounts.id, body.account.id));
+    // Simulate a deploy that bumped the version: drop every current-version row of this player.
+    await database.db.delete(schema.matchAnalyses)
+      .where(and(eq(schema.matchAnalyses.puuid, acc!.puuid), eq(schema.matchAnalyses.analysisVersion, ANALYSIS_VERSION)));
+    expect((await call("/matches", { cookie })).body.total).toBe(0);
+    expect(await ctx.sync.reanalyzeAll()).toBeGreaterThan(0);
+    const list = (await call("/matches", { cookie })).body;
+    expect(list.total).toBeGreaterThan(0);
+    const m = list.matches[0];
+    expect(m.items.length).toBeGreaterThan(0);
+    expect(m.level).toBeGreaterThan(0);
+    expect(Array.isArray(m.spells)).toBe(true);
+  }, 60_000);
 });
 
 describe("knowledge schema upgrades", () => {

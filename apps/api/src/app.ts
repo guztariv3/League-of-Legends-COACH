@@ -238,6 +238,13 @@ export function createApp(deps: AppDeps) {
     csPerMin: a.csPerMin,
     goldDiff15: a.goldDiff15,
     headline: matchHeadline(a, avg),
+    // Scoreboard loadout (analysis v3).
+    level: a.level,
+    gold: a.gold,
+    cs: a.cs,
+    items: a.items,
+    spells: a.spells,
+    runes: a.runes,
   });
 
   authed.get("/dashboard", async (c) => {

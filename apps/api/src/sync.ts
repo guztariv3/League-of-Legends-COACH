@@ -114,6 +114,24 @@ export class SyncService {
   }
 
   /**
+   * Brings every linked account up to the current ANALYSIS_VERSION from stored raw
+   * games (no Riot calls). Run at startup so a version bump never shows an empty
+   * history until the next sync. Never throws.
+   */
+  async reanalyzeAll(): Promise<number> {
+    let done = 0;
+    for (const account of await this.db.select().from(schema.riotAccounts)) {
+      try {
+        await this.reanalyze(account);
+        done++;
+      } catch (err) {
+        console.error(`[sync] re-analysis failed for ${account.id}:`, err);
+      }
+    }
+    return done;
+  }
+
+  /**
    * Adds current-version analyses for stored games analysed under an older
    * ANALYSIS_VERSION. Older rows are kept untouched (historical truth is
    * immutable); queries read the current version.

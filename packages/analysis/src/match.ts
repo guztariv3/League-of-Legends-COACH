@@ -8,8 +8,11 @@ import {
   type Role,
 } from "@coach/domain";
 
-/** Bump whenever per-match analysis output changes. Old rows keep their version (history is immutable). */
-export const ANALYSIS_VERSION = 2;
+/**
+ * Bump whenever per-match analysis output changes. Old rows keep their version (history is immutable).
+ * v3: loadout (champion level, items, summoner spells, runes, gold) for the match-history view.
+ */
+export const ANALYSIS_VERSION = 3;
 
 const EARLY_GAME_MS = 14 * 60_000;
 const MID_GAME_MS = 15 * 60_000;
@@ -50,6 +53,13 @@ export interface MatchAnalysis {
   /** Deaths from 15:00 onwards; requires the timeline and a game lasting past 15:00. v2+ */
   deathsAfter15: number | null;
   hasTimeline: boolean;
+  /** Loadout as the scoreboard shows it. v3+ */
+  level: number;
+  gold: number;
+  cs: number;
+  items: number[];
+  spells: number[];
+  runes: { keystone: number | null; primary: number | null; secondary: number | null };
 }
 
 export function analyzeMatch(match: NormalizedMatch, timeline: RawTimeline | null, puuid: string): MatchAnalysis | null {
@@ -124,5 +134,11 @@ export function analyzeMatch(match: NormalizedMatch, timeline: RawTimeline | nul
     teamGoldDiff15,
     deathsAfter15,
     hasTimeline: timeline !== null,
+    level: me.level,
+    gold: me.gold,
+    cs: me.cs,
+    items: me.items,
+    spells: me.spells,
+    runes: me.runes,
   };
 }
