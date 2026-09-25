@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { DEFAULT_CONTROLS, LiveEngine, type Delivery, type EngineTick, type Intensity, type LiveControls } from "@coach/live";
+import { DEFAULT_CONTROLS, LiveEngine, modeInfo, type Delivery, type EngineTick, type Intensity, type LiveControls } from "@coach/live";
 import { CoachAvatar } from "@coach/ui";
 import { checkUpdate, inTauri, installUpdate, minimizeWindow, readLoad, readSnapshot, type UpdateInfo } from "./bridge";
 import "./live.css";
@@ -10,7 +10,7 @@ const categoryLabel: Record<string, string> = {
   own_level_spike: "Tus niveles clave (6/11/16)",
   own_item_spike: "Tus objetos completados",
   enemy_level_spike: "Nivel 6 de tu rival de línea",
-  enemy_item_spike: "Objetos de tu rival de línea",
+  enemy_item_spike: "Objetos de tu rival de línea (sin líneas: del rival más fuerte)",
   objective_taken: "Objetivos conseguidos",
   goal_progress: "Progreso de tu enfoque",
 };
@@ -95,6 +95,7 @@ function LiveWindow() {
 
   const set = (patch: Partial<LiveControls>) => setControls((c) => ({ ...c, ...patch }));
   const me = tick?.state.me;
+  const game = tick ? modeInfo(tick.state) : null;
   const minutes = tick ? tick.state.time / 60 : 0;
   const reduced = controls.focus || tick?.safeMode;
 
@@ -150,6 +151,11 @@ function LiveWindow() {
         )}
       </section>
 
+      {game && (
+        <div className="mode-line" title={game.lanes ? undefined : "Sin líneas: en lugar de tu rival de línea, te aviso del rival con más objetos grandes."}>
+          {game.label}{game.lanes ? "" : " · sin líneas"}
+        </div>
+      )}
       {me && (
         <div className="stats" aria-label="Tu partida">
           <span>{Math.floor(minutes)}:{String(Math.floor(tick!.state.time % 60)).padStart(2, "0")}</span>

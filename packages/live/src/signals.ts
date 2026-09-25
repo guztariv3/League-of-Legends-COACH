@@ -42,6 +42,14 @@ function bigItems(items: number[], cfg: SignalConfig): number[] {
   return items.filter((id) => (cfg.itemPrices?.get(id) ?? 0) >= cfg.bigItemGold);
 }
 
+/** The single enemy with the most completed big items (visible on the scoreboard); null on a tie or when nobody has one. */
+function itemLeader(state: GameState, cfg: SignalConfig): { champion: string; count: number } | null {
+  const counts = state.enemies.map((e) => ({ champion: e.champion, count: bigItems(e.items, cfg).length }));
+  const max = Math.max(0, ...counts.map((c) => c.count));
+  const top = counts.filter((c) => c.count === max);
+  return max > 0 && top.length === 1 ? top[0]! : null;
+}
+
 export function detectSignals(prev: GameState, next: GameState, cfg: SignalConfig): LiveSignal[] {
   const out: LiveSignal[] = [];
   const at = next.time;
@@ -64,6 +72,14 @@ export function detectSignals(prev: GameState, next: GameState, cfg: SignalConfi
 
   // Lane opponent power spikes (visible on the in-game scoreboard)
   const opp = laneOpponent(next);
+  if (!me.position && prev.complete) {
+    // No lanes (ARAM, Arena…): instead of a lane opponent, the enemy with the most completed big items.
+    const lead = itemLeader(next, cfg);
+    const leadBefore = itemLeader(prev, cfg);
+    if (lead && (lead.champion !== leadBefore?.champion || lead.count > leadBefore.count)) {
+      out.push({ key: `enemy-leader-${lead.champion}-${lead.count}`, category: "enemy_item_spike", priority: "important", text: `${lead.champion} es el rival con más objetos grandes completados (${lead.count}).`, at });
+    }
+  }
   const oppBefore = opp ? prev.enemies.find((e) => e.name === opp.name && e.champion === opp.champion) : undefined;
   if (opp && oppBefore) {
     if (oppBefore.level < 6 && opp.level >= 6) {
