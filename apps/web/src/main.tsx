@@ -21,6 +21,7 @@ import { ChampionIcon } from "./assets";
 import "@coach/ui/fonts.css";
 import { AssetsProvider } from "./assets";
 import { World } from "./components/World";
+import { LegalFooter } from "./components/LegalFooter";
 import "./styles.css";
 
 function Layout() {
@@ -67,6 +68,7 @@ function Layout() {
         <main id="main">
           <Outlet />
         </main>
+        <LegalFooter />
       </div>
       <Coach />
     </>
