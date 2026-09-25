@@ -52,6 +52,7 @@ export function snapshotAt(match: MatchLike, timeline: TimelineLike, puuid: stri
       .map((itemID) => ({ itemID, price: itemPrices.get(itemID), count: 1 }));
     return {
       championName: p.championName,
+      rawChampionName: `game_character_displayname_${p.championName}`,
       riotId: name(p),
       team: p.teamId === 100 ? "ORDER" : "CHAOS",
       level: pf?.level ?? 1,

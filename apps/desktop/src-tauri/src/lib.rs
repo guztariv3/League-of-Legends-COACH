@@ -146,6 +146,17 @@ async fn desktop_scout(state: tauri::State<'_, AppState>, base_url: String, toke
     site_json(res).await
 }
 
+/// The player's own build with a champion (from their history on the site), with the device token.
+#[tauri::command]
+async fn desktop_build(state: tauri::State<'_, AppState>, base_url: String, token: String, champion: String, mode: String) -> Result<serde_json::Value, String> {
+    let origin = site_origin(&base_url)?;
+    let res = state.site.get(format!("{origin}/api/desktop/build"))
+        .query(&[("champion", champion.as_str()), ("mode", mode.as_str())])
+        .bearer_auth(token)
+        .send().await.map_err(|_| "offline".to_string())?;
+    site_json(res).await
+}
+
 fn site_client() -> reqwest::Client {
     reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(10))
@@ -181,7 +192,7 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     builder
         .manage(AppState { http: live_client(), site: site_client(), sys: Mutex::new(sys) })
-        .invoke_handler(tauri::generate_handler![live_snapshot, system_load, check_update, install_update, desktop_claim, desktop_scout])
+        .invoke_handler(tauri::generate_handler![live_snapshot, system_load, check_update, install_update, desktop_claim, desktop_scout, desktop_build])
         .run(tauri::generate_context!())
         .expect("error while running KOI Master desktop");
 }

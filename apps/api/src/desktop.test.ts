@@ -80,6 +80,39 @@ describe("desktop pairing", () => {
     expect((await call("/desktop/devices", { cookie })).body.devices).toHaveLength(0);
   }, 60_000);
 
+  it("gives the player's own build with a champion, from their history only", async () => {
+    const cookie = await player("DeskBuilder");
+    const me = await call("/me", { cookie });
+    await ctx.sync.start(me.body.accounts[0].id);
+    const pair = await call("/desktop/pair", { method: "POST", cookie, body: "{}" });
+    const token = (await claim(pair.body.code, "10.0.0.3")).body.token as string;
+    const auth = { Authorization: `Bearer ${token}` };
+
+    // The champion this player has played most on Summoner's Rift.
+    const matches = (await call("/matches?mode=summoners_rift&limit=100", { cookie })).body.matches as { championName: string }[];
+    const counts = new Map<string, number>();
+    for (const m of matches) counts.set(m.championName, (counts.get(m.championName) ?? 0) + 1);
+    const [main, played] = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]!;
+
+    const build = await call(`/desktop/build?champion=${main}&mode=summoners_rift`, { headers: auth });
+    expect(build.res.status).toBe(200);
+    expect(build.body.games).toBe(played);
+    expect(played).toBeGreaterThanOrEqual(3);
+    expect(build.body.items.length).toBeGreaterThan(0);
+    for (const i of build.body.items) {
+      expect(i.games).toBeGreaterThanOrEqual(2);
+      expect(i.games).toBeLessThanOrEqual(played);
+      expect(i.wins).toBeLessThanOrEqual(i.games);
+    }
+
+    const none = await call("/desktop/build?champion=NoSuchChampion&mode=summoners_rift", { headers: auth });
+    expect(none.body).toMatchObject({ games: 0, items: [] });
+    expect(none.body.note).toContain("Aún no tienes partidas");
+
+    expect((await call("/desktop/build?champion=../x&mode=summoners_rift", { headers: auth })).res.status).toBe(400);
+    expect((await call(`/desktop/build?champion=${main}&mode=summoners_rift`)).res.status).toBe(401);
+  }, 60_000);
+
   it("rejects wrong, expired and malformed codes and tokens", async () => {
     const cookie = await player("DeskExpired");
     const pair = await call("/desktop/pair", { method: "POST", cookie, body: "{}" });

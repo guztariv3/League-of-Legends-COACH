@@ -40,7 +40,7 @@ test("desktop: connect with a code and see the rivals from the loading screen", 
   });
 
   await page.goto("/");
-  await page.getByText("Ajustes", { exact: true }).click();
+  await page.getByRole("button", { name: "Conectar" }).click();
   await page.getByLabel("Dirección de la web").fill("https://koi.example/settings");
   await page.getByLabel("Código").fill("WRNG-CODE");
   await page.getByRole("button", { name: "Conectar" }).click();
@@ -48,6 +48,7 @@ test("desktop: connect with a code and see the rivals from the loading screen", 
 
   await page.getByLabel("Código").fill("ABCD-EFGH");
   await page.getByRole("button", { name: "Conectar" }).click();
+  await page.getByText("Ajustes", { exact: true }).click();
   await expect(page.getByText(/Conectada a/)).toContainText("koi.example");
 
   const rivals = page.getByRole("region", { name: "Tus rivales" });
@@ -69,5 +70,5 @@ test("desktop: connect with a code and see the rivals from the loading screen", 
   await page.getByText("Ajustes", { exact: true }).click();
   await page.getByRole("button", { name: "Desconectar" }).click();
   await expect(page.getByRole("region", { name: "Tus rivales" })).toHaveCount(0);
-  await expect(page.getByLabel("Código")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Conecta con la web" }).getByRole("button", { name: "Conectar" })).toBeVisible();
 });

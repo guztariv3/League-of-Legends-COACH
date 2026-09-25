@@ -17,7 +17,7 @@ Los precios salen de fuentes secundarias de septiembre de 2026 (las webs de los 
 
 - La imagen Docker se construye y arranca como usuario sin privilegios (`node`).
 - Contra **Postgres 16 real**: se aplican las 3 migraciones, funcionan login → vincular cuenta → sync de 50 partidas → dashboard, perfil, objetivos, evolución, historial y revisión de partida, y los datos sobreviven a un reinicio.
-- El gate del prototipo: `/api/health` queda abierto (lo usa Render), igual que `/api/desktop/claim` y `/api/desktop/scout`, que llevan su propia autenticación (código de un solo uso y token de dispositivo, ver `08-fase4.md`), y las páginas públicas `/info/*` con sus ficheros `/assets/*` (ver `11-apertura.md`). Todo lo demás pide contraseña. Hay cabeceras de seguridad (CSP, `nosniff`, `frame-ancestors 'none'`) y la ruta SPA sirve la app sin tocar `/api/*`.
+- El gate del prototipo: `/api/health` queda abierto (lo usa Render), igual que `/api/desktop/claim`, `/api/desktop/scout` y `/api/desktop/build`, que llevan su propia autenticación (código de un solo uso y token de dispositivo, ver `08-fase4.md`), y las páginas públicas `/info/*` con sus ficheros `/assets/*` (ver `11-apertura.md`). Todo lo demás pide contraseña. Hay cabeceras de seguridad (CSP, `nosniff`, `frame-ancestors 'none'`) y la ruta SPA sirve la app sin tocar `/api/*`.
 - El updater: si una build con updater no tiene clave pública, **se niega a arrancar**; con la configuración correcta arranca normalmente (probado con una clave de usar y tirar que no se guardó).
 
 ## Estado del despliegue

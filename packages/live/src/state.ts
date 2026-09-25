@@ -10,6 +10,8 @@ import type { AllGameData, LiveEvent, LivePlayer } from "./schema.js";
 export interface PlayerState {
   name: string;
   champion: string;
+  /** Data Dragon id (for art and for matching the player's history), e.g. "MissFortune". */
+  championId: string;
   team: "ORDER" | "CHAOS";
   position: string | null;
   level: number;
@@ -48,12 +50,21 @@ function playerName(p: { riotId?: string | undefined; summonerName?: string | un
   return p.riotId ?? p.summonerName ?? "";
 }
 
+const RAW_PREFIX = "game_character_displayname_";
+
+/** Data Dragon id from the live data; without the raw name, the display name minus spaces and symbols. */
+export function championIdOf(p: { championName: string; rawChampionName?: string | undefined }): string {
+  if (p.rawChampionName?.startsWith(RAW_PREFIX)) return p.rawChampionName.slice(RAW_PREFIX.length);
+  return p.championName.replace(/[^A-Za-z0-9]/g, "");
+}
+
 function toPlayer(p: LivePlayer, ctx: StateContext): PlayerState {
   const items = p.items.map((i) => i.itemID);
   const itemGold = p.items.reduce((s, i) => s + (i.price ?? ctx.itemPrices?.get(i.itemID) ?? 0) * (i.count ?? 1), 0);
   return {
     name: playerName(p),
     champion: p.championName,
+    championId: championIdOf(p),
     team: p.team === "CHAOS" ? "CHAOS" : "ORDER",
     position: p.position && p.position !== "NONE" ? p.position : null,
     level: p.level,
