@@ -2,6 +2,7 @@ import { analyzeMatch, ANALYSIS_VERSION } from "@coach/analysis";
 import { normalizeMatch } from "@coach/domain";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { schema, type Db } from "./db/index.js";
+import { riotFailure } from "./errors.js";
 import type { MatchSource } from "./sources.js";
 
 /** First sync pulls the last 50 games (brief §14); later syncs page back until they reach known games. */
@@ -62,7 +63,7 @@ export class SyncService {
   private async setError(accountId: string, err: unknown): Promise<void> {
     try {
       await this.db.update(schema.riotAccounts)
-        .set({ syncStatus: "error", syncError: err instanceof Error ? err.message : String(err) })
+        .set({ syncStatus: "error", syncError: riotFailure(err)?.message ?? (err instanceof Error ? err.message : String(err)) })
         .where(eq(schema.riotAccounts.id, accountId));
     } catch (dbErr) {
       console.error(`[sync] could not record error for ${accountId}:`, dbErr);
