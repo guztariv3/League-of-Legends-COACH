@@ -131,3 +131,20 @@ export const recommendationLog = pgTable("recommendation_log", {
   decision: text("decision").$type<"accepted" | "rejected" | "dismissed" | "none">(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * Desktop app pairing: a one-time code (10 min) is exchanged for a device token.
+ * Only hashes are stored; a device can be revoked from the web at any time.
+ */
+export const deviceLinks = pgTable("device_links", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  label: text("label").notNull().default("App de escritorio"),
+  codeHash: text("code_hash"),
+  codeExpiresAt: timestamp("code_expires_at", { withTimezone: true }),
+  tokenHash: text("token_hash"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  claimedAt: timestamp("claimed_at", { withTimezone: true }),
+  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+});

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { api, type Preferences } from "../api";
+import { api, type DesktopDevice, type Preferences } from "../api";
 import { useSession } from "../session";
 
 /** Accounts, a couple of preferences and data deletion. Nothing more. */
@@ -60,6 +60,8 @@ export function Settings() {
         </div>
       </section>
 
+      <DesktopLink />
+
       <section className="card stack" aria-labelledby="coach-h">
         <h2 id="coach-h">Coach</h2>
         <div className="field" style={{ maxWidth: 320 }}>
@@ -93,5 +95,85 @@ export function Settings() {
         </div>
       </section>
     </div>
+  );
+}
+
+const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" }) : "nunca");
+
+/** Connect the desktop app with a one-time code; the app never sees the site password. */
+function DesktopLink() {
+  const [code, setCode] = useState<{ code: string; expiresAt: number } | null>(null);
+  const [devices, setDevices] = useState<DesktopDevice[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [now, setNow] = useState(Date.now());
+
+  const load = () => api.desktopDevices().then((r) => setDevices(r.devices)).catch(() => setDevices([]));
+  useEffect(() => { load(); }, []);
+  // While a code is showing, tick the countdown and watch for the app to claim it.
+  useEffect(() => {
+    if (!code) return;
+    const t = setInterval(() => {
+      setNow(Date.now());
+      if (Date.now() >= code.expiresAt) setCode(null);
+    }, 1000);
+    const p = setInterval(load, 5000);
+    return () => { clearInterval(t); clearInterval(p); };
+  }, [code]);
+
+  const generate = async () => {
+    setError(null);
+    try {
+      const r = await api.desktopPair();
+      setCode({ code: r.code, expiresAt: Date.now() + r.expiresInSec * 1000 });
+      setNow(Date.now());
+    } catch {
+      setError("No se pudo generar el código. Inténtalo de nuevo.");
+    }
+  };
+
+  const left = code ? Math.max(0, Math.round((code.expiresAt - now) / 1000)) : 0;
+
+  return (
+    <section className="card stack" aria-labelledby="desk-h">
+      <h2 id="desk-h">App de escritorio</h2>
+      <p className="page-sub" style={{ margin: 0 }}>
+        Conecta la app para que te muestre a tus rivales en la pantalla de carga. Escribe en la app la dirección de esta web y el código.
+        La app no guarda tu contraseña y solo puede leer el análisis de rivales.
+      </p>
+      {code ? (
+        <div className="pair-code" role="status">
+          <span className="pair-code-value" aria-label={`Código ${code.code.split("").join(" ")}`}>{code.code}</span>
+          <span className="tile-note">Caduca en {Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")} · un solo uso</span>
+          <span className="tile-note">Dirección: <code>{window.location.origin}</code></span>
+        </div>
+      ) : (
+        <div><button className="btn btn-primary" onClick={generate}>Generar código de conexión</button></div>
+      )}
+      {error && <p className="tile-note" role="alert" style={{ margin: 0 }}>{error}</p>}
+      {devices && devices.length > 0 && (
+        <div className="stack" style={{ gap: 8 }}>
+          <h3 className="tile-note" style={{ margin: 0 }}>Apps conectadas</h3>
+          {devices.map((d) => (
+            <div key={d.id} className="row tile">
+              <div>
+                <div className="match-title">{d.label}</div>
+                <div className="tile-note">Conectada {when(d.claimedAt)} · último uso {when(d.lastUsedAt)}</div>
+              </div>
+              <span className="spacer" />
+              <button
+                className="btn btn-danger"
+                onClick={async () => {
+                  if (!confirm(`¿Desconectar "${d.label}"? La app dejará de funcionar hasta que la vuelvas a conectar.`)) return;
+                  await api.desktopRevoke(d.id);
+                  await load();
+                }}
+              >
+                Desconectar
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }

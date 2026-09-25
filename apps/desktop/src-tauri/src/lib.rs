@@ -19,6 +19,8 @@ const LIVE_URL: &str = "https://127.0.0.1:2999/liveclientdata/allgamedata";
 
 struct AppState {
     http: reqwest::Client,
+    /// Ordinary, certificate-checking client for the player's own KOI Master site.
+    site: reqwest::Client,
     sys: Mutex<System>,
 }
 
@@ -95,6 +97,64 @@ async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
     }
 }
 
+/// Origin of the player's KOI Master site: `https://…`, or `http://` only on this machine
+/// (local development). Anything else is refused so the device token never travels in clear.
+fn site_origin(raw: &str) -> Result<String, String> {
+    let url = reqwest::Url::parse(raw.trim()).map_err(|_| "invalid_url".to_string())?;
+    let host = url.host_str().ok_or("invalid_url")?;
+    let local = matches!(host, "localhost" | "127.0.0.1" | "[::1]");
+    match url.scheme() {
+        "https" => {}
+        "http" if local => {}
+        _ => return Err("insecure_url".into()),
+    }
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err("invalid_url".into());
+    }
+    Ok(url.origin().ascii_serialization())
+}
+
+/// Turns a site response into JSON, or into an error code the UI can explain.
+async fn site_json(res: reqwest::Response) -> Result<serde_json::Value, String> {
+    match res.status().as_u16() {
+        200..=299 => res.json().await.map_err(|_| "unexpected_response".to_string()),
+        401 => Err("unauthorized".into()),
+        429 => Err("rate_limited".into()),
+        _ => Err("server_error".into()),
+    }
+}
+
+/// Exchanges a one-time pairing code (generated on the web, Ajustes) for a device token.
+#[tauri::command]
+async fn desktop_claim(state: tauri::State<'_, AppState>, base_url: String, code: String, label: String) -> Result<serde_json::Value, String> {
+    let origin = site_origin(&base_url)?;
+    let res = state.site.post(format!("{origin}/api/desktop/claim"))
+        .json(&serde_json::json!({ "code": code, "label": label }))
+        .send().await.map_err(|_| "offline".to_string())?;
+    let mut body = site_json(res).await?;
+    body["origin"] = serde_json::Value::String(origin);
+    Ok(body)
+}
+
+/// Reads the rival scouting for the player's current game with the device token.
+#[tauri::command]
+async fn desktop_scout(state: tauri::State<'_, AppState>, base_url: String, token: String) -> Result<serde_json::Value, String> {
+    let origin = site_origin(&base_url)?;
+    let res = state.site.get(format!("{origin}/api/desktop/scout"))
+        .bearer_auth(token)
+        .send().await.map_err(|_| "offline".to_string())?;
+    site_json(res).await
+}
+
+fn site_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        // A free Render instance can take a while to wake up.
+        .timeout(Duration::from_secs(60))
+        .build()
+        .expect("site client")
+}
+
 fn live_client() -> reqwest::Client {
     reqwest::Client::builder()
         // The game serves this local endpoint with a certificate signed by Riot's own
@@ -120,8 +180,8 @@ pub fn run() {
     #[cfg(feature = "updater")]
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     builder
-        .manage(AppState { http: live_client(), sys: Mutex::new(sys) })
-        .invoke_handler(tauri::generate_handler![live_snapshot, system_load, check_update, install_update])
+        .manage(AppState { http: live_client(), site: site_client(), sys: Mutex::new(sys) })
+        .invoke_handler(tauri::generate_handler![live_snapshot, system_load, check_update, install_update, desktop_claim, desktop_scout])
         .run(tauri::generate_context!())
         .expect("error while running KOI Master desktop");
 }
@@ -130,6 +190,19 @@ pub fn run() {
 mod tests {
     use super::*;
     use std::time::Instant;
+
+    #[test]
+    fn site_origin_requires_https_except_on_this_machine() {
+        assert_eq!(site_origin("https://kairos-coach.onrender.com/settings?x=1").unwrap(), "https://kairos-coach.onrender.com");
+        assert_eq!(site_origin("  https://example.com/ ").unwrap(), "https://example.com");
+        assert_eq!(site_origin("http://localhost:8787").unwrap(), "http://localhost:8787");
+        assert_eq!(site_origin("http://127.0.0.1:8787").unwrap(), "http://127.0.0.1:8787");
+        assert_eq!(site_origin("http://example.com").unwrap_err(), "insecure_url");
+        assert_eq!(site_origin("file:///etc/passwd").unwrap_err(), "invalid_url");
+        assert_eq!(site_origin("ftp://example.com").unwrap_err(), "insecure_url");
+        assert_eq!(site_origin("https://user:pw@example.com").unwrap_err(), "invalid_url");
+        assert_eq!(site_origin("not a url").unwrap_err(), "invalid_url");
+    }
 
     /// With no game running, a read must fail fast (never block the Coach).
     #[test]

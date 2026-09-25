@@ -36,4 +36,9 @@ test("onboarding → dashboard → matches → match detail → settings", async
   await page.getByRole("link", { name: "Ajustes" }).click();
   await expect(page.getByText(`${player}#EUW`)).toBeVisible();
   await expect(page.getByText("no verificada")).toBeVisible();
+
+  // Desktop app pairing: a one-time code with its expiry and the address to type in the app.
+  await page.getByRole("button", { name: "Generar código de conexión" }).click();
+  await expect(page.locator(".pair-code-value")).toHaveText(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+  await expect(page.getByText(/Caduca en \d+:\d{2}/)).toBeVisible();
 });

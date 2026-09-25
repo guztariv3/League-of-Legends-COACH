@@ -378,3 +378,11 @@ td .loadout { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
 .recent-champ-name { font-family: var(--font-display); font-weight: 700; color: var(--text-primary); letter-spacing: 0.04em; }
 .recent-champ-pct { font-family: var(--font-display); font-style: italic; font-size: 1.3rem; color: var(--gold-bright); }
 @media (max-width: 640px) { .recent-champs { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); } }
+
+/* Desktop pairing code */
+.pair-code { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.pair-code-value {
+  font-family: "Cinzel", serif; font-size: 2rem; letter-spacing: .18em; color: var(--gold-bright);
+  padding: 8px 16px; border: 1px solid var(--gold-dark); background: var(--surface-solid);
+  user-select: all;
+}

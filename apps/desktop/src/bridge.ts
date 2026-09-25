@@ -55,3 +55,23 @@ export async function installUpdate(): Promise<{ ok: true } | { ok: false; error
     return { ok: false, error: String(e) };
   }
 }
+
+/** Why a call to the player's KOI Master site failed (see desktop_claim / desktop_scout in lib.rs). */
+export type SiteError = "invalid_url" | "insecure_url" | "offline" | "unauthorized" | "rate_limited" | "server_error" | "unexpected_response" | "unavailable";
+export type SiteResult<T> = { ok: true; data: T } | { ok: false; error: SiteError };
+
+async function site<T>(cmd: string, args: Record<string, unknown>): Promise<SiteResult<T>> {
+  if (!inTauri) return { ok: false, error: "unavailable" };
+  try {
+    return { ok: true, data: await invoke<T>(cmd, args) };
+  } catch (e) {
+    return { ok: false, error: (typeof e === "string" ? e : "server_error") as SiteError };
+  }
+}
+
+/** Exchanges the one-time code from the web (Ajustes) for a device token. */
+export const claimDevice = (baseUrl: string, code: string, label: string) =>
+  site<{ token: string; origin: string }>("desktop_claim", { baseUrl, code, label });
+
+/** The rival scouting for the player's current game (read-only). */
+export const fetchScout = <T>(baseUrl: string, token: string) => site<T>("desktop_scout", { baseUrl, token });

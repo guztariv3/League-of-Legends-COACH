@@ -8,7 +8,7 @@ import { z } from "zod";
 import type { AuthVars } from "./auth.js";
 import { schema, type Db } from "./db/index.js";
 import { analysesFor, userAccounts } from "./queries.js";
-import { scoutActiveGame } from "./scout.js";
+import { scoutForUser } from "./scout.js";
 import type { Services } from "./services.js";
 import type { MatchSource } from "./sources.js";
 
@@ -59,13 +59,7 @@ export function gameRoutes({ db, source, knowledge, services }: { db: Db; source
     const candidates = accountId ? accounts.filter((a) => a.id === accountId) : accounts;
     if (!candidates.length) return c.json({ error: "not_found" }, 404);
     const { analyses } = await services.profileAnalyses(c.get("userId"));
-    // Try each linked account: the player may be in game on any of them.
-    let last = null;
-    for (const account of candidates) {
-      last = await scoutActiveGame({ db, source, knowledge }, account, analyses);
-      if (last.inGame) return c.json({ ...last, account: `${account.gameName}#${account.tagLine}` });
-    }
-    return c.json(last);
+    return c.json(await scoutForUser({ db, source, knowledge }, accountId ? `${c.get("userId")}:${accountId}` : c.get("userId"), candidates, analyses));
   });
 
   return r;

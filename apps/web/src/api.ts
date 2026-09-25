@@ -347,6 +347,13 @@ export class ApiError extends Error {
   }
 }
 
+export interface DesktopDevice {
+  id: string;
+  label: string;
+  claimedAt: string;
+  lastUsedAt: string | null;
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body) headers.set("Content-Type", "application/json");
@@ -368,6 +375,9 @@ export const api = {
   updateAccount: (id: string, includeInProfile: boolean) =>
     request<{ account: Account }>(`/accounts/${id}`, { method: "PATCH", body: JSON.stringify({ includeInProfile }) }),
   deleteAccount: (id: string) => request<{ ok: true }>(`/accounts/${id}`, { method: "DELETE" }),
+  desktopPair: () => request<{ code: string; expiresInSec: number }>("/desktop/pair", { method: "POST", body: "{}" }),
+  desktopDevices: () => request<{ devices: DesktopDevice[] }>("/desktop/devices"),
+  desktopRevoke: (id: string) => request<{ ok: true }>(`/desktop/devices/${id}`, { method: "DELETE" }),
   syncAll: () => request<{ started: string[] }>("/sync", { method: "POST", body: "{}" }),
   dashboard: () => request<Dashboard>("/dashboard"),
   matches: (params: Record<string, string>) => request<MatchList>(`/matches?${new URLSearchParams(params)}`),

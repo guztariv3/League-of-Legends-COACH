@@ -183,3 +183,37 @@ export async function scoutActiveGame(
   );
   return { inGame: true, simulated: game.simulated, mode: game.gameMode, myChampion, allies, enemies, draft };
 }
+
+/**
+ * Scouting for a signed-in player across their linked accounts (the game may be on any of them).
+ * Results of a game in progress are cached briefly per user, so the web and the desktop app
+ * polling at the same time don't multiply Riot API calls.
+ */
+const SCOUT_CACHE_MS = 90_000;
+const scoutCache = new Map<string, { at: number; result: ScoutResult & { account?: string } }>();
+
+export async function scoutForUser(
+  deps: { db: Db; source: MatchSource; knowledge: KnowledgeRegistry },
+  userId: string,
+  accounts: { id: string; platform: string; puuid: string; gameName: string; tagLine: string }[],
+  myHistory: MatchAnalysis[],
+): Promise<ScoutResult & { account?: string }> {
+  const cached = scoutCache.get(userId);
+  if (cached && Date.now() - cached.at < SCOUT_CACHE_MS) return cached.result;
+  let last: ScoutResult = { inGame: false, message: "No hay cuentas vinculadas." };
+  for (const account of accounts) {
+    last = await scoutActiveGame(deps, account, myHistory);
+    if (last.inGame) {
+      const result = { ...last, account: `${account.gameName}#${account.tagLine}` };
+      scoutCache.set(userId, { at: Date.now(), result });
+      return result;
+    }
+  }
+  scoutCache.delete(userId);
+  return last;
+}
+
+/** Test hook: forget cached scouting. */
+export function clearScoutCache() {
+  scoutCache.clear();
+}

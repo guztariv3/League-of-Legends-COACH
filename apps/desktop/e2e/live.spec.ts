@@ -5,7 +5,7 @@ test("live window: waiting state, demo game, controls", async ({ page }) => {
   await expect(page.getByText("Esperando partida")).toBeVisible();
   await expect(page.getByText(/prueba la demostración/)).toBeVisible();
 
-  await page.getByText("Ajustes").click();
+  await page.getByText("Ajustes", { exact: true }).click();
   await expect(page.getByText(/nunca te da órdenes/)).toBeVisible();
   await page.getByRole("button", { name: "Probar demostración" }).click();
   await expect(page.getByText("◆ Demostración")).toBeVisible();
