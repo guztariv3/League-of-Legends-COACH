@@ -22,19 +22,35 @@ Los precios salen de fuentes secundarias de septiembre de 2026 (las webs de los 
 
 ## Estado del despliegue
 
-**Desplegado en Render** el 24-09-2026 con el Blueprint (`render.yaml`, rama `main`): servicio web `kairos-coach` y Postgres `kairos-db` en Frankfurt.
+**Desplegado en Render** el 25-09-2026 con el Blueprint (`render.yaml`, rama `main`): servicio web `kairos-coach` (`https://kairos-coach.onrender.com`) y Postgres `kairos-db` en Frankfurt.
+
+> Corrección: el 24-09 se dio por desplegado a partir de un log, pero el workspace de Render estaba vacío. El despliegue real es el del 25-09.
 
 | Comprobación | Resultado | Cómo se comprobó |
 |---|---|---|
 | El servicio arranca | Sí | Log de arranque en Render |
-| Gate del prototipo activo | Sí (`gate=on`) | Log de arranque |
+| Gate del prototipo activo | Sí (`gate=on`) | Log de arranque y prompt de contraseña en el navegador |
 | La web se sirve desde la API | Sí (`web=served`) | Log de arranque |
-| Datos reales de Riot (`data=riot`) | **Pendiente de confirmar** | Mirar la misma línea del log |
-| IA activa (`ai=on`) | **Pendiente de confirmar** (opcional) | Idem |
+| Datos reales de Riot (`data=riot`) | Sí | Log de arranque |
+| Vincular una cuenta real y sincronizar | Sí (cuenta de NA) | En la web |
+| Datos de las partidas correctos | Sí, coinciden con op.gg | Revisión manual de varias partidas por el propietario |
+| IA activa (`ai=on`) | No configurada (opcional) | Sin `ANTHROPIC_API_KEY` |
 
-Lo comprobó el propietario en el panel de Render. Desde el entorno de desarrollo no se puede verificar: su política de red bloquea `*.onrender.com`.
+Lo comprobó el propietario en el panel de Render y en la web. Desde el entorno de desarrollo no se puede verificar: su política de red bloquea `*.onrender.com`.
 
-Pendiente antes de abrirlo a más gente: rate limiting en los endpoints propios (ver `05-fase1.md`), validar con datos reales de Riot y sustituir el gate por RSO (D-01).
+**Aún sin validar con datos reales:** Perfil, Evolución, Adaptación, revisión de partida, scouting en pantalla de carga y la app de escritorio con una partida real.
+
+Pendiente antes de abrirlo a más gente: rate limiting en los endpoints propios (ver `05-fase1.md`), una **Personal API key** (ver abajo) y sustituir el gate por RSO (D-01).
+
+### Problemas encontrados en el primer despliegue
+
+| Síntoma | Causa | Solución |
+|---|---|---|
+| El Blueprint no mostraba los recursos | Estaba seleccionado `pnpm-workspace.yaml` y la rama por defecto del repo no es `main` | Elegir **Blueprint Path** `render.yaml` y rama `main`. Conviene poner `main` como rama por defecto en GitHub |
+| Pantalla negra con "Unauthorized" | El navegador no mostraba el diálogo de contraseña (probablemente por una extensión) | Abrir la web en una ventana de incógnito u otro navegador |
+| "Riot ha rechazado la clave de la API" | La clave de desarrollo caduca cada 24 h | Regenerarla en el portal de Riot y actualizar `RIOT_API_KEY` en Render (**Save, rebuild, and deploy**) |
+
+Antes de PR #4, cualquier fallo de Riot se mostraba como "Algo ha fallado en el servidor". Ahora la web distingue clave rechazada, límite de peticiones y caída de Riot.
 
 ## Poner en marcha el prototipo en Render
 
