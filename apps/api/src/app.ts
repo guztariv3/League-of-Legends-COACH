@@ -16,6 +16,7 @@ import { SyncService } from "./sync.js";
 import { makeServices, Preferences } from "./services.js";
 import { personalRoutes } from "./personal.js";
 import { gameRoutes } from "./game.js";
+import { forgetPlayers } from "./retention.js";
 import { desktopDeviceRoutes, desktopSessionRoutes } from "./desktop.js";
 import { evolutionRoutes } from "./evolution.js";
 
@@ -116,8 +117,10 @@ export function createApp(deps: AppDeps) {
   });
 
   authed.delete("/me", async (c) => {
-    // Deletes identity, accounts, links, preferences and sessions (cascade).
+    // Deletes identity, accounts, links, preferences and sessions (cascade), then the analyses.
+    const accounts = await db.select({ puuid: schema.riotAccounts.puuid }).from(schema.riotAccounts).where(eq(schema.riotAccounts.userId, c.get("userId")));
     await db.delete(schema.users).where(eq(schema.users.id, c.get("userId")));
+    await forgetPlayers(db, accounts.map((a) => a.puuid));
     await destroySession(db, c);
     return c.json({ ok: true });
   });
@@ -187,6 +190,7 @@ export function createApp(deps: AppDeps) {
     const acc = await ownAccount(c.get("userId"), c.req.param("id"));
     if (!acc) return c.json({ error: "not_found" }, 404);
     await db.delete(schema.riotAccounts).where(eq(schema.riotAccounts.id, acc.id));
+    await forgetPlayers(db, [acc.puuid]);
     return c.json({ ok: true });
   });
 

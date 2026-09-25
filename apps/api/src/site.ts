@@ -32,8 +32,11 @@ export function createSite(deps: AppDeps) {
   if (password) {
     const gate = basicAuth({ username: "kairos", password, realm: "KOI Master (prototipo privado)" });
     // The desktop pairing routes carry their own credentials (one-time code or device token).
-    const open = new Set(["/api/health", "/api/desktop/claim", "/api/desktop/scout"]);
-    site.use("*", async (c, next) => (open.has(c.req.path) ? next() : gate(c, next)));
+    const open = new Set(["/api/health", "/api/desktop/claim", "/api/desktop/scout", "/favicon.svg"]);
+    // Public pages (what KOI Master is, download, privacy, terms) and the built static files
+    // they load. The bundles hold no data and the source is public anyway.
+    const isPublic = (path: string) => open.has(path) || path === "/info" || path.startsWith("/info/") || path.startsWith("/assets/");
+    site.use("*", async (c, next) => (isPublic(c.req.path) ? next() : gate(c, next)));
   }
 
   site.route("/", api);
@@ -43,6 +46,8 @@ export function createSite(deps: AppDeps) {
     site.use("/*", serveStatic({ root: dist }));
     // SPA fallback: any non-API route serves the app shell.
     const shell = readFileSync(join(dist, "index.html"), "utf8");
+    const infoShell = readFileSync(join(dist, "info", "index.html"), "utf8");
+    site.get("/info/*", (c) => c.html(infoShell));
     site.get("*", (c) => (c.req.path.startsWith("/api/") ? c.notFound() : c.html(shell)));
   }
 

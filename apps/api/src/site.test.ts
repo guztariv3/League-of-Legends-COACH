@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -19,6 +19,10 @@ beforeAll(async () => {
   const dist = mkdtempSync(join(tmpdir(), "kairos-web-"));
   writeFileSync(join(dist, "index.html"), "<!doctype html><title>KOI Master</title><div id=root></div>");
   writeFileSync(join(dist, "app.js"), "console.log('ok')");
+  mkdirSync(join(dist, "info"));
+  writeFileSync(join(dist, "info", "index.html"), "<!doctype html><title>KOI Master info</title><div id=root></div>");
+  mkdirSync(join(dist, "assets"));
+  writeFileSync(join(dist, "assets", "info-abc.js"), "console.log('public')");
   const cfg = loadConfig({ NODE_ENV: "production", PROTOTYPE_PASSWORD: PASSWORD, DEV_LOGIN: "1", WEB_DIST: dist, RENDER_EXTERNAL_URL: "https://kairos.example" });
   const knowledge = await bootKnowledge(database.db, syntheticKnowledge());
   site = createSite({ cfg, db: database.db, source: syntheticSource(), knowledge, aiProviders: [] }).site;
@@ -31,6 +35,20 @@ describe("production site", () => {
     expect((await site.request("/api/config")).status).toBe(401);
     expect((await site.request("/")).status).toBe(401);
     expect((await site.request("/api/config", { headers: { Authorization: `Basic ${Buffer.from("kairos:wrong").toString("base64")}` } })).status).toBe(401);
+  });
+
+  it("serves the public pages without the password, and nothing private", async () => {
+    for (const path of ["/info/", "/info/privacidad", "/info/terminos"]) {
+      const res = await site.request(path);
+      expect(res.status, path).toBe(200);
+      expect(await res.text()).toContain("KOI Master info");
+    }
+    expect((await site.request("/info")).status).toBe(200);
+    expect(await (await site.request("/assets/info-abc.js")).text()).toContain("public");
+    // The app itself, its API and anything else stay behind the gate.
+    for (const path of ["/", "/settings", "/app.js", "/api/me", "/api/assets", "/informacion", "/api/info/"]) {
+      expect((await site.request(path)).status, path).toBe(401);
+    }
   });
 
   it("lets only the desktop device routes past the gate, which then need their own credentials", async () => {

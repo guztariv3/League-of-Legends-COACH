@@ -386,3 +386,21 @@ td .loadout { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
   padding: 8px 16px; border: 1px solid var(--gold-dark); background: var(--surface-solid);
   user-select: all;
 }
+
+/* Public pages and legal footer */
+.info-hero { display: flex; align-items: center; gap: var(--space-5); padding-top: var(--space-5); }
+.info-hero-avatar { width: 96px; height: 96px; flex-shrink: 0; display: inline-flex; }
+.info-hero .page-sub { max-width: 60ch; }
+.legal { max-width: 78ch; line-height: 1.6; }
+.legal h2 { margin-top: var(--space-3); }
+.legal ul { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; }
+.legal p { margin: 0; }
+.legal-footer { margin-top: var(--space-6); padding-top: var(--space-4); border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.75rem; }
+.legal-footer nav { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-bottom: var(--space-3); }
+.legal-footer a { color: var(--text-secondary); }
+.legal-footer p { margin: 0 0 6px; max-width: 90ch; }
+@media (max-width: 640px) {
+  .info-hero { flex-direction: column; align-items: flex-start; }
+  .info-hero-avatar { width: 64px; height: 64px; }
+}
+.info-features { grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); }

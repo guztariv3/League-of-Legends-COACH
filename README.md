@@ -42,6 +42,7 @@ docs/         auditoría, investigación, arquitectura, roadmap, decisiones, fas
 | [docs/08-fase4.md](docs/08-fase4.md) | Fase 4: Live Coach de escritorio, política, Modo seguro |
 | [docs/09-fase5.md](docs/09-fase5.md) | Fase 5: evolución, jugador vs entorno, adaptabilidad, historial |
 | [docs/10-despliegue.md](docs/10-despliegue.md) | Despliegue (Render), CI y actualizaciones firmadas del escritorio |
+| [docs/11-apertura.md](docs/11-apertura.md) | Abrir al público: páginas públicas, privacidad, retención y pasos con Riot |
 
 ---
 
