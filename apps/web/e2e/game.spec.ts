@@ -38,6 +38,8 @@ test("match review, manual draft and scouting", async ({ page }, info) => {
 
   await page.getByRole("button", { name: "Buscar mi partida" }).click();
   await expect(page.getByRole("heading", { name: "Rivales" })).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator("li.tile").filter({ hasText: /Rival \d#SYN/ })).toHaveCount(5);
+  await expect(page.locator("article.rival").filter({ hasText: /Rival \d#SYN/ })).toHaveCount(5);
+  // Honest about what Riot did not provide in the synthetic environment.
+  await expect(page.locator("article.rival").first()).toContainText("Rango no disponible");
   await page.screenshot({ path: `test-results/game-${info.project.name}.png`, fullPage: true });
 });
