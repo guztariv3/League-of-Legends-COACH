@@ -11,6 +11,7 @@ import { devLoginAllowed, type Config } from "./config.js";
 import { schema, type Db } from "./db/index.js";
 import { analysesFor, applyFilters, userAccounts, type AccountAnalysis } from "./queries.js";
 import type { MatchSource } from "./sources.js";
+import { riotFailure } from "./errors.js";
 import { SyncService } from "./sync.js";
 import { makeServices, Preferences } from "./services.js";
 import { personalRoutes } from "./personal.js";
@@ -38,6 +39,8 @@ export function createApp(deps: AppDeps) {
   app.use("*", csrfGuard(cfg.webOrigin));
   app.onError((err, c) => {
     console.error(err);
+    const riot = riotFailure(err);
+    if (riot) return c.json({ error: "riot_unavailable", message: riot.message }, riot.status);
     return c.json({ error: "internal", message: "Algo ha fallado en el servidor. Inténtalo de nuevo." }, 500);
   });
 
