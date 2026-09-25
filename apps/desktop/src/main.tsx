@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { DEFAULT_CONTROLS, LiveEngine, modeInfo, type Delivery, type EngineTick, type Intensity, type LiveControls } from "@coach/live";
 import { CoachAvatar } from "@coach/ui";
 import { checkUpdate, inTauri, installUpdate, minimizeWindow, readLoad, readSnapshot, type UpdateInfo } from "./bridge";
+import { ConnectForm, RivalsPanel, useRivals } from "./rivals";
 import "./live.css";
 
 const CONTROLS_KEY = "live.controls";
@@ -34,6 +35,7 @@ function LiveWindow() {
   const [message, setMessage] = useState<(Delivery & { shownAt: number }) | null>(null);
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const [updateState, setUpdateState] = useState<"idle" | "installing" | "failed">("idle");
+  const rivals = useRivals(mode);
   const controlsRef = useRef(controls);
   controlsRef.current = controls;
 
@@ -132,6 +134,8 @@ function LiveWindow() {
         </div>
       )}
 
+      <RivalsPanel scout={rivals.scout} collapsed={mode === "live"} />
+
       <section className="stage" aria-live="polite">
         {message && !controls.muted ? (
           <div className="presence">
@@ -188,6 +192,8 @@ function LiveWindow() {
         <p className="quiet">
           El Coach solo lee los datos que el propio juego publica y nunca te da órdenes. No rastrea definitivas ni hechizos de invocador rivales.
         </p>
+        <h3>Conexión con la web</h3>
+        <ConnectForm link={rivals.link} problem={rivals.problem} onConnect={rivals.connect} onDisconnect={rivals.disconnect} />
         <button className="btn" onClick={() => setMode((m) => (m === "demo" ? "waiting" : "demo"))}>{mode === "demo" ? "Salir de la demostración" : "Probar demostración"}</button>
       </details>
     </main>

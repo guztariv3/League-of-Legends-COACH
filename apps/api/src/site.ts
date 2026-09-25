@@ -31,7 +31,9 @@ export function createSite(deps: AppDeps) {
   const password = deps.cfg.prototypePassword;
   if (password) {
     const gate = basicAuth({ username: "kairos", password, realm: "KOI Master (prototipo privado)" });
-    site.use("*", async (c, next) => (c.req.path === "/api/health" ? next() : gate(c, next)));
+    // The desktop pairing routes carry their own credentials (one-time code or device token).
+    const open = new Set(["/api/health", "/api/desktop/claim", "/api/desktop/scout"]);
+    site.use("*", async (c, next) => (open.has(c.req.path) ? next() : gate(c, next)));
   }
 
   site.route("/", api);

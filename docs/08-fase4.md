@@ -19,7 +19,24 @@ Estado: **compila y se ha probado con partidas simuladas**. Este entorno no tien
 | Demostración | Reproduce una partida sintética "como si fuera en vivo" para probar el Coach sin League. Siempre aparece etiquetada. Se carga solo cuando se pide, para que la ventana siga ligera. | `demo.ts`, `simulator.ts` |
 | Diseño compartido | El avatar y los tokens de diseño viven en `packages/ui` y los usan la web y el escritorio (sección 112). | `packages/ui` |
 
-Durante la partida no se usa IA ni Internet: los precios y nombres de los objetos vienen en los propios datos del juego (sección 88).
+### Rivales en la pantalla de carga (conexión con la web)
+
+La ventana puede mostrar a tus rivales (Riot ID, rango, % de victorias y 3 mejores campeones) en cuanto empieza la pantalla de carga. Lee el mismo análisis que la web ("Antes de jugar"); no toca el cliente ni el juego. En el lobby o la selección de campeones no es posible: Riot oculta a los rivales hasta la pantalla de carga (D-03).
+
+Seguridad de la conexión (decisión del usuario: **código de conexión**):
+
+1. En la web, **Ajustes → App de escritorio → Generar código**: un código `XXXX-XXXX` de un solo uso que caduca en 10 minutos.
+2. En la app, **Ajustes → Conexión con la web**: la dirección de la web y el código. La app lo cambia por un token de dispositivo (`POST /api/desktop/claim`).
+3. Con `Authorization: Bearer <token>` la app **solo** puede leer `GET /api/desktop/scout`. No abre ninguna otra ruta ni la sesión web.
+
+- En la base de datos solo se guardan hashes SHA-256 del código y del token (`device_links`).
+- La app nunca ve ni guarda la contraseña del prototipo. Esas dos rutas son las únicas que el gate deja pasar, porque llevan su propia autenticación.
+- Hay límite de intentos del código: 10 por minuto por IP (la que añade el proxy, no la que manda el cliente) y 60 por minuto en total.
+- Desde la web se ve cada app conectada (último uso) y se puede **desconectar**; el token deja de valer al momento.
+- La parte en Rust solo acepta `https://` (o `http://` a esta misma máquina, para desarrollo) y comprueba el certificado con normalidad.
+- La app consulta cada 30 s mientras espera, deja de consultar cuando ya conoce a los rivales y empieza de nuevo al terminar la partida. El servidor cachea el análisis 90 s.
+
+Durante la partida el Live Coach no usa IA ni Internet (la lista de rivales ya se ha descargado en la pantalla de carga): los precios y nombres de los objetos vienen en los propios datos del juego (sección 88).
 
 ## Compatibilidad con Riot y Vanguard
 

@@ -33,6 +33,16 @@ describe("production site", () => {
     expect((await site.request("/api/config", { headers: { Authorization: `Basic ${Buffer.from("kairos:wrong").toString("base64")}` } })).status).toBe(401);
   });
 
+  it("lets only the desktop device routes past the gate, which then need their own credentials", async () => {
+    expect((await site.request("/api/desktop/scout")).status).toBe(401);
+    const claim = await site.request("/api/desktop/claim", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: "ABCD-EFGH" }) });
+    expect(claim.status).toBe(401);
+    expect(((await claim.json()) as { error: string }).error).toBe("invalid_code");
+    // Pairing a new device needs the web session, so it stays behind the gate.
+    expect((await site.request("/api/desktop/pair", { method: "POST" })).status).toBe(401);
+    expect((await site.request("/api/desktop/devices")).headers.get("www-authenticate")).toContain("Basic");
+  });
+
   it("serves the API, static files and the SPA shell from one origin", async () => {
     const cfg = await site.request("/api/config", { headers: { Authorization: auth } });
     expect((await cfg.json() as { auth: { devLogin: boolean } }).auth.devLogin).toBe(true);
