@@ -79,6 +79,17 @@ En cada PR y en cada push a `main` se ejecutan typecheck, tests, E2E web y de es
 | Si falla | La firma se verifica antes de instalar. Si la descarga o la verificación fallan, se queda la versión instalada y se avisa. |
 | Rollback | Publica de nuevo una versión anterior como la más reciente (o elimina el Release defectuoso). |
 
+### Instalador de prueba (sin firma ni actualizaciones)
+
+Para probar la app de escritorio antes de configurar la firma:
+
+1. En GitHub: **Actions → Desktop test build → Run workflow** (rama `main`). También se ejecuta en los PR que tocan la app de escritorio.
+2. Cuando termine (unos 15–20 min), descarga el artefacto **KOI-Master-Windows** y descomprímelo.
+3. Ejecuta el instalador `.exe`. Windows SmartScreen avisará porque no está firmado: **Más información → Ejecutar de todas formas**.
+4. Abre **KOI Master**: la ventana lateral espera una partida. Con **Probar demostración** se ve sin jugar. En una partida real (también sirve la Herramienta de práctica), la app lee solo la Live Client Data API local (`127.0.0.1:2999`).
+
+Esta build no incluye el updater: no busca actualizaciones ni necesita claves.
+
 ### Configuración inicial (una vez)
 
 1. Genera las claves en tu máquina: `pnpm --filter @coach/desktop tauri signer generate -w ~/.tauri/kairos.key`
