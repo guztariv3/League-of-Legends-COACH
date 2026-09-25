@@ -17,6 +17,9 @@ import { Matches } from "./pages/Matches";
 import { Settings } from "./pages/Settings";
 import { Welcome } from "./pages/Welcome";
 import { SessionProvider, useSession } from "./session";
+import "@coach/ui/fonts.css";
+import { AssetsProvider } from "./assets";
+import { World } from "./components/World";
 import "./styles.css";
 
 function Layout() {
@@ -93,7 +96,10 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
       <SessionProvider>
-        <App />
+        <AssetsProvider>
+          <World />
+          <App />
+        </AssetsProvider>
       </SessionProvider>
     </BrowserRouter>
   </StrictMode>,

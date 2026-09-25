@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ChampionIcon } from "../assets";
 import { Link } from "react-router";
 import { api } from "../api";
 import { ErrorNotice, Loading, pct, SyntheticBadge } from "../components/ui";
@@ -36,6 +37,7 @@ export function Champions() {
         {list.map((c) => (
           <li key={c.key}>
             <Link to={`/champions/${encodeURIComponent(c.name)}`} className="tile row" style={{ textDecoration: "none", color: "inherit" }}>
+              <ChampionIcon champion={c.key} size={48} />
               <div>
                 <div className="match-title">{c.name}</div>
                 <div className="tile-note">{c.title} · {c.tags.join(", ")}</div>

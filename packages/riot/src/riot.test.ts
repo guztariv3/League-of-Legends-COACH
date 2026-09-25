@@ -108,3 +108,29 @@ describe("spectator-v5", () => {
     expect(g?.participants[0]?.puuid).toBeNull();
   });
 });
+
+describe("mastery and ranked", () => {
+  it("asks the platform host for the top 3 masteries and the ranked entries", async () => {
+    const urls: string[] = [];
+    const client = new RiotClient({
+      apiKey: "k",
+      fetch: async (url) => {
+        urls.push(String(url));
+        return String(url).includes("mastery")
+          ? json([{ championId: 103, championLevel: 7, championPoints: 250000, puuid: "p" }])
+          : json([{ queueType: "RANKED_SOLO_5x5", tier: "GOLD", rank: "II", leaguePoints: 40, wins: 30, losses: 25 }]);
+      },
+    });
+    expect(await client.getTopMasteries("na1", "p")).toEqual([expect.objectContaining({ championId: 103, championPoints: 250000 })]);
+    expect((await client.getLeagueEntries("na1", "p"))[0]).toMatchObject({ tier: "GOLD", wins: 30, losses: 25 });
+    expect(urls).toEqual([
+      "https://na1.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/p/top?count=3",
+      "https://na1.api.riotgames.com/lol/league/v4/entries/by-puuid/p",
+    ]);
+  });
+
+  it("treats an unranked player (empty list) as no entries", async () => {
+    const client = new RiotClient({ apiKey: "k", fetch: async () => json([]) });
+    expect(await client.getLeagueEntries("na1", "p")).toEqual([]);
+  });
+});

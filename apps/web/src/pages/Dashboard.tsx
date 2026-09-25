@@ -4,6 +4,8 @@ import { Goals } from "../components/Goals";
 import { api } from "../api";
 import { ErrorNotice, InsightView, Loading, MatchItem, modeLabel, num, pct, roleLabel, StatTile, SyntheticBadge } from "../components/ui";
 import { useLoad, useSession } from "../session";
+import { ChampionIcon } from "../assets";
+import { SplashBackdrop } from "../components/World";
 
 /**
  * The dashboard decides what matters: headline numbers for the main mode, at
@@ -26,6 +28,7 @@ export function Dashboard() {
 
   return (
     <div className="stack" style={{ gap: 24 }}>
+      <SplashBackdrop champion={main?.champions[0]?.championName} />
       <header className="row">
         <div>
           <h1 className="page-title">Hola, {me?.user.displayName}</h1>
@@ -58,7 +61,16 @@ export function Dashboard() {
           />
           <StatTile label="KDA medio" value={num(main.avgKda, 2)} />
           {main.avgCsPerMin !== null && <StatTile label="CS por minuto" value={num(main.avgCsPerMin)} note={main.mainRole ? `Rol principal: ${roleLabel[main.mainRole]}` : undefined} />}
-          {main.champions[0] && <StatTile label="Campeón más jugado" value={main.champions[0].championName} note={`${main.champions[0].games} partidas`} />}
+          {main.champions[0] && (
+            <div className="tile tile-media">
+              <ChampionIcon champion={main.champions[0].championName} size={52} className="portrait" />
+              <div>
+                <div className="tile-value">{main.champions[0].championName}</div>
+                <div className="tile-label">Campeón más jugado</div>
+                <div className="tile-note">{main.champions[0].games} partidas</div>
+              </div>
+            </div>
+          )}
         </section>
       )}
 

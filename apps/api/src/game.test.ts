@@ -64,7 +64,7 @@ describe("draft", () => {
 });
 
 describe("scouting", () => {
-  it("scouts the (simulated) game in progress with sample sizes and no rank", async () => {
+  it("scouts the (simulated) game in progress; without mastery/ranked data it says so and uses recent games", async () => {
     const cookie = await player("Scouter");
     const { body } = await call("/game/scout", { cookie });
     expect(body.inGame).toBe(true);
@@ -73,9 +73,46 @@ describe("scouting", () => {
     for (const e of body.enemies) {
       expect(e.games).toBeLessThanOrEqual(10);
       expect(typeof e.smallSample).toBe("boolean");
-      expect(e).not.toHaveProperty("rank");
+      expect(e.rankStatus).toBe("unavailable");
+      expect(e.rank).toBeNull();
+      expect(e.topChampions.length).toBeLessThanOrEqual(3);
+      if (e.games) expect(e.topSource).toBe("recent");
     }
     expect(body.draft.keyPoints.length).toBeLessThanOrEqual(3);
+  }, 60_000);
+
+  it("shows ranked records and mastery top 3, and marks unranked / failing players honestly", async () => {
+    const base = syntheticSource(() => Date.UTC(2026, 5, 1));
+    let n = 0;
+    const source = {
+      ...base,
+      topMasteries: async () => [9001, 9002, 9003].map((championId, i) => ({ championId, championLevel: 7, championPoints: 300000 - i * 1000 })),
+      leagueEntries: async () => {
+        const i = n++ % 3;
+        if (i === 0) return [{ queueType: "RANKED_FLEX_SR", wins: 1, losses: 1 }, { queueType: "RANKED_SOLO_5x5", tier: "GOLD", rank: "II", leaguePoints: 40, wins: 30, losses: 25 }];
+        if (i === 1) return [];
+        throw new Error("403 from Riot");
+      },
+    };
+    const knowledge = await bootKnowledge(database.db, syntheticKnowledge());
+    const app = createApp({ cfg: loadConfig({ NODE_ENV: "test" }), db: database.db, source, knowledge, aiProviders: [] });
+    const login = await app.app.request("/api/auth/dev-login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayName: "RankScout" }) });
+    const cookie = login.headers.get("set-cookie")!.split(";")[0]!;
+    const acc = await app.app.request("/api/accounts", { method: "POST", headers: { "Content-Type": "application/json", Cookie: cookie }, body: JSON.stringify({ gameName: "RankScout", tagLine: "EUW", platform: "euw1" }) });
+    await app.sync.start(((await acc.json()) as any).account.id);
+    const body = (await (await app.app.request("/api/game/scout", { headers: { Cookie: cookie } })).json()) as any;
+    expect(body.inGame).toBe(true);
+    const statuses = body.enemies.map((e: any) => e.rankStatus);
+    expect(statuses).toContain("ranked");
+    expect(statuses).toContain("unranked");
+    expect(statuses).toContain("unavailable");
+    const ranked = body.enemies.find((e: any) => e.rankStatus === "ranked");
+    expect(ranked.rank).toEqual({ queue: "solo", tier: "GOLD", division: "II", lp: 40, wins: 30, losses: 25 });
+    for (const e of body.enemies) {
+      expect(e.topSource).toBe("mastery");
+      expect(e.topChampions.map((c: any) => c.id)).toEqual(["Aurelith", "Korvane", "Brannoc"]);
+      expect(e.topChampions[0].points).toBe(300000);
+    }
   }, 60_000);
 });
 

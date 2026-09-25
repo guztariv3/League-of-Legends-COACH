@@ -43,6 +43,15 @@ describe("API (synthetic mode)", () => {
     expect((await call("/me")).res.status).toBe(401);
   });
 
+  it("serves static game assets without auth; synthetic data has no CDN art", async () => {
+    const { res, body } = await call("/assets");
+    expect(res.status).toBe(200);
+    expect(body.cdn).toBeNull();
+    expect(body.champions.length).toBeGreaterThan(5);
+    expect(body.champions[0]).toEqual(expect.objectContaining({ key: expect.any(Number), id: expect.any(String), name: expect.any(String) }));
+    expect(Array.isArray(body.items) && Array.isArray(body.spells) && Array.isArray(body.runes)).toBe(true);
+  });
+
   it("blocks cross-origin writes", async () => {
     const { res } = await call("/auth/dev-login", { method: "POST", body: "{}", headers: { Origin: "https://evil.example" } });
     expect(res.status).toBe(403);

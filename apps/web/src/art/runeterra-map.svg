@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" fill="none">
+  <!-- Original, stylised map of Runeterra drawn for KOI Master (not Riot artwork). -->
+  <defs>
+    <radialGradient id="sea" cx="50%" cy="45%" r="70%">
+      <stop offset="0" stop-color="#0f3147"/>
+      <stop offset="1" stop-color="#010a13"/>
+    </radialGradient>
+    <linearGradient id="land" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5e4c2b"/>
+      <stop offset="1" stop-color="#2c2517"/>
+    </linearGradient>
+    <!-- Rough, organic coastlines from smooth shapes -->
+    <filter id="coast" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="4" seed="7" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="38" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <!-- Parchment grain -->
+    <filter id="grain">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3"/>
+      <feColorMatrix values="0 0 0 0 0.78  0 0 0 0 0.67  0 0 0 0 0.43  0 0 0 0.05 0"/>
+    </filter>
+    <pattern id="hatch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(35)">
+      <path d="M0 0v10" stroke="#c8aa6e" stroke-opacity=".08"/>
+    </pattern>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#sea)"/>
+  <!-- graticule -->
+  <g stroke="#c8aa6e" stroke-opacity=".14">
+    <path d="M0 250 Q800 200 1600 250"/><path d="M0 500 Q800 460 1600 500"/><path d="M0 750 Q800 720 1600 750"/>
+    <path d="M400 0 Q360 500 400 1000"/><path d="M800 0 Q800 500 800 1000"/><path d="M1200 0 Q1240 500 1200 1000"/>
+  </g>
+  <g stroke="#c8aa6e" stroke-opacity=".75" stroke-width="1.8" fill="url(#land)" filter="url(#coast)">
+    <!-- Freljord -->
+    <path d="M230 170 C300 70 520 40 700 60 C880 40 1060 60 1160 120 C1120 190 980 215 860 205 C720 230 560 225 420 240 C320 250 220 230 230 170Z"/>
+    <!-- Demacia -->
+    <path d="M160 300 C230 250 380 250 500 280 C540 330 520 400 470 450 C400 490 300 480 230 450 C160 420 120 360 160 300Z"/>
+    <!-- Noxus -->
+    <path d="M560 270 C680 240 860 245 990 280 C1030 340 1000 420 920 455 C820 480 700 470 610 440 C550 400 530 330 560 270Z"/>
+    <!-- Piltover & Zaun isthmus -->
+    <path d="M780 455 C810 470 850 470 870 458 C880 490 870 525 850 545 C820 548 795 530 785 505 C778 490 776 470 780 455Z"/>
+    <!-- Shurima -->
+    <path d="M470 590 C600 540 780 545 900 560 C1020 570 1110 610 1120 690 C1110 780 1020 860 880 880 C740 895 590 870 510 810 C440 760 420 660 470 590Z"/>
+    <!-- Targon -->
+    <path d="M250 640 C300 610 380 620 410 660 C425 720 405 790 360 820 C310 835 262 800 245 750 C232 710 230 670 250 640Z"/>
+    <!-- Ixtal -->
+    <path d="M1040 700 C1080 680 1140 690 1160 730 C1170 780 1130 820 1085 822 C1045 815 1025 780 1030 745 C1030 725 1032 710 1040 700Z"/>
+    <!-- Ionia -->
+    <path d="M1220 210 C1300 170 1400 190 1450 250 C1480 320 1455 400 1390 440 C1320 470 1250 450 1215 390 C1185 330 1180 250 1220 210Z"/>
+    <!-- Bilgewater -->
+    <path d="M1170 580 C1200 565 1240 570 1255 595 C1260 625 1235 645 1205 645 C1180 640 1160 620 1170 580Z"/>
+    <path d="M1275 610 C1295 600 1318 606 1322 624 C1320 642 1300 650 1284 644 C1270 636 1268 620 1275 610Z"/>
+    <!-- Shadow Isles -->
+    <path d="M1390 780 C1420 760 1470 765 1490 790 C1500 820 1475 845 1440 848 C1405 845 1385 820 1390 780Z" stroke="#0ac8b9" stroke-opacity=".35"/>
+    <path d="M1505 830 C1520 822 1540 828 1542 842 C1540 858 1522 862 1510 856 C1500 850 1498 838 1505 830Z" stroke="#0ac8b9" stroke-opacity=".35"/>
+  </g>
+  <g fill="url(#hatch)">
+    <path d="M300 690 L330 650 L360 700 L390 660 L400 740 L300 760Z"/>
+    <path d="M620 110 L660 80 L700 120 L740 90 L780 130 L620 150Z"/>
+  </g>
+  <rect width="1600" height="1000" filter="url(#grain)"/>
+  <!-- region names -->
+  <g font-family="Cinzel, Georgia, serif" font-size="22" letter-spacing="6" fill="#e3c88f" fill-opacity=".6" text-anchor="middle">
+    <text x="700" y="150">FRELJORD</text>
+    <text x="330" y="375">DEMACIA</text>
+    <text x="780" y="365">NOXUS</text>
+    <text x="828" y="600" font-size="14" letter-spacing="3">PILTOVER · ZAUN</text>
+    <text x="780" y="730">SHURIMA</text>
+    <text x="330" y="880" font-size="16" letter-spacing="4">TARGÓN</text>
+    <text x="1095" y="860" font-size="14" letter-spacing="3">IXTAL</text>
+    <text x="1335" y="330">JONIA</text>
+    <text x="1245" y="690" font-size="14" letter-spacing="3">AGUASTURBIAS</text>
+    <text x="1450" y="900" font-size="14" letter-spacing="3" fill="#0ac8b9">ISLAS DE LA SOMBRA</text>
+  </g>
+  <!-- compass rose -->
+  <g transform="translate(140 870)" stroke="#c8aa6e" stroke-opacity=".5" fill="none">
+    <circle r="60"/><circle r="48" stroke-dasharray="2 6"/>
+    <path d="M0 -78 L10 -10 L0 0 L-10 -10Z M0 78 L10 10 L0 0 L-10 10Z M-78 0 L-10 -10 L0 0 L-10 10Z M78 0 L10 -10 L0 0 L10 10Z" fill="#c8aa6e" fill-opacity=".25"/>
+    <text y="-86" text-anchor="middle" font-family="Cinzel, Georgia, serif" font-size="14" fill="#c8aa6e" stroke="none">N</text>
+  </g>
+  <text x="1560" y="40" text-anchor="end" font-family="Cinzel, Georgia, serif" font-size="18" letter-spacing="8" fill="#c8aa6e" fill-opacity=".4">RUNATERRA</text>
+</svg>

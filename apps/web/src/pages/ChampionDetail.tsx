@@ -1,4 +1,6 @@
 import { useEffect } from "react";
+import { ChampionIcon } from "../assets";
+import { SplashBackdrop } from "../components/World";
 import { Link, useParams } from "react-router";
 import { api } from "../api";
 import { ErrorNotice, Loading, modeLabel, pct, StatTile } from "../components/ui";
@@ -35,13 +37,17 @@ export function ChampionDetail() {
 
   return (
     <div className="stack" style={{ gap: 20 }}>
+      <SplashBackdrop champion={champId} />
       <Link to="/champions">← Campeones</Link>
-      <header>
+      <header className="hero">
+        <ChampionIcon champion={champId} size={84} className="portrait" />
+        <div>
         <h1 className="page-title">{champName}</h1>
         <p className="page-sub" style={{ margin: 0 }}>
           {data.champion ? `${data.champion.title} · ${data.champion.tags.join(", ")}` : "Sin datos estáticos en la versión activa"}
           {data.knowledgeVersion && ` · datos de la versión ${data.knowledgeVersion}`}
         </p>
+        </div>
       </header>
 
       {personal.games === 0 ? (

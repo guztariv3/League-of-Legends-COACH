@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { ChampionIcon } from "../assets";
+import { RivalCard } from "../components/RivalCard";
 import { api, type DraftAnalysis, type DraftPoint, type ScoutResult } from "../api";
-import { ErrorNotice, Loading, pct, roleLabel, SyntheticBadge } from "../components/ui";
+import { ErrorNotice, Loading, SyntheticBadge } from "../components/ui";
 import { useLoad } from "../session";
 
 const kindLabel = { fact: "Hecho", observation: "Observación", hypothesis: "Hipótesis" } as const;
@@ -73,44 +75,29 @@ function LiveGame() {
       {state.error ? <ErrorNotice error={state.error} /> : null}
       {d && !d.inGame && <div className="notice">{d.message}</div>}
       {d?.inGame && (
-        <div className="grid grid-2">
+        <>
+          <div className="stack" style={{ gap: 8 }}>
+            <h3 className="section-title">Tus rivales</h3>
+            <div className="rivals">
+              {d.enemies!.map((e, i) => <RivalCard key={i} e={e} />)}
+            </div>
+            <p className="tile-note" style={{ margin: 0 }}>
+              Rango y maestría vienen de Riot; el resto, de sus últimas partidas. Con pocas partidas no se puede juzgar el nivel de nadie: es solo contexto.
+            </p>
+          </div>
           <div className="stack">
+            <h3 className="section-title">Tu equipo</h3>
+            <div className="row" style={{ gap: 6 }}>
+              <ChampionIcon champion={d.myChampion!.id} size={52} className="portrait" />
+              {d.allies!.map((a) => <ChampionIcon key={a.id} champion={a.id} size={34} />)}
+            </div>
             <p style={{ margin: 0 }}>
               Juegas <strong>{d.myChampion!.name}</strong> con {d.allies!.map((a) => a.name).join(", ")}.
               {d.account && <span className="tile-note"> Cuenta: {d.account}</span>}
             </p>
             <Points draft={d.draft!} />
           </div>
-          <div className="stack">
-            <h3 className="tile-label" style={{ margin: 0 }}>Rivales</h3>
-            <ul className="stack" style={{ listStyle: "none", margin: 0, padding: 0, gap: 6 }}>
-              {d.enemies!.map((e, i) => (
-                <li key={i} className="tile stack" style={{ gap: 2 }}>
-                  <div className="row">
-                    <strong>{e.championName}</strong>
-                    <span className="tile-note">{e.riotId ?? "Jugador"}</span>
-                    <span className="spacer" />
-                    {e.available && e.smallSample && <span className="badge">Muestra pequeña</span>}
-                  </div>
-                  <span className="tile-note">{e.headline}</span>
-                  {e.available && (
-                    <details className="layer">
-                      <summary>Ver datos</summary>
-                      <dl>
-                        <dt>Partidas recientes analizadas</dt><dd>{e.games}</dd>
-                        <dt>Victorias</dt><dd>{e.wins} de {e.games}{e.games ? ` (${pct(e.wins / e.games)})` : ""}</dd>
-                        <dt>Con {e.championName}</dt><dd>{e.winsOnChampion} de {e.gamesOnChampion}</dd>
-                        <dt>Rol más jugado</dt><dd>{e.mainRole ? roleLabel[e.mainRole] : "—"}</dd>
-                        <dt>KDA medio</dt><dd>{e.avgKda?.toFixed(2) ?? "—"}</dd>
-                      </dl>
-                    </details>
-                  )}
-                </li>
-              ))}
-            </ul>
-            <p className="tile-note" style={{ margin: 0 }}>Con tan pocas partidas no se puede juzgar el nivel de nadie: es solo contexto.</p>
-          </div>
-        </div>
+        </>
       )}
     </section>
   );

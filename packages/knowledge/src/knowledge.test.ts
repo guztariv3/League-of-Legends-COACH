@@ -20,6 +20,32 @@ describe("knowledge pipeline", () => {
     expect(urls[1]).toBe("https://ddragon.leagueoflegends.com/cdn/99.1.1/data/en_US/champion.json");
   });
 
+  it("reads summoner spells and runes, and a broken icon feed never rejects the bundle", async () => {
+    const champ = { version: "9.9.9", data: { Ahri: { id: "Ahri", key: "103", name: "Ahri", title: "t", tags: ["Mage"] } } };
+    const items = { version: "9.9.9", data: { "1001": { name: "Boots", gold: { total: 300 } } } };
+    const spells = { version: "9.9.9", data: { SummonerFlash: { id: "SummonerFlash", key: "4", name: "Flash" } } };
+    const runes = [{ id: 8100, key: "Domination", name: "Domination", icon: "perk-images/Styles/7200_Domination.png",
+      slots: [{ runes: [{ id: 8112, key: "Electrocute", name: "Electrocute", icon: "perk-images/Styles/Domination/Electrocute/Electrocute.png" }] }] }];
+    const serve = (brokenRunes: boolean): typeof fetch => async (url) => {
+      const u = String(url);
+      if (u.endsWith("versions.json")) return new Response(JSON.stringify(["9.9.9"]));
+      if (u.endsWith("champion.json")) return new Response(JSON.stringify(champ));
+      if (u.endsWith("item.json")) return new Response(JSON.stringify(items));
+      if (u.endsWith("summoner.json")) return new Response(JSON.stringify(spells));
+      if (u.endsWith("runesReforged.json")) return brokenRunes ? new Response("nope", { status: 500 }) : new Response(JSON.stringify(runes));
+      return new Response("?", { status: 404 });
+    };
+    const b = await fetchBundle(dataDragonSource(serve(false)));
+    expect(b.spells).toEqual([{ key: 4, id: "SummonerFlash", name: "Flash" }]);
+    expect(b.runes).toEqual([
+      { id: 8100, name: "Domination", icon: "perk-images/Styles/7200_Domination.png", style: true },
+      { id: 8112, name: "Electrocute", icon: "perk-images/Styles/Domination/Electrocute/Electrocute.png", style: false },
+    ]);
+    const degraded = await fetchBundle(dataDragonSource(serve(true)));
+    expect(degraded.runes).toEqual([]);
+    expect(degraded.champions).toHaveLength(1);
+  });
+
   it("activates valid bundles, rejects broken ones and rolls back", async () => {
     const reg = new KnowledgeRegistry();
     const good = await fetchBundle(syntheticSource());

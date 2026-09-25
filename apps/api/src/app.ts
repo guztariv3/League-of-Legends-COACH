@@ -58,6 +58,24 @@ export function createApp(deps: AppDeps) {
     }),
   );
 
+  /**
+   * Static game data for icons and splash art. Images come straight from Riot's Data Dragon CDN, so they
+   * only exist for real bundles: the synthetic catalog (fictional champions) returns `cdn: null` and the
+   * web falls back to lettered medallions.
+   */
+  app.get("/assets", (c) => {
+    const b = knowledge.active();
+    c.header("Cache-Control", "private, max-age=3600");
+    return c.json({
+      version: b?.version ?? null,
+      cdn: b?.source === "ddragon" ? "https://ddragon.leagueoflegends.com" : null,
+      champions: (b?.champions ?? []).map((ch) => ({ key: ch.key, id: ch.id, name: ch.name })),
+      spells: (b?.spells ?? []).map((sp) => ({ key: sp.key, id: sp.id, name: sp.name })),
+      runes: b?.runes ?? [],
+      items: (b?.items ?? []).map((i) => ({ id: i.id, name: i.name })),
+    });
+  });
+
   app.post("/auth/dev-login", async (c) => {
     if (!devLoginAllowed(cfg)) return c.json({ error: "dev_login_disabled" }, 403);
     const body = z.object({ displayName: z.string().trim().min(1).max(40).default("Jugador") }).safeParse(await c.req.json().catch(() => ({})));
@@ -317,7 +335,10 @@ export function createApp(deps: AppDeps) {
           cs: p.cs,
           gold: p.gold,
           damage: p.damageToChampions,
-          items: p.items.map((id) => knowledge.active()?.items.find((i) => i.id === id)?.name ?? `#${id}`),
+          championId: p.championId,
+          items: p.items.map((id) => ({ id, name: knowledge.active()?.items.find((i) => i.id === id)?.name ?? `#${id}` })),
+          spells: p.spells,
+          runes: p.runes,
           isMe: p.puuid === mine.puuid,
         })),
       })),

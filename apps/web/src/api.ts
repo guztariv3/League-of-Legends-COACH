@@ -10,6 +10,16 @@ export interface AppConfig {
   platforms: { id: string; label: string }[];
 }
 
+/** Static game data for icons (see apps/api `/assets`). `cdn` is null for the synthetic catalog. */
+export interface GameAssets {
+  version: string | null;
+  cdn: string | null;
+  champions: { key: number; id: string; name: string }[];
+  spells: { key: number; id: string; name: string }[];
+  runes: { id: number; name: string; icon: string; style: boolean }[];
+  items: { id: number; name: string }[];
+}
+
 export interface Account {
   id: string;
   riotId: string;
@@ -99,7 +109,7 @@ export interface MatchList {
 
 export interface MatchDetail {
   dataSource: "riot" | "synthetic";
-  analysis: MatchRow & {
+  analysis: MatchRow & { championId: number;
     killParticipation: number | null;
     damageShare: number | null;
     visionPerMin: number | null;
@@ -112,7 +122,7 @@ export interface MatchDetail {
   teams: {
     teamId: number;
     win: boolean;
-    players: { championName: string; riotId: string | null; role: string; kills: number; deaths: number; assists: number; cs: number; gold: number; damage: number; items: string[]; isMe: boolean }[];
+    players: { championName: string; riotId: string | null; role: string; kills: number; deaths: number; assists: number; cs: number; gold: number; damage: number; championId: number; items: { id: number; name: string }[]; spells: number[]; runes: { keystone: number | null; primary: number | null; secondary: number | null }; isMe: boolean }[];
   }[];
   goldCurve: { minute: number; me: number; opponent: number | null }[] | null;
   myEvents: { minute: number; type: "kill" | "death" | "assist" }[] | null;
@@ -269,6 +279,10 @@ export interface ScoutedPlayer {
   avgKda: number | null;
   smallSample: boolean;
   headline: string;
+  rankStatus: "ranked" | "unranked" | "unavailable";
+  rank: { queue: "solo" | "flex"; tier: string | null; division: string | null; lp: number | null; wins: number; losses: number } | null;
+  topChampions: { id: string; name: string; points: number | null; games: number | null }[];
+  topSource: "mastery" | "recent" | null;
 }
 
 export interface ScoutResult {
@@ -337,6 +351,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export const api = {
   config: () => request<AppConfig>("/config"),
+  assets: () => request<GameAssets>("/assets"),
   me: () => request<Me>("/me"),
   devLogin: (displayName: string) => request<{ user: Me["user"] }>("/auth/dev-login", { method: "POST", body: JSON.stringify({ displayName }) }),
   logout: () => request<{ ok: true }>("/auth/logout", { method: "POST", body: "{}" }),
