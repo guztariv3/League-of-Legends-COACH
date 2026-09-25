@@ -32,6 +32,8 @@ export interface GameState {
   /** Map id as reported by the game (11 = Summoner's Rift, 12 = Howling Abyss). */
   map: number | null;
   me: PlayerState | null;
+  /** The player's unspent gold (the game reports it only for the active player). */
+  gold: number | null;
   allies: PlayerState[];
   enemies: PlayerState[];
   /** Events seen so far (deduplicated by EventID). */
@@ -79,7 +81,7 @@ function toPlayer(p: LivePlayer, ctx: StateContext): PlayerState {
 }
 
 export function emptyState(): GameState {
-  return { time: 0, mode: null, map: null, me: null, allies: [], enemies: [], events: [], lastEventId: -1, complete: false };
+  return { time: 0, mode: null, map: null, me: null, gold: null, allies: [], enemies: [], events: [], lastEventId: -1, complete: false };
 }
 
 export function reduceState(prev: GameState, data: AllGameData, ctx: StateContext = {}): GameState {
@@ -93,6 +95,7 @@ export function reduceState(prev: GameState, data: AllGameData, ctx: StateContex
     mode: data.gameData.gameMode ?? null,
     map: data.gameData.mapNumber ?? null,
     me,
+    gold: data.activePlayer.currentGold ?? null,
     allies: myTeam ? players.filter((p) => p.team === myTeam && p !== me) : [],
     enemies: myTeam ? players.filter((p) => p.team !== myTeam) : [],
     events: [...prev.events, ...newEvents],

@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { DEFAULT_CONTROLS, LiveEngine, modeInfo, type Delivery, type EngineTick, type Intensity, type LiveControls } from "@coach/live";
 import { CoachAvatar } from "@coach/ui";
 import { checkUpdate, fetchBuild, inTauri, installUpdate, minimizeWindow, readLoad, readSnapshot, type UpdateInfo } from "./bridge";
-import { Board, useArt, type PersonalBuild } from "./board";
+import { Board, useArt, useCatalog, type PersonalBuild } from "./board";
 import { ConnectForm, RivalsPanel, useRivals } from "./rivals";
 import "./live.css";
 
@@ -38,6 +38,7 @@ function LiveWindow() {
   const [updateState, setUpdateState] = useState<"idle" | "installing" | "failed">("idle");
   const rivals = useRivals(mode);
   const art = useArt(rivals.scout?.assets ?? null);
+  const catalog = useCatalog(art);
   const [showConnect, setShowConnect] = useState(false);
   const [build, setBuild] = useState<PersonalBuild | null | "loading">(null);
   // Item names arrive with the game's own data; the engine fills this map as it reads.
@@ -157,7 +158,7 @@ function LiveWindow() {
       <RivalsPanel scout={rivals.scout} collapsed={mode === "live"} />
 
       {tick?.state.me && (
-        <Board state={tick.state} names={itemNames.current} art={art} build={mode === "demo" ? null : build} connected={Boolean(rivals.link) && mode !== "demo"} />
+        <Board state={tick.state} names={itemNames.current} art={art} catalog={catalog} demo={mode === "demo"} build={mode === "demo" ? null : build} connected={Boolean(rivals.link) && mode !== "demo"} />
       )}
 
       {!rivals.link && mode === "waiting" && (

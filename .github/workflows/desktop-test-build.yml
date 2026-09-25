@@ -9,6 +9,7 @@ on:
     paths:
       - "apps/desktop/**"
       - "packages/live/**"
+      - "packages/itemization/**"
       - "packages/ui/**"
       - ".github/workflows/desktop-test-build.yml"
 
