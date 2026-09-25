@@ -11,8 +11,16 @@ const features = [
     text: "Riot ID, rango, porcentaje de victorias y sus tres mejores campeones de cada rival, en la web o en la app de escritorio. Antes no se puede: Riot los mantiene ocultos en el lobby y en la selección.",
   },
   {
+    title: "Qué comprar, según la partida",
+    text: "En partida, la app sugiere el siguiente objeto según lo que construyen los rivales, quién va fuerte y cómo te va a ti, explica por qué y te enseña cómo comprarlo con el oro que tienes.",
+  },
+  {
     title: "Live Coach, sin órdenes",
     text: "Una ventana lateral que te avisa de lo importante (tus picos de poder, los de tu rival, tu objetivo de CS) y calla el resto. Informa; las decisiones son tuyas. Funciona en todos los modos.",
+  },
+  {
+    title: "Honesto y privado",
+    text: "No inventa datos: cada conclusión dice cuántas partidas tiene detrás, y si no lo sabe, lo dice. Tus datos son solo tuyos y puedes borrarlos cuando quieras.",
   },
   {
     title: "Respeta el juego",
@@ -45,7 +53,7 @@ export function Landing() {
       <section className="card stack" id="descargar" aria-labelledby="dl-h">
         <h2 id="dl-h">Descargar la app de escritorio</h2>
         <p style={{ margin: 0 }}>
-          Para Windows. Se abre como una ventana lateral junto al juego. El Live Coach funciona sin cuenta; para ver a tus rivales, conéctala a la web con un código (Ajustes → App de escritorio).
+          Para Windows. Se abre como una ventana lateral junto al juego. Funciona sin cuenta: siguiente objeto sugerido según los rivales y la partida, cómo comprarlo, el marcador con los objetos de todos y avisos del Live Coach. Con cuenta en la web, además, tus rivales en la pantalla de carga.
         </p>
         <div className="row">
           <a className="btn btn-primary" href={DOWNLOAD_URL} rel="noopener noreferrer">Descargar para Windows</a>
