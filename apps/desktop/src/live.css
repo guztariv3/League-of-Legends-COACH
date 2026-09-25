@@ -1,4 +1,5 @@
 @import "@coach/ui/tokens.css";
+@import "@coach/ui/fonts.css";
 
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }

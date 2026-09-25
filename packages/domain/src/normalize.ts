@@ -25,6 +25,10 @@ export interface NormalizedParticipant {
   visionScore: number | null;
   level: number;
   items: number[];
+  /** Summoner spell keys (summoner1Id, summoner2Id). */
+  spells: number[];
+  /** Keystone and rune paths; null when the payload has no runes (e.g. some special modes). */
+  runes: { keystone: number | null; primary: number | null; secondary: number | null };
 }
 
 export interface NormalizedMatch {
@@ -91,6 +95,12 @@ export function normalizeMatch(raw: RawMatch): NormalizedMatch {
       visionScore: p.visionScore ?? null,
       level: p.champLevel,
       items: [p.item0, p.item1, p.item2, p.item3, p.item4, p.item5, p.item6].filter((i) => i > 0),
+      spells: [p.summoner1Id, p.summoner2Id].filter((i) => i > 0),
+      runes: {
+        keystone: p.perks?.styles[0]?.selections[0]?.perk ?? null,
+        primary: p.perks?.styles[0]?.style ?? null,
+        secondary: p.perks?.styles[1]?.style ?? null,
+      },
     })),
   };
 }

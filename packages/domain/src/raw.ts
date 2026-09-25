@@ -29,6 +29,10 @@ export const RawParticipant = z.looseObject({
   item0: num, item1: num, item2: num, item3: num, item4: num, item5: num, item6: num,
   summoner1Id: num,
   summoner2Id: num,
+  // Runes: styles[0] is the primary path (its first selection is the keystone), styles[1] the secondary.
+  perks: z.looseObject({
+    styles: z.array(z.looseObject({ style: num, selections: z.array(z.looseObject({ perk: num })) })),
+  }).optional(),
   riotIdGameName: z.string().optional(),
   riotIdTagline: z.string().optional(),
   gameEndedInEarlySurrender: z.boolean().optional(),

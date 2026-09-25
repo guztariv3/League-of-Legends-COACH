@@ -1,5 +1,6 @@
 import { Link } from "react-router";
 import type { Insight, MatchRow } from "../api";
+import { ChampionIcon } from "../assets";
 
 export const pct = (x: number) => `${Math.round(x * 100)}%`;
 export const num = (x: number | null | undefined, d = 1) => (x === null || x === undefined || Number.isNaN(x) ? "—" : x.toFixed(d));
@@ -75,6 +76,7 @@ export function MatchItem({ m }: { m: MatchRow }) {
     <li>
       <Link className="match" to={`/matches/${encodeURIComponent(m.matchId)}`}>
         <span className={`match-bar ${m.analyzable ? (m.win ? "win" : "loss") : ""}`} aria-hidden="true" />
+        <ChampionIcon champion={m.championName} size={44} />
         <span className="match-main">
           <span className="match-title">
             {m.championName} <span className="visually-hidden">{m.analyzable ? (m.win ? "victoria" : "derrota") : "sin análisis"}</span>

@@ -21,7 +21,7 @@ export function createSite(deps: AppDeps) {
       contentSecurityPolicy: {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:"],
+        imgSrc: ["'self'", "data:", "https://ddragon.leagueoflegends.com"],
         connectSrc: ["'self'"],
         frameAncestors: ["'none'"],
       },

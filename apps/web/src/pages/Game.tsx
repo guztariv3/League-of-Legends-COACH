@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ChampionIcon } from "../assets";
 import { api, type DraftAnalysis, type DraftPoint, type ScoutResult } from "../api";
 import { ErrorNotice, Loading, pct, roleLabel, SyntheticBadge } from "../components/ui";
 import { useLoad } from "../session";
@@ -75,6 +76,10 @@ function LiveGame() {
       {d?.inGame && (
         <div className="grid grid-2">
           <div className="stack">
+            <div className="row" style={{ gap: 6 }}>
+              <ChampionIcon champion={d.myChampion!.id} size={52} className="portrait" />
+              {d.allies!.map((a) => <ChampionIcon key={a.id} champion={a.id} size={34} />)}
+            </div>
             <p style={{ margin: 0 }}>
               Juegas <strong>{d.myChampion!.name}</strong> con {d.allies!.map((a) => a.name).join(", ")}.
               {d.account && <span className="tile-note"> Cuenta: {d.account}</span>}
@@ -87,6 +92,7 @@ function LiveGame() {
               {d.enemies!.map((e, i) => (
                 <li key={i} className="tile stack" style={{ gap: 2 }}>
                   <div className="row">
+                    <ChampionIcon champion={e.championId} size={36} />
                     <strong>{e.championName}</strong>
                     <span className="tile-note">{e.riotId ?? "Jugador"}</span>
                     <span className="spacer" />

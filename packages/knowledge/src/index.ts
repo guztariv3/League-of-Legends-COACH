@@ -2,7 +2,7 @@ import { z } from "zod";
 import { syntheticChampionJson, syntheticItemJson, SYNTHETIC_KNOWLEDGE_VERSION } from "@coach/synthetic";
 
 /**
- * Versioned static game knowledge (champions, items) sourced from Data Dragon.
+ * Versioned static game knowledge (champions, items, summoner spells, runes) sourced from Data Dragon.
  *
  * Pipeline: fetch → validate (schema + sanity against the active version) →
  * stage → activate. Every bundle is tied to a version, so versions are never
@@ -31,6 +31,33 @@ const DDragonItemFile = z.object({
   data: z.record(z.string(), z.looseObject({ name: z.string(), gold: z.looseObject({ total: z.number() }) })),
 });
 
+// Summoner spells and runes only feed icons: a feed that fails or changes shape leaves them empty
+// instead of rejecting the whole bundle.
+const DDragonSpellFile = z.object({
+  version: z.string(),
+  data: z.record(z.string(), z.looseObject({ id: z.string(), key: z.string(), name: z.string() })),
+});
+const DDragonRune = z.looseObject({ id: z.number(), key: z.string(), name: z.string(), icon: z.string() });
+const DDragonRuneFile = z.array(DDragonRune.extend({ slots: z.array(z.looseObject({ runes: z.array(DDragonRune) })) }));
+
+export interface SummonerSpell {
+  /** Numeric key used by match data (summoner1Id / summoner2Id). */
+  key: number;
+  /** Data Dragon id, which is also the image name (e.g. "SummonerFlash"). */
+  id: string;
+  name: string;
+}
+
+export interface Rune {
+  /** Perk or style id used by match data. */
+  id: number;
+  name: string;
+  /** Icon path under the versionless Data Dragon image root. */
+  icon: string;
+  /** true for rune paths (Precision, Domination…), false for individual runes. */
+  style: boolean;
+}
+
 export interface Champion {
   id: string;
   key: number;
@@ -51,8 +78,9 @@ export interface Item {
  * Version of the *parsed* bundle shape. Bump when fetchBundle starts extracting
  * new fields, so stored bundles of the same game version get re-ingested.
  * v2: champion `info` ratings.
+ * v3: summoner spells and runes.
  */
-export const KNOWLEDGE_SCHEMA_VERSION = 2;
+export const KNOWLEDGE_SCHEMA_VERSION = 3;
 
 export interface KnowledgeBundle {
   version: string;
@@ -61,6 +89,9 @@ export interface KnowledgeBundle {
   source: "ddragon" | "synthetic";
   champions: Champion[];
   items: Item[];
+  /** Absent in bundles stored before schema v3 and in the synthetic catalog. */
+  spells?: SummonerSpell[];
+  runes?: Rune[];
 }
 
 export interface KnowledgeSource {
@@ -68,6 +99,8 @@ export interface KnowledgeSource {
   latestVersion(): Promise<string>;
   championFile(version: string): Promise<unknown>;
   itemFile(version: string): Promise<unknown>;
+  summonerFile?(version: string): Promise<unknown>;
+  runesFile?(version: string): Promise<unknown>;
 }
 
 /** Data Dragon over HTTPS. Paths follow the public Data Dragon CDN layout. */
@@ -86,6 +119,8 @@ export function dataDragonSource(fetchImpl: typeof fetch = fetch, locale = "en_U
     },
     championFile: (v) => getJson(`${base}/cdn/${v}/data/${locale}/champion.json`),
     itemFile: (v) => getJson(`${base}/cdn/${v}/data/${locale}/item.json`),
+    summonerFile: (v) => getJson(`${base}/cdn/${v}/data/${locale}/summoner.json`),
+    runesFile: (v) => getJson(`${base}/cdn/${v}/data/${locale}/runesReforged.json`),
   };
 }
 
@@ -114,7 +149,24 @@ export async function fetchBundle(source: KnowledgeSource, version?: string): Pr
       id: c.id, key: Number(c.key), name: c.name, title: c.title, tags: c.tags, ...(c.info ? { info: c.info } : {}),
     })),
     items: Object.entries(items.data).map(([id, i]) => ({ id: Number(id), name: i.name, goldTotal: i.gold.total })),
+    spells: await optionalFeed("summoner spells", () => source.summonerFile?.(v), (raw) =>
+      Object.values(DDragonSpellFile.parse(raw).data).map((sp) => ({ key: Number(sp.key), id: sp.id, name: sp.name }))),
+    runes: await optionalFeed("runes", () => source.runesFile?.(v), (raw) =>
+      DDragonRuneFile.parse(raw).flatMap((style) => [
+        { id: style.id, name: style.name, icon: style.icon, style: true },
+        ...style.slots.flatMap((slot) => slot.runes.map((r) => ({ id: r.id, name: r.name, icon: r.icon, style: false }))),
+      ])),
   };
+}
+
+async function optionalFeed<T>(what: string, load: () => Promise<unknown> | undefined, parse: (raw: unknown) => T[]): Promise<T[]> {
+  try {
+    const raw = await load();
+    return raw === undefined ? [] : parse(raw);
+  } catch (err) {
+    console.warn(`[knowledge] ${what} unavailable; icons fall back to text`, err);
+    return [];
+  }
 }
 
 export interface ValidationResult {
