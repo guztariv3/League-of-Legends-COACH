@@ -220,3 +220,13 @@ describe("game modes", () => {
     for (const d of shown) expect(policy.check(d.signal.category, d.signal.text).allowed).toBe(true);
   });
 });
+
+describe("champion ids from live data", () => {
+  it("uses the raw name's Data Dragon id, falling back to the display name", async () => {
+    const { championIdOf } = await import("./state.js");
+    expect(championIdOf({ championName: "Miss Fortune", rawChampionName: "game_character_displayname_MissFortune" })).toBe("MissFortune");
+    expect(championIdOf({ championName: "Wukong", rawChampionName: "game_character_displayname_MonkeyKing" })).toBe("MonkeyKing");
+    expect(championIdOf({ championName: "Kai'Sa" })).toBe("KaiSa");
+    expect(championIdOf({ championName: "Lee Sin" })).toBe("LeeSin");
+  });
+});

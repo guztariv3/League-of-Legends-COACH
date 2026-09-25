@@ -6,6 +6,7 @@ import { z } from "zod";
 import { hashToken, type AuthVars } from "./auth.js";
 import { schema, type Db } from "./db/index.js";
 import { userAccounts } from "./queries.js";
+import { personalBuild } from "./build.js";
 import { scoutForUser } from "./scout.js";
 import type { Services } from "./services.js";
 import type { MatchSource } from "./sources.js";
@@ -15,9 +16,9 @@ import type { MatchSource } from "./sources.js";
  *
  * 1. Signed in on the web, the player asks for a code (valid 10 minutes, single use).
  * 2. The desktop app exchanges it at /desktop/claim for a device token.
- * 3. With `Authorization: Bearer <token>` the app can only read /desktop/scout.
+ * 3. With `Authorization: Bearer <token>` the app can only read /desktop/scout and /desktop/build.
  * Only SHA-256 hashes are stored; the player can revoke a device from the web at any time.
- * /desktop/claim and /desktop/scout are the only routes the site's password gate lets through,
+ * /desktop/claim, /desktop/scout and /desktop/build are the only API routes the site's password gate lets through,
  * because they carry their own authentication.
  */
 export const PAIRING_CODE_TTL_MS = 10 * 60_000;
@@ -110,13 +111,21 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
     return c.json({ token });
   });
 
-  r.get("/desktop/scout", async (c) => {
+  /** The device behind a bearer token, or null. Also records when it was last used. */
+  const deviceFor = async (c: Context) => {
     const bearer = c.req.header("Authorization")?.match(/^Bearer ([A-Za-z0-9_-]{20,})$/)?.[1];
-    if (!bearer) return c.json({ error: "unauthenticated" }, 401);
+    if (!bearer) return null;
     const [device] = await db.select().from(schema.deviceLinks)
       .where(and(eq(schema.deviceLinks.tokenHash, hashToken(bearer)), isNull(schema.deviceLinks.revokedAt)));
-    if (!device) return c.json({ error: "unauthenticated", message: "Esta app ya no está conectada. Vuelve a conectarla desde la web." }, 401);
+    if (!device) return null;
     await db.update(schema.deviceLinks).set({ lastUsedAt: new Date() }).where(eq(schema.deviceLinks.id, device.id));
+    return device;
+  };
+  const disconnected = (c: Context) => c.json({ error: "unauthenticated", message: "Esta app ya no está conectada. Vuelve a conectarla desde la web." }, 401);
+
+  r.get("/desktop/scout", async (c) => {
+    const device = await deviceFor(c);
+    if (!device) return disconnected(c);
 
     const accounts = (await userAccounts(db, device.userId)).filter((a) => a.includeInProfile);
     if (!accounts.length) return c.json({ inGame: false, message: "No hay cuentas vinculadas en la web." });
@@ -126,6 +135,17 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
     // Image base for the desktop window (Data Dragon only for real bundles).
     const assets = { cdn: bundle?.source === "ddragon" ? "https://ddragon.leagueoflegends.com" : null, version: bundle?.version ?? null };
     return c.json({ ...result, assets });
+  });
+
+  /** Your own build with the champion you are playing (from your history only). */
+  r.get("/desktop/build", async (c) => {
+    const device = await deviceFor(c);
+    if (!device) return disconnected(c);
+    const q = z.object({ champion: z.string().regex(/^[A-Za-z0-9]{1,40}$/), mode: z.enum(["summoners_rift", "aram"]) })
+      .safeParse({ champion: c.req.query("champion"), mode: c.req.query("mode") });
+    if (!q.success) return c.json({ error: "invalid_query" }, 400);
+    const { analyses } = await deps.services.profileAnalyses(device.userId);
+    return c.json(personalBuild(analyses, q.data.champion, q.data.mode, deps.knowledge.active()));
   });
 
   return r;

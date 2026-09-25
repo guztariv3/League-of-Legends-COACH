@@ -2,7 +2,8 @@ import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { DEFAULT_CONTROLS, LiveEngine, modeInfo, type Delivery, type EngineTick, type Intensity, type LiveControls } from "@coach/live";
 import { CoachAvatar } from "@coach/ui";
-import { checkUpdate, inTauri, installUpdate, minimizeWindow, readLoad, readSnapshot, type UpdateInfo } from "./bridge";
+import { checkUpdate, fetchBuild, inTauri, installUpdate, minimizeWindow, readLoad, readSnapshot, type UpdateInfo } from "./bridge";
+import { Board, useArt, type PersonalBuild } from "./board";
 import { ConnectForm, RivalsPanel, useRivals } from "./rivals";
 import "./live.css";
 
@@ -36,6 +37,11 @@ function LiveWindow() {
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const [updateState, setUpdateState] = useState<"idle" | "installing" | "failed">("idle");
   const rivals = useRivals(mode);
+  const art = useArt(rivals.scout?.assets ?? null);
+  const [showConnect, setShowConnect] = useState(false);
+  const [build, setBuild] = useState<PersonalBuild | null | "loading">(null);
+  // Item names arrive with the game's own data; the engine fills this map as it reads.
+  const itemNames = useRef(new Map<number, string>());
   const controlsRef = useRef(controls);
   controlsRef.current = controls;
 
@@ -51,11 +57,12 @@ function LiveWindow() {
       // The demo (synthetic generator) is loaded only when asked for, keeping the live window light.
       const speed = Number(new URLSearchParams(location.search).get("demoSpeed")) || 20;
       const demo = mode === "demo" ? (await import("./demo")).createDemo(speed) : null;
+      itemNames.current = new Map(demo?.itemNames ?? []);
       const engine = new LiveEngine({
         bigItemGold: demo?.bigItemGold ?? 2200,
         spikeLevels: [6, 11, 16],
         itemPrices: demo?.itemPrices,
-        itemNames: demo?.itemNames,
+        itemNames: itemNames.current,
         focus: focusCs ? "csPerMin" : null,
       });
 
@@ -91,6 +98,19 @@ function LiveWindow() {
     const age = tick.state.time - message.shownAt;
     if (age > (message.compact ? 12 : 25) || (mode === "demo" && age > 60)) setMessage(null);
   }, [tick, message, mode]);
+
+  // Your build with this champion, once per game, from your own history on the site.
+  const myChampion = mode === "live" ? tick?.state.me?.championId ?? null : null;
+  const buildMode = tick?.state.map === 11 ? "summoners_rift" : tick?.state.map === 12 ? "aram" : null;
+  useEffect(() => {
+    setBuild(null);
+    const link = rivals.link;
+    if (!link || !myChampion || !buildMode) return;
+    let stopped = false;
+    setBuild("loading");
+    void fetchBuild<PersonalBuild>(link.origin, link.token, myChampion, buildMode).then((r) => { if (!stopped) setBuild(r.ok ? r.data : null); });
+    return () => { stopped = true; };
+  }, [rivals.link, myChampion, buildMode]);
 
   // Updates are checked at start-up and offered only outside a game (the game always comes first).
   useEffect(() => { void checkUpdate().then(setUpdate); }, []);
@@ -136,7 +156,26 @@ function LiveWindow() {
 
       <RivalsPanel scout={rivals.scout} collapsed={mode === "live"} />
 
-      <section className="stage" aria-live="polite">
+      {tick?.state.me && (
+        <Board state={tick.state} names={itemNames.current} art={art} build={mode === "demo" ? null : build} connected={Boolean(rivals.link) && mode !== "demo"} />
+      )}
+
+      {!rivals.link && mode === "waiting" && (
+        <section className="connect-card" aria-labelledby="connect-h">
+          <h2 id="connect-h">Conecta con la web</h2>
+          {showConnect ? (
+            <ConnectForm link={rivals.link} problem={rivals.problem} onConnect={(l) => { rivals.connect(l); setShowConnect(false); }} onDisconnect={rivals.disconnect} />
+          ) : (
+            <>
+              <p className="quiet">Para ver a tus rivales en la pantalla de carga y los objetos que sueles hacer. Solo hace falta una vez.</p>
+              {rivals.problem && <p className="quiet" role="alert">{rivals.problem}</p>}
+              <button className="btn btn-primary" onClick={() => setShowConnect(true)}>Conectar</button>
+            </>
+          )}
+        </section>
+      )}
+
+      <section className={`stage${tick?.state.me ? " stage-compact" : ""}`} aria-live="polite">
         {message && !controls.muted ? (
           <div className="presence">
             <CoachAvatar expression={message.signal.category.startsWith("enemy") ? "concerned" : "happy"} />
@@ -193,7 +232,9 @@ function LiveWindow() {
           El Coach solo lee los datos que el propio juego publica y nunca te da órdenes. No rastrea definitivas ni hechizos de invocador rivales.
         </p>
         <h3>Conexión con la web</h3>
-        <ConnectForm link={rivals.link} problem={rivals.problem} onConnect={rivals.connect} onDisconnect={rivals.disconnect} />
+        {rivals.link
+          ? <ConnectForm link={rivals.link} problem={rivals.problem} onConnect={rivals.connect} onDisconnect={rivals.disconnect} />
+          : <p className="quiet">No conectada. Usa el botón <strong>Conectar</strong> de la pantalla principal (fuera de partida).</p>}
         <button className="btn" onClick={() => setMode((m) => (m === "demo" ? "waiting" : "demo"))}>{mode === "demo" ? "Salir de la demostración" : "Probar demostración"}</button>
       </details>
     </main>

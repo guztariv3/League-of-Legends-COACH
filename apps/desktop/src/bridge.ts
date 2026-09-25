@@ -75,3 +75,7 @@ export const claimDevice = (baseUrl: string, code: string, label: string) =>
 
 /** The rival scouting for the player's current game (read-only). */
 export const fetchScout = <T>(baseUrl: string, token: string) => site<T>("desktop_scout", { baseUrl, token });
+
+/** The player's own build with the champion they are playing (from their history on the site). */
+export const fetchBuild = <T>(baseUrl: string, token: string, champion: string, mode: "summoners_rift" | "aram") =>
+  site<T>("desktop_build", { baseUrl, token, champion, mode });

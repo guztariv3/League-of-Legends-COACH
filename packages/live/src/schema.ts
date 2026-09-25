@@ -25,6 +25,8 @@ const Item = z.looseObject({
 
 export const LivePlayer = z.looseObject({
   championName: z.string(),
+  /** e.g. "game_character_displayname_MissFortune": the suffix is the Data Dragon id. */
+  rawChampionName: z.string().optional(),
   riotId: z.string().optional(),
   summonerName: z.string().optional(),
   team: z.string(), // "ORDER" | "CHAOS"

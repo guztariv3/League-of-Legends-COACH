@@ -19,6 +19,19 @@ Estado: **compila y se ha probado con partidas simuladas**. Este entorno no tien
 | Demostración | Reproduce una partida sintética "como si fuera en vivo" para probar el Coach sin League. Siempre aparece etiquetada. Se carga solo cuando se pide, para que la ventana siga ligera. | `demo.ts`, `simulator.ts` |
 | Diseño compartido | El avatar y los tokens de diseño viven en `packages/ui` y los usan la web y el escritorio (sección 112). | `packages/ui` |
 
+### Panel de partida (sin conexión)
+
+Durante la partida, la ventana muestra lo mismo que el marcador del juego (Tab), leído de la Live Client Data API:
+- **Rivales** y **Tu equipo**: retrato, nivel, KDA, CS y los 7 huecos de objetos de cada jugador.
+- Imágenes de Data Dragon (`rawChampionName` → id del campeón, `itemID` → objeto). Sin red, se muestran iniciales.
+- No añade información oculta. Los objetos rivales los enseña el propio juego. Nada de cooldowns ni de hechizos rivales.
+
+**Tu build** (decisión del usuario: *solo tu historial*):
+- Muestra los objetos grandes (≥ 2200 de oro, más las botas de nivel 2) con los que terminaste tus partidas con ese campeón en ese modo.
+- Cada objeto indica en cuántas partidas lo terminaste y su % de victorias, y marca los que ya llevas.
+- Necesita al menos 3 partidas con el campeón, y cada objeto debe aparecer en al menos 2.
+- Sale de `GET /api/desktop/build` con el token del dispositivo. Nunca es una orden, ni sale de otros jugadores o de la meta.
+
 ### Rivales en la pantalla de carga (conexión con la web)
 
 La ventana puede mostrar a tus rivales (Riot ID, rango, % de victorias y 3 mejores campeones) en cuanto empieza la pantalla de carga. Lee el mismo análisis que la web ("Antes de jugar"); no toca el cliente ni el juego. En el lobby o la selección de campeones no es posible: Riot oculta a los rivales hasta la pantalla de carga (D-03).
@@ -26,8 +39,8 @@ La ventana puede mostrar a tus rivales (Riot ID, rango, % de victorias y 3 mejor
 Seguridad de la conexión (decisión del usuario: **código de conexión**):
 
 1. En la web, **Ajustes → App de escritorio → Generar código**: un código `XXXX-XXXX` de un solo uso que caduca en 10 minutos.
-2. En la app, **Ajustes → Conexión con la web**: la dirección de la web y el código. La app lo cambia por un token de dispositivo (`POST /api/desktop/claim`).
-3. Con `Authorization: Bearer <token>` la app **solo** puede leer `GET /api/desktop/scout`. No abre ninguna otra ruta ni la sesión web.
+2. En la app, botón **Conectar** de la pantalla principal (fuera de partida): la dirección de la web y el código. La app lo cambia por un token de dispositivo (`POST /api/desktop/claim`).
+3. Con `Authorization: Bearer <token>` la app **solo** puede leer `GET /api/desktop/scout` y `GET /api/desktop/build`. No abre ninguna otra ruta ni la sesión web.
 
 - En la base de datos solo se guardan hashes SHA-256 del código y del token (`device_links`).
 - La app nunca ve ni guarda la contraseña del prototipo. Esas dos rutas son las únicas que el gate deja pasar, porque llevan su propia autenticación.
