@@ -53,7 +53,7 @@ export function Welcome() {
     <main className="shell" style={{ maxWidth: 520, paddingTop: "10vh" }}>
       <div className="stack" style={{ alignItems: "center", textAlign: "center", marginBottom: 24 }}>
         <CoachAvatar expression="happy" />
-        <h1 className="page-title">Kairos Coach</h1>
+        <h1 className="page-title">KOI Master</h1>
         <p className="page-sub" style={{ margin: 0 }}>
           Tu analista personal de League. Entiende tus partidas y te avisa solo cuando importa.
         </p>
@@ -101,7 +101,7 @@ export function Welcome() {
         {error && <p role="alert" style={{ color: "var(--bad)", margin: 0 }}>{error}</p>}
       </div>
       <p className="tile-note" style={{ textAlign: "center", marginTop: 24 }}>
-        Kairos Coach isn&apos;t endorsed by Riot Games and doesn&apos;t reflect the views or opinions of Riot Games or anyone officially
+        KOI Master isn&apos;t endorsed by Riot Games and doesn&apos;t reflect the views or opinions of Riot Games or anyone officially
         involved in producing or managing Riot Games properties.
       </p>
     </main>

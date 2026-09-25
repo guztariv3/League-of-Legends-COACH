@@ -1,7 +1,7 @@
 [package]
 name = "kairos-desktop"
 version = "0.1.0"
-description = "Kairos Coach — Live Coach side window"
+description = "KOI Master — Live Coach side window"
 edition = "2021"
 publish = false
 

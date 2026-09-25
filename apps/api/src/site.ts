@@ -30,7 +30,7 @@ export function createSite(deps: AppDeps) {
 
   const password = deps.cfg.prototypePassword;
   if (password) {
-    const gate = basicAuth({ username: "kairos", password, realm: "Kairos Coach (prototipo privado)" });
+    const gate = basicAuth({ username: "kairos", password, realm: "KOI Master (prototipo privado)" });
     site.use("*", async (c, next) => (c.req.path === "/api/health" ? next() : gate(c, next)));
   }
 

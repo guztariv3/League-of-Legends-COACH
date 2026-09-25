@@ -37,9 +37,9 @@ function Layout() {
       <a href="#main" className="visually-hidden">Saltar al contenido</a>
       <div className="shell">
         <header className="topbar">
-          <Link to="/" className="brand" aria-label="Kairos Coach, inicio">
+          <Link to="/" className="brand" aria-label="KOI Master, inicio">
             <span style={{ width: 28, height: 28, display: "inline-flex" }}><CoachAvatar quiet /></span>
-            KAIROS
+            KOI MASTER
           </Link>
           <nav className="nav" aria-label="Principal">
             <NavLink to="/" end>Inicio</NavLink>

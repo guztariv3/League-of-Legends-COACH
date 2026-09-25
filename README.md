@@ -1,4 +1,4 @@
-# Kairos Coach — League of Legends AI Coach
+# KOI Master — League of Legends AI Coach
 
 Aplicación web + desktop de análisis y coaching personal para League of Legends.
 Hace el trabajo complejo por dentro y muestra solo lo que el jugador necesita.
@@ -45,4 +45,4 @@ docs/         auditoría, investigación, arquitectura, roadmap, decisiones, fas
 
 ---
 
-Kairos Coach isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.
+KOI Master isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.

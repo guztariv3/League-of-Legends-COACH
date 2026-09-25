@@ -1,4 +1,4 @@
-//! Kairos desktop: a separate side window for the Live Coach.
+//! KOI Master desktop: a separate side window for the Live Coach.
 //!
 //! Integrity rules (brief §23, §90–91):
 //! - It only *reads* the Live Client Data API that the game itself exposes on
@@ -123,7 +123,7 @@ pub fn run() {
         .manage(AppState { http: live_client(), sys: Mutex::new(sys) })
         .invoke_handler(tauri::generate_handler![live_snapshot, system_load, check_update, install_update])
         .run(tauri::generate_context!())
-        .expect("error while running Kairos desktop");
+        .expect("error while running KOI Master desktop");
 }
 
 #[cfg(test)]
