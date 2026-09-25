@@ -26,7 +26,28 @@ Durante la partida, la ventana muestra lo mismo que el marcador del juego (Tab),
 - Imágenes de Data Dragon (`rawChampionName` → id del campeón, `itemID` → objeto). Sin red, se muestran iniciales.
 - No añade información oculta. Los objetos rivales los enseña el propio juego. Nada de cooldowns ni de hechizos rivales.
 
-**Tu build** (decisión del usuario: *solo tu historial*):
+**Objetos: siguiente objeto sugerido** (petición del usuario: "según el enemigo y cómo va la partida, no por % de victorias"). Vive en `packages/itemization`:
+- **Datos:** catálogo oficial de Data Dragon en español (`item.json` y `champion.json` del parche). Incluye estadísticas, etiquetas, recetas (`from`), precios, mapas y descripciones de cada objeto, y la clase y los ratings de daño de cada campeón. La app lo descarga directamente, sin la web.
+- **Partida:** lo que publica el juego, leído cada pocos segundos: objetos y marcador de los rivales, tus objetos y tu oro.
+- **Reglas:**
+  - reparto de daño mágico o físico del equipo rival, ponderado por lo fuerte que va cada uno (kills y oro en objetos);
+  - quién se cura con robo de vida, lo que da prioridad a Heridas graves;
+  - armadura y resistencia mágica que acumulan, lo que da prioridad a la penetración;
+  - tu clase y tu tipo de daño: nunca se sugiere el otro tipo;
+  - si mueres más de lo que matas, más peso a la defensa. Un campeón de daño recibe defensa con daño; defensa pura solo tanques, luchadores y soportes;
+  - un pequeño extra para los objetos que sueles terminar.
+- **Salida:**
+  - siguiente objeto, 2 alternativas y botas si no llevas;
+  - **por qué**, con hechos de la partida;
+  - **cómo comprarlo**: componentes con los que ya tienes marcados, oro que falta y qué te alcanza con tu oro ahora.
+- **Estabilidad:** la sugerencia no salta mientras la anterior siga cerca de la mejor (dentro de un 10 %).
+- **Límites (honestos):**
+  - no usa estadísticas de otras partidas (no las tenemos), así que no es una "build óptima" de la meta;
+  - no conoce curaciones que no vengan de objetos (las propias de un campeón);
+  - en la demostración no hay sugerencias, porque sus objetos son inventados;
+  - sin Internet no hay catálogo y no hay sugerencias.
+
+**Tu historial** (decisión anterior: *solo tu historial*), plegado bajo las sugerencias:
 - Muestra los objetos grandes (≥ 2200 de oro, más las botas de nivel 2) con los que terminaste tus partidas con ese campeón en ese modo.
 - Cada objeto indica en cuántas partidas lo terminaste y su % de victorias, y marca los que ya llevas.
 - Necesita al menos 3 partidas con el campeón, y cada objeto debe aparecer en al menos 2.

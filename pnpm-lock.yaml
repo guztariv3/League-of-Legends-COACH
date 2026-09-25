@@ -75,6 +75,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@coach/itemization':
+        specifier: workspace:*
+        version: link:../../packages/itemization
       '@coach/live':
         specifier: workspace:*
         version: link:../../packages/live
@@ -197,6 +200,12 @@ importers:
       '@coach/synthetic':
         specifier: workspace:*
         version: link:../synthetic
+
+  packages/itemization:
+    dependencies:
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
 
   packages/knowledge:
     dependencies:
