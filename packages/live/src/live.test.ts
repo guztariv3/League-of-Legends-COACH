@@ -5,6 +5,7 @@ import {
   BLOCKED_CATEGORIES,
   DEFAULT_CONTROLS,
   LiveEngine,
+  modeInfo,
   PolicyEngine,
   SafeModeController,
   snapshotAt,
@@ -162,5 +163,60 @@ describe("review regressions", () => {
     e.tick(base(1200, 10, 10, old), controls, null); // Coach starts mid-game: prev state is empty
     const d = e.tick(base(1202, 10, 10, old), controls, null).deliveries;
     expect(d.filter((x) => x.signal.category === "objective_taken")).toHaveLength(0);
+  });
+});
+
+describe("game modes", () => {
+  const cfg = { bigItemGold: 1000, spikeLevels: [6, 11, 16], itemPrices: new Map([[1, 3000], [2, 3000], [3, 300]]) };
+  type Enemy = { name: string; items: number[]; level?: number };
+  const snap = (t: number, enemies: Enemy[], opts: { mode?: string; map?: number; position?: string } = {}) => ({
+    activePlayer: { riotId: "Me#1" },
+    allPlayers: [
+      { championName: "A", riotId: "Me#1", team: "ORDER", level: 8, position: opts.position ?? "", items: [] },
+      ...enemies.map((e) => ({ championName: e.name, riotId: `${e.name}#1`, team: "CHAOS", level: e.level ?? 8, position: opts.position ?? "", items: e.items.map((itemID) => ({ itemID })) })),
+    ],
+    events: { Events: [] },
+    gameData: { gameTime: t, gameMode: opts.mode ?? "ARAM", mapNumber: opts.map ?? 12 },
+  });
+  const keys = (e: LiveEngine, s: ReturnType<typeof snap>) => e.tick(s, DEFAULT_CONTROLS, null).deliveries.map((d) => d.signal.key);
+
+  it("labels the mode the game reports, and unknown modes by their own code", () => {
+    const e = new LiveEngine(cfg);
+    expect(modeInfo(e.tick(snap(60, []), DEFAULT_CONTROLS, null).state)).toEqual({ label: "ARAM · Abismo de los Lamentos", lanes: false });
+    const sr = new LiveEngine(cfg).tick(snap(60, [], { mode: "CLASSIC", map: 11, position: "MIDDLE" }), DEFAULT_CONTROLS, null).state;
+    expect(modeInfo(sr)).toEqual({ label: "Grieta del Invocador", lanes: true });
+    const other = new LiveEngine(cfg).tick(snap(60, [], { mode: "NEWMODE", map: 99 }), DEFAULT_CONTROLS, null).state;
+    expect(modeInfo(other)!.label).toBe("NEWMODE");
+  });
+
+  it("without lanes, tells when one enemy leads in completed big items, not on ties", () => {
+    const e = new LiveEngine(cfg);
+    keys(e, snap(300, [{ name: "B", items: [] }, { name: "C", items: [] }]));
+    expect(keys(e, snap(302, [{ name: "B", items: [1] }, { name: "C", items: [1] }]))).toEqual([]); // tie → nothing
+    expect(keys(e, snap(304, [{ name: "B", items: [1, 2] }, { name: "C", items: [1, 3] }]))).toEqual(["enemy-leader-B-2"]);
+    expect(keys(e, snap(306, [{ name: "B", items: [1, 2] }, { name: "C", items: [1, 3] }]))).toEqual([]); // no repeats
+  });
+
+  it("without lanes, does not announce every enemy reaching level 6", () => {
+    const e = new LiveEngine(cfg);
+    keys(e, snap(400, [{ name: "B", items: [], level: 5 }, { name: "C", items: [], level: 5 }]));
+    const k = keys(e, snap(402, [{ name: "B", items: [], level: 6 }, { name: "C", items: [], level: 6 }]));
+    expect(k.filter((x) => x.startsWith("enemy-level"))).toEqual([]);
+  });
+
+  it("an ARAM game replayed end to end stays quiet, allowed and order-free", () => {
+    const aram = generateHistory({ seed: 5, puuid: "me", gameName: "Me", tagLine: "T", platform: "euw1", count: 10, scenarios: { normal: 0, stomp_win: 0, stomp_loss: 0, comeback: 0, throw: 0, remake: 0, aram: 1, missing_timeline: 0, unsupported_mode: 0 } })[0]!;
+    const engine = new LiveEngine({ bigItemGold: 1000, spikeLevels: [6, 11, 16], itemPrices: prices, itemNames: names });
+    const policy = new PolicyEngine();
+    const shown: Delivery[] = [];
+    let info = null;
+    for (let t = 0; t <= aram.match.info.gameDuration; t += 2) {
+      const tick = engine.tick(snapshotAt(aram.match, aram.timeline!, "me", t, prices), DEFAULT_CONTROLS, null);
+      info ??= modeInfo(tick.state);
+      shown.push(...tick.deliveries);
+    }
+    expect(info).toMatchObject({ lanes: false });
+    expect(shown.length).toBeLessThan(15);
+    for (const d of shown) expect(policy.check(d.signal.category, d.signal.text).allowed).toBe(true);
   });
 });

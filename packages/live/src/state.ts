@@ -27,6 +27,8 @@ export interface PlayerState {
 export interface GameState {
   time: number;
   mode: string | null;
+  /** Map id as reported by the game (11 = Summoner's Rift, 12 = Howling Abyss). */
+  map: number | null;
   me: PlayerState | null;
   allies: PlayerState[];
   enemies: PlayerState[];
@@ -66,7 +68,7 @@ function toPlayer(p: LivePlayer, ctx: StateContext): PlayerState {
 }
 
 export function emptyState(): GameState {
-  return { time: 0, mode: null, me: null, allies: [], enemies: [], events: [], lastEventId: -1, complete: false };
+  return { time: 0, mode: null, map: null, me: null, allies: [], enemies: [], events: [], lastEventId: -1, complete: false };
 }
 
 export function reduceState(prev: GameState, data: AllGameData, ctx: StateContext = {}): GameState {
@@ -78,6 +80,7 @@ export function reduceState(prev: GameState, data: AllGameData, ctx: StateContex
   return {
     time: data.gameData.gameTime,
     mode: data.gameData.gameMode ?? null,
+    map: data.gameData.mapNumber ?? null,
     me,
     allies: myTeam ? players.filter((p) => p.team === myTeam && p !== me) : [],
     enemies: myTeam ? players.filter((p) => p.team !== myTeam) : [],
@@ -93,4 +96,26 @@ export function laneOpponent(state: GameState): PlayerState | null {
   if (!pos) return null;
   const same = state.enemies.filter((e) => e.position === pos);
   return same.length === 1 ? same[0]! : null;
+}
+
+const MAP_NAMES: Record<number, string> = { 11: "Grieta del Invocador", 12: "Abismo de los Lamentos" };
+const MODE_NAMES: Record<string, string> = { CLASSIC: "", PRACTICETOOL: "Herramienta de práctica", ARAM: "ARAM" };
+
+export interface ModeInfo {
+  /** What the window shows, e.g. "ARAM · Abismo de los Lamentos". */
+  label: string;
+  /** Whether the game reports lane positions (Summoner's Rift): lane-opponent notices need them. */
+  lanes: boolean;
+}
+
+/**
+ * The mode as the game reports it. Modes without a known name (new or rotating ones)
+ * are shown by the game's own code rather than a guessed name.
+ */
+export function modeInfo(state: GameState): ModeInfo | null {
+  if (!state.complete) return null;
+  const code = state.mode ?? "";
+  const mode = code in MODE_NAMES ? MODE_NAMES[code] : code;
+  const map = state.map !== null ? MAP_NAMES[state.map] : undefined;
+  return { label: [mode, map].filter(Boolean).join(" · ") || "Modo desconocido", lanes: state.me?.position != null };
 }
