@@ -1,5 +1,5 @@
 import type { RawMatch, RawTimeline } from "@coach/domain";
-import { RiotClient } from "@coach/riot";
+import { RiotClient, type RiotLeagueEntry, type RiotMastery } from "@coach/riot";
 import { generateHistory, mulberry32, SYNTHETIC_CHAMPIONS, type SyntheticGame } from "@coach/synthetic";
 import type { DataSource } from "./config.js";
 
@@ -27,6 +27,10 @@ export interface MatchSource {
   matchIds(platform: string, puuid: string, count: number, start: number, startTime?: number): Promise<string[]>;
   match(platform: string, matchId: string): Promise<RawMatch | null>;
   timeline(platform: string, matchId: string): Promise<RawTimeline | null>;
+  /** Top champions by mastery; absent in the synthetic environment (scouting falls back to recent games). */
+  topMasteries?(platform: string, puuid: string, count: number): Promise<RiotMastery[]>;
+  /** Ranked entries; absent in the synthetic environment. May fail: callers treat failure as unavailable. */
+  leagueEntries?(platform: string, puuid: string): Promise<RiotLeagueEntry[]>;
   /** Only returns data once the game has started (spectator-v5), never during champion select. */
   activeGame(platform: string, puuid: string): Promise<ActiveGame | null>;
 }
@@ -41,6 +45,8 @@ export function riotSource(client: RiotClient): MatchSource {
     matchIds: (platform, puuid, count, start, startTime) => client.getMatchIds(platform, puuid, { count, start, startTime }),
     match: (platform, id) => client.getMatch(platform, id),
     timeline: (platform, id) => client.getTimeline(platform, id),
+    topMasteries: (platform, puuid, count) => client.getTopMasteries(platform, puuid, count),
+    leagueEntries: (platform, puuid) => client.getLeagueEntries(platform, puuid),
     async activeGame(platform, puuid) {
       const g = await client.getActiveGame(platform, puuid);
       if (!g) return null;

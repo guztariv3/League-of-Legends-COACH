@@ -43,6 +43,24 @@ export const RiotActiveGame = z.looseObject({
 });
 export type RiotActiveGame = z.infer<typeof RiotActiveGame>;
 
+/** champion-mastery-v4 entry (platform host). Verified in public references of the API. */
+export const RiotMastery = z.looseObject({ championId: z.number(), championLevel: z.number(), championPoints: z.number() });
+export type RiotMastery = z.infer<typeof RiotMastery>;
+
+/**
+ * league-v4 entry. The by-PUUID route could not be checked against Riot's official page from the
+ * development environment, so callers must treat any failure as "rank unavailable", never as data.
+ */
+export const RiotLeagueEntry = z.looseObject({
+  queueType: z.string(),
+  tier: z.string().optional(),
+  rank: z.string().optional(),
+  leaguePoints: z.number().optional(),
+  wins: z.number(),
+  losses: z.number(),
+});
+export type RiotLeagueEntry = z.infer<typeof RiotLeagueEntry>;
+
 export interface RiotClientOptions {
   apiKey: string;
   fetch?: typeof fetch;
@@ -113,6 +131,19 @@ export class RiotClient {
   async getTimeline(platform: string, matchId: string): Promise<RawTimeline | null> {
     const route = this.platform(platform).matchRoute;
     return this.get(route, "match.timeline", `/lol/match/v5/matches/${encodeURIComponent(matchId)}/timeline`, RawTimeline, { nullOn404: true });
+  }
+
+  /** A player's top champions by mastery points (champion-mastery-v4, platform host). */
+  async getTopMasteries(platform: string, puuid: string, count = 3): Promise<RiotMastery[]> {
+    const route = this.platform(platform).id;
+    const path = `/lol/champion-mastery/v4/champion-masteries/by-puuid/${encodeURIComponent(puuid)}/top?count=${count}`;
+    return (await this.get(route, "mastery.top", path, z.array(RiotMastery), { nullOn404: true })) ?? [];
+  }
+
+  /** Ranked entries of a player (league-v4, platform host); empty when unranked. See RiotLeagueEntry. */
+  async getLeagueEntries(platform: string, puuid: string): Promise<RiotLeagueEntry[]> {
+    const route = this.platform(platform).id;
+    return (await this.get(route, "league.entries", `/lol/league/v4/entries/by-puuid/${encodeURIComponent(puuid)}`, z.array(RiotLeagueEntry), { nullOn404: true })) ?? [];
   }
 
   /** Current game for a player; null when they are not in a game. */

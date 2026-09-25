@@ -39,6 +39,8 @@ a { color: var(--accent); }
   /* Readable over bright splash art: a sticky, frosted night bar. */
   position: sticky; top: 0; z-index: 15;
   background: rgb(1 10 19 / 0.78); backdrop-filter: blur(10px);
+  /* Full-bleed bar while the content stays in the column. */
+  box-shadow: 0 0 0 100vmax rgb(1 10 19 / 0.78); clip-path: inset(0 -100vmax);
   margin: 0 calc(-1 * var(--space-4)) var(--space-5); padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid transparent;
   border-image: linear-gradient(90deg, transparent, var(--gold-dark) 15%, var(--gold) 50%, var(--gold-dark) 85%, transparent) 1;
@@ -277,3 +279,44 @@ td .loadout { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
 /* hero banner with champion portrait */
 .hero { display: flex; align-items: center; gap: var(--space-4); }
 .hero .portrait { width: 84px; height: 84px; }
+
+/* pre-game: rivals as on the loading screen */
+.section-title { font-family: var(--font-display); color: var(--gold); letter-spacing: 0.08em; text-transform: uppercase; font-size: 0.95rem; margin: 0; }
+.rivals { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-3); }
+@media (max-width: 1000px) { .rivals { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); } }
+.rival {
+  display: flex; flex-direction: column; overflow: hidden; min-width: 0;
+  background: var(--surface-solid); border: 1px solid var(--gold-dark); border-radius: var(--radius-m);
+  box-shadow: var(--shadow), var(--glow-gold);
+}
+.rival-art { position: relative; aspect-ratio: 308 / 380; overflow: hidden; border-bottom: 2px solid var(--gold); }
+.loading-art { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 15%; }
+.loading-art-fallback {
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 50% 35%, #25414f, #0a1621 70%);
+  font-family: var(--font-display); font-size: 2.6rem; color: var(--gold-bright);
+}
+.rival-champ {
+  position: absolute; inset: auto 0 0 0; padding: 18px 10px 6px; text-align: center;
+  font-family: var(--font-display); font-weight: 700; letter-spacing: 0.06em; color: var(--gold-bright);
+  background: linear-gradient(180deg, transparent, rgb(1 10 19 / 0.92));
+}
+.rival-body { display: flex; flex-direction: column; gap: 6px; padding: var(--space-3); min-width: 0; }
+.rival-id { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rival-rank { font-size: 0.85rem; color: var(--text-secondary); }
+.rank-gold, .rank-platinum, .rank-emerald, .rank-diamond, .rank-master, .rank-grandmaster, .rank-challenger { color: var(--gold-bright); }
+.rank-unavailable { color: var(--text-muted); font-style: italic; }
+.rival-wr .tile-note { display: block; }
+.rival-wr strong { font-family: var(--font-display); font-size: 1.15rem; color: var(--gold-bright); }
+.rival-top { display: flex; flex-direction: column; gap: 4px; }
+.rival-top-champ { display: inline-flex; flex-direction: column; align-items: center; gap: 1px; }
+.rival-top-champ small { font-size: 0.68rem; color: var(--text-muted); }
+.rival-headline { margin: 0; font-size: 0.8rem; color: var(--text-secondary); }
+@media (max-width: 640px) {
+  /* Phones: art on the left, facts on the right, so five rivals fit in a couple of screens. */
+  .rivals { grid-template-columns: 1fr; }
+  .rival { flex-direction: row; }
+  .rival-art { flex: 0 0 104px; aspect-ratio: auto; border-bottom: 0; border-right: 2px solid var(--gold); }
+  .rival-champ { font-size: 0.75rem; padding: 14px 4px 4px; }
+  .loading-art-fallback { font-size: 1.6rem; }
+}

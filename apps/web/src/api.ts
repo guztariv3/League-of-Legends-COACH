@@ -279,6 +279,10 @@ export interface ScoutedPlayer {
   avgKda: number | null;
   smallSample: boolean;
   headline: string;
+  rankStatus: "ranked" | "unranked" | "unavailable";
+  rank: { queue: "solo" | "flex"; tier: string | null; division: string | null; lp: number | null; wins: number; losses: number } | null;
+  topChampions: { id: string; name: string; points: number | null; games: number | null }[];
+  topSource: "mastery" | "recent" | null;
 }
 
 export interface ScoutResult {

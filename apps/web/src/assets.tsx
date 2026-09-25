@@ -103,3 +103,15 @@ export function RuneIcon({ id, size = 22 }: { id: number; size?: number }) {
   const src = a.cdn ? `${a.cdn}/cdn/img/${r.icon}` : null;
   return <GameImage src={src} label={r.name} size={size} shape="round" className="gi-rune" />;
 }
+
+/** Tall loading-screen art (versionless Data Dragon path), with a lettered fallback. */
+export function LoadingArt({ champion, className = "" }: { champion: string | number; className?: string }) {
+  const a = useAssets();
+  const c = a.champion(champion);
+  const label = c?.name ?? String(champion);
+  const src = a.cdn && c ? `${a.cdn}/cdn/img/champion/loading/${c.id}_0.jpg` : null;
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [src]);
+  if (!src || failed) return <div className={`loading-art loading-art-fallback ${className}`} role="img" aria-label={label}><span>{initials(label)}</span></div>;
+  return <img className={`loading-art ${className}`} src={src} alt={label} loading="lazy" decoding="async" onError={() => setFailed(true)} />;
+}
