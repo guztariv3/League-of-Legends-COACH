@@ -3,10 +3,10 @@
   color-scheme: dark;
   /* surfaces: deep Runeterra night, translucent so the map and splash art show through */
   --bg: #010a13;
-  --surface-1: rgb(9 20 30 / 0.86);
-  --surface-2: rgb(16 30 42 / 0.9);
-  --surface-3: #1e2a36;
-  --surface-solid: #0a1621;
+  --surface-1: rgb(1 10 19 / 0.84);
+  --surface-2: rgb(10 20 40 / 0.86);
+  --surface-3: #1e2328;
+  --surface-solid: #0a1428;
   --border: #3c3222;
   --border-strong: #785a28;
   /* text */
@@ -19,6 +19,9 @@
   --gold: #c8aa6e;
   --gold-bright: #f0d49c;
   --gold-dark: #785a28;
+  /* match results, as in the client's match history (always with a word, never colour alone) */
+  --win: #0acbe6;
+  --loss: #e84057;
   /* data viz (validated with the dataviz skill against --surface-1) */
   --series-1: #3987e5;
   /* teams on the review map (validated pair, dataviz skill); always paired with shape */

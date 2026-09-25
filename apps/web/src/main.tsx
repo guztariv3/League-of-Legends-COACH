@@ -16,7 +16,8 @@ import { MatchDetail } from "./pages/MatchDetail";
 import { Matches } from "./pages/Matches";
 import { Settings } from "./pages/Settings";
 import { Welcome } from "./pages/Welcome";
-import { SessionProvider, useSession } from "./session";
+import { SessionProvider, useLoad, useSession } from "./session";
+import { ChampionIcon } from "./assets";
 import "@coach/ui/fonts.css";
 import { AssetsProvider } from "./assets";
 import { World } from "./components/World";
@@ -25,6 +26,9 @@ import "./styles.css";
 function Layout() {
   const { me, refresh } = useSession();
   const syncing = me?.accounts.some((a) => a.sync.status === "syncing");
+  // The client shows your icon top-right; we show the champion of your latest game.
+  const latest = useLoad(() => api.matches({ limit: "1" }), [syncing]);
+  const lastChampion = latest.data?.matches[0]?.championId;
 
   // Sync on open (brief §14); the API skips accounts synced in the last 10 minutes.
   useEffect(() => { api.syncAll().then(() => refresh()).catch(() => {}); }, [refresh]);
@@ -52,7 +56,13 @@ function Layout() {
             <NavLink to="/profile">Perfil</NavLink>
           </nav>
           <SearchBox />
-          <NavLink to="/settings" className="btn btn-ghost">Ajustes</NavLink>
+          <NavLink to="/settings" className="profile" aria-label="Ajustes y cuenta">
+            {lastChampion ? <ChampionIcon champion={lastChampion} size={40} className="portrait" /> : <span className="profile-empty" aria-hidden="true" />}
+            <span className="profile-text">
+              <span className="profile-name">{me?.accounts[0]?.riotId.split("#")[0] ?? me?.user.displayName}</span>
+              <span className="profile-sub">Ajustes</span>
+            </span>
+          </NavLink>
         </header>
         <main id="main">
           <Outlet />

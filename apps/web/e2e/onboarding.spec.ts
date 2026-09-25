@@ -30,7 +30,7 @@ test("onboarding → dashboard → matches → match detail → settings", async
   await expect(page.locator(".match .match-bar.loss")).toHaveCount(0);
   await page.locator(".match").first().click();
   await expect(page.getByRole("link", { name: "← Partidas" })).toBeVisible();
-  await expect(page.getByText("Victoria")).toBeVisible();
+  await expect(page.getByText("▲ Victoria")).toBeVisible(); // the result badge (the scoreboard also says "Victoria")
   await page.screenshot({ path: `test-results/match-${info.project.name}.png`, fullPage: true });
 
   await page.getByRole("link", { name: "Ajustes" }).click();

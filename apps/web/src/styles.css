@@ -13,15 +13,14 @@ body {
   min-height: 100vh;
 }
 html { background: var(--bg); }
-/* World backdrop: an original map of Runeterra under a night vignette; pages can add a champion splash on top. */
+/* World backdrop: an original night forest (lobby mood) under a vignette; pages can add a champion splash on top. */
 .world { position: fixed; inset: 0; z-index: -2; pointer-events: none; overflow: hidden; background: var(--bg); }
-.world-map { position: absolute; inset: -2%; background: center / cover no-repeat; opacity: 0.7; }
+.world-map { position: absolute; inset: 0; background: center bottom / cover no-repeat; }
 .world::after {
   content: ""; position: absolute; inset: 0;
   background:
-    radial-gradient(ellipse at 50% 0%, rgb(10 200 185 / 0.08), transparent 55%),
-    radial-gradient(ellipse at center, transparent 40%, rgb(1 10 19 / 0.7) 100%),
-    linear-gradient(180deg, rgb(1 10 19 / 0.15), rgb(1 10 19 / 0.55));
+    radial-gradient(ellipse at center, transparent 45%, rgb(1 10 19 / 0.65) 100%),
+    linear-gradient(180deg, rgb(1 10 19 / 0.35), rgb(1 10 19 / 0.1) 40%, rgb(1 10 19 / 0.5));
 }
 .splash-backdrop {
   position: fixed; inset: 0 0 auto 0; height: 620px; z-index: -1; pointer-events: none;
@@ -49,6 +48,7 @@ a { color: var(--accent); }
 /* The tabs never shrink (a clipped "Perfil" is easy to miss); the search box gives way instead. */
 .nav { display: flex; gap: var(--space-1); flex: 0 0 auto; overflow-x: auto; }
 .nav a {
+  font-family: var(--font-display); font-weight: 700; font-size: 0.85rem; letter-spacing: 0.1em; text-transform: uppercase;
   color: var(--text-secondary); text-decoration: none; padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-s); white-space: nowrap; transition: color 0.15s, background 0.15s;
 }
@@ -131,25 +131,44 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 0;
 .badge-synthetic { color: var(--gold); border-color: #5b4a23; }
 .badge-kind { color: var(--accent); border-color: #1f5c55; }
 
-/* match list */
-.match-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+/* match list — client match-history rows */
+.match-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .match {
-  display: grid; grid-template-columns: 6px auto 1fr auto; gap: var(--space-3); align-items: center;
-  background: linear-gradient(90deg, var(--surface-2), var(--surface-1)); border: 1px solid var(--border); border-radius: var(--radius-m);
-  backdrop-filter: blur(6px);
+  display: grid; grid-template-columns: 3px auto minmax(0, 1fr) auto auto; gap: var(--space-4); align-items: center;
   padding: var(--space-3) var(--space-4) var(--space-3) 0; text-decoration: none; color: inherit;
-  transition: border-color 0.15s, transform 0.15s var(--ease);
+  border-bottom: 1px solid rgb(120 90 40 / 0.35);
+  background: linear-gradient(90deg, rgb(10 20 40 / 0.55), rgb(1 10 19 / 0.25));
+  transition: background 0.15s;
 }
-.match:hover { border-color: var(--gold); transform: translateX(2px); }
-.match-bar { align-self: stretch; border-radius: var(--radius-m) 0 0 var(--radius-m); background: var(--text-muted); }
-.match-bar.win { background: var(--good); }
-.match-bar.loss { background: var(--bad); }
-.match-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.match:hover { background: linear-gradient(90deg, rgb(30 45 70 / 0.7), rgb(1 10 19 / 0.35)); }
+.mh-compact { grid-template-columns: 3px auto minmax(0, 1fr) auto; gap: var(--space-3); }
+.match-bar { align-self: stretch; background: var(--text-muted); }
+.match-bar.win { background: var(--win); }
+.match-bar.loss { background: var(--loss); }
+.mh-portrait { position: relative; display: inline-flex; }
+.mh-level {
+  position: absolute; right: -4px; bottom: -4px; min-width: 22px; height: 22px; padding: 0 4px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: 700;
+  background: #010a13; color: var(--text-primary); border: 1px solid var(--gold);
+}
+.match-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.mh-result { font-family: var(--font-display); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+.mh-result.is-win { color: var(--win); }
+.mh-result.is-loss { color: var(--loss); }
 .match-title { font-weight: 600; }
 .match-meta { color: var(--text-muted); font-size: 0.85rem; }
-.match-headline { color: var(--accent); font-size: 0.85rem; }
-.match-stats { text-align: right; font-variant-numeric: tabular-nums; }
-.match-stats .kda { font-weight: 700; }
+.match-headline { color: var(--accent); font-size: 0.82rem; }
+.mh-build { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.mh-score { display: flex; gap: var(--space-4); align-items: baseline; }
+.mh-score .kda, .match-stats .kda { font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; letter-spacing: 0.04em; color: var(--text-primary); }
+.match-stats { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.item-row { display: inline-flex; gap: 2px; }
+.item-slot { display: inline-block; border: 1px solid #2a2f33; background: rgb(1 10 19 / 0.6); border-radius: 3px; }
+.loadout-grid { display: inline-grid; grid-template-columns: repeat(2, auto); gap: 2px; width: max-content; }
+@media (max-width: 900px) {
+  .match { grid-template-columns: 3px auto minmax(0, 1fr) auto; }
+  .mh-build { grid-column: 3 / -1; }
+}
 
 /* insights */
 .insight { border-left: 3px solid var(--gold); padding: var(--space-2) 0 var(--space-2) var(--space-4); }
@@ -320,3 +339,42 @@ td .loadout { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
   .rival-champ { font-size: 0.75rem; padding: 14px 4px 4px; }
   .loading-art-fallback { font-size: 1.6rem; }
 }
+
+/* scoreboard — as in the client's post-game screen */
+.scoreboard { display: flex; flex-direction: column; gap: var(--space-5); }
+.sb-head {
+  display: flex; align-items: baseline; gap: var(--space-4); padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--gold-dark); font-family: var(--font-display); letter-spacing: 0.08em; text-transform: uppercase;
+}
+.sb-name { font-weight: 700; }
+.sb-head.is-win .sb-name, .sb-head.is-win .sb-result { color: var(--win); }
+.sb-head.is-loss .sb-name, .sb-head.is-loss .sb-result { color: var(--loss); }
+.sb-result { font-size: 0.8rem; }
+.sb-total { margin-left: auto; color: var(--text-primary); font-weight: 700; }
+.sb-gold { color: var(--gold); font-size: 0.85rem; }
+.sb-table { table-layout: fixed; min-width: 640px; }
+.sb-table col.c-champ { width: 30%; } .sb-table col.c-load { width: 9%; } .sb-table col.c-items { width: 31%; }
+.sb-table col.c-kda { width: 13%; } .sb-table col.c-cs { width: 7%; } .sb-table col.c-gold { width: 10%; }
+.sb-table td { border-bottom: 1px solid rgb(120 90 40 / 0.25); padding: 6px 8px; vertical-align: middle; }
+.sb-player { font-weight: 600; letter-spacing: 0.02em; }
+.sb-kda { font-family: var(--font-display); font-weight: 700; white-space: nowrap; }
+
+/* profile medallion, top right as in the client */
+.profile { display: inline-flex; align-items: center; gap: var(--space-2); text-decoration: none; color: inherit; flex-shrink: 0; }
+.profile .portrait { width: 40px; height: 40px; }
+.profile-empty { width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--gold); background: var(--surface-3); }
+.profile-text { display: flex; flex-direction: column; line-height: 1.15; }
+.profile-name { font-family: var(--font-display); font-weight: 700; color: var(--gold-bright); letter-spacing: 0.04em; }
+.profile-sub { font-size: 0.72rem; color: var(--text-muted); }
+.profile[aria-current="page"] .profile-sub { color: var(--gold); }
+@media (max-width: 640px) { .profile-text { display: none; } }
+
+/* recently played champions, as in the client profile */
+.recent-champs { display: grid; grid-template-columns: repeat(3, minmax(0, 150px)); gap: var(--space-4); }
+.recent-champ { display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: inherit; }
+.recent-champ .loading-art { width: 100%; aspect-ratio: 1; object-position: center 12%; border: 2px solid var(--gold-dark); border-radius: 4px; }
+.recent-champ .loading-art-fallback { aspect-ratio: 1; height: auto; border: 2px solid var(--gold-dark); border-radius: 4px; font-size: 2rem; }
+.recent-champ:hover .loading-art { border-color: var(--gold); }
+.recent-champ-name { font-family: var(--font-display); font-weight: 700; color: var(--text-primary); letter-spacing: 0.04em; }
+.recent-champ-pct { font-family: var(--font-display); font-style: italic; font-size: 1.3rem; color: var(--gold-bright); }
+@media (max-width: 640px) { .recent-champs { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); } }

@@ -77,6 +77,13 @@ export interface MatchRow {
   csPerMin: number | null;
   goldDiff15: number | null;
   headline: string | null;
+  championId: number;
+  level: number;
+  gold: number;
+  cs: number;
+  items: number[];
+  spells: number[];
+  runes: { keystone: number | null; primary: number | null; secondary: number | null };
 }
 
 export interface ModeSummary {
@@ -109,7 +116,7 @@ export interface MatchList {
 
 export interface MatchDetail {
   dataSource: "riot" | "synthetic";
-  analysis: MatchRow & { championId: number;
+  analysis: MatchRow & {
     killParticipation: number | null;
     damageShare: number | null;
     visionPerMin: number | null;

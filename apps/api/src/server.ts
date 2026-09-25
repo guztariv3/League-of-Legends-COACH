@@ -20,7 +20,9 @@ const aiProviders: AiProvider[] = cfg.anthropicApiKey
   ? [anthropicProvider({ apiKey: cfg.anthropicApiKey, model: cfg.aiModel })]
   : [];
 
-const { site } = createSite({ cfg, db, source, knowledge, aiProviders });
+const { site, sync } = createSite({ cfg, db, source, knowledge, aiProviders });
+// After an ANALYSIS_VERSION bump, rebuild analyses from stored games in the background.
+void sync.reanalyzeAll().then((n) => n && console.log(`[sync] analyses up to date for ${n} account(s)`));
 serve({ fetch: site.fetch, port: cfg.port });
 console.log(
   `[api] listening on :${cfg.port} · env=${cfg.env} · data=${mode} · ai=${aiProviders.length ? `on (${cfg.aiModel ?? "claude-opus-5"})` : "off"}` +

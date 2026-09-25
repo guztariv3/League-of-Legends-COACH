@@ -4,7 +4,7 @@ import { Goals } from "../components/Goals";
 import { api } from "../api";
 import { ErrorNotice, InsightView, Loading, MatchItem, modeLabel, num, pct, roleLabel, StatTile, SyntheticBadge } from "../components/ui";
 import { useLoad, useSession } from "../session";
-import { ChampionIcon } from "../assets";
+import { LoadingArt } from "../assets";
 import { SplashBackdrop } from "../components/World";
 
 /**
@@ -61,16 +61,23 @@ export function Dashboard() {
           />
           <StatTile label="KDA medio" value={num(main.avgKda, 2)} />
           {main.avgCsPerMin !== null && <StatTile label="CS por minuto" value={num(main.avgCsPerMin)} note={main.mainRole ? `Rol principal: ${roleLabel[main.mainRole]}` : undefined} />}
-          {main.champions[0] && (
-            <div className="tile tile-media">
-              <ChampionIcon champion={main.champions[0].championName} size={52} className="portrait" />
-              <div>
-                <div className="tile-value">{main.champions[0].championName}</div>
-                <div className="tile-label">Campeón más jugado</div>
-                <div className="tile-note">{main.champions[0].games} partidas</div>
-              </div>
-            </div>
-          )}
+        </section>
+      )}
+
+      {main && main.champions.length > 0 && (
+        <section className="card" aria-labelledby="h-recent-champs">
+          <h2 id="h-recent-champs">Campeones más jugados</h2>
+          <div className="recent-champs">
+            {main.champions.slice(0, 3).map((c) => (
+              <Link key={c.championName} to={`/champions/${encodeURIComponent(c.championName)}`} className="recent-champ">
+                <LoadingArt champion={c.championName} />
+                <span className="recent-champ-name">{c.championName}</span>
+                <span className="recent-champ-pct">{pct(c.games / main.games)}</span>
+                <span className="tile-note">{c.games} partidas · {pct(c.wins / c.games)} victorias</span>
+              </Link>
+            ))}
+          </div>
+          <p className="tile-note" style={{ margin: "8px 0 0" }}>% de tus partidas analizadas en {modeLabel[main.mode]}.</p>
         </section>
       )}
 
@@ -114,7 +121,7 @@ export function Dashboard() {
             <Link to="/matches">Ver todas</Link>
           </div>
           {data.recent.length ? (
-            <ul className="match-list">{data.recent.map((m) => <MatchItem key={m.matchId} m={m} />)}</ul>
+            <ul className="match-list">{data.recent.map((m) => <MatchItem key={m.matchId} m={m} compact />)}</ul>
           ) : (
             <p className="page-sub" style={{ margin: 0 }}>Aún no hay partidas.</p>
           )}

@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 import type { Insight, MatchRow } from "../api";
-import { ChampionIcon } from "../assets";
+import { ChampionIcon, ItemIcon, RuneIcon, SpellIcon } from "../assets";
 
 export const pct = (x: number) => `${Math.round(x * 100)}%`;
 export const num = (x: number | null | undefined, d = 1) => (x === null || x === undefined || Number.isNaN(x) ? "—" : x.toFixed(d));
@@ -71,25 +71,62 @@ export function InsightView({ insight, children }: { insight: Insight; children?
   );
 }
 
-export function MatchItem({ m }: { m: MatchRow }) {
+const mapLabel: Record<string, string> = { summoners_rift: "Grieta del Invocador", aram: "Abismo de los Lamentos" };
+const shortDate = (ts: number) => new Date(ts).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" });
+
+/** Seven item slots like the client scoreboard: filled first, empty frames after. */
+export function ItemRow({ items, size = 30 }: { items: number[]; size?: number }) {
+  const slots = [...items.slice(0, 7), ...Array(Math.max(0, 7 - items.length)).fill(null)] as (number | null)[];
+  return (
+    <span className="item-row" aria-label="Objetos">
+      {slots.map((id, i) => (id ? <ItemIcon key={`${id}-${i}`} id={id} size={size} /> : <span key={`e${i}`} className="item-slot" style={{ width: size, height: size }} aria-hidden="true" />))}
+    </span>
+  );
+}
+
+/** Summoner spells and runes in a 2×2 block. */
+export function Loadout({ spells, runes, size = 20 }: { spells: number[]; runes: { keystone: number | null; secondary: number | null }; size?: number }) {
+  return (
+    <span className="loadout-grid">
+      {spells.slice(0, 2).map((id) => <SpellIcon key={id} id={id} size={size} />)}
+      {runes.keystone !== null && <RuneIcon id={runes.keystone} size={size} />}
+      {runes.secondary !== null && <RuneIcon id={runes.secondary} size={size} />}
+    </span>
+  );
+}
+
+/** One game as in the client's match history: portrait, result, loadout, build, score and when. */
+export function MatchItem({ m, compact = false }: { m: MatchRow; compact?: boolean }) {
+  const result = !m.analyzable ? "Sin análisis" : m.win ? "Victoria" : "Derrota";
   return (
     <li>
-      <Link className="match" to={`/matches/${encodeURIComponent(m.matchId)}`}>
+      <Link className={`match mh${compact ? " mh-compact" : ""}`} to={`/matches/${encodeURIComponent(m.matchId)}`}>
         <span className={`match-bar ${m.analyzable ? (m.win ? "win" : "loss") : ""}`} aria-hidden="true" />
-        <ChampionIcon champion={m.championName} size={44} />
+        <span className="mh-portrait">
+          <ChampionIcon champion={m.championId ?? m.championName} size={compact ? 46 : 60} className="portrait" />
+          {m.level > 0 && <span className="mh-level">{m.level}</span>}
+        </span>
         <span className="match-main">
-          <span className="match-title">
-            {m.championName} <span className="visually-hidden">{m.analyzable ? (m.win ? "victoria" : "derrota") : "sin análisis"}</span>
-          </span>
-          <span className="match-meta">
-            {m.queue} · {roleLabel[m.role] ?? m.role} · {duration(m.durationSec)} · {ago(m.startedAt)}
-          </span>
+          <span className={`mh-result ${m.analyzable ? (m.win ? "is-win" : "is-loss") : ""}`}>{result}</span>
+          <span className="match-title">{m.championName} <span className="match-meta">· {m.queue}</span></span>
+          {!compact && <Loadout spells={m.spells} runes={m.runes} />}
           {m.headline && <span className="match-headline">{m.headline}</span>}
         </span>
+        {!compact && (
+          <span className="mh-build">
+            <ItemRow items={m.items} />
+            <span className="mh-score">
+              <span className="kda">{m.kills} / {m.deaths} / {m.assists}</span>
+              <span className="match-meta">{m.cs} CS · {m.gold.toLocaleString("es-ES")} oro</span>
+            </span>
+          </span>
+        )}
         <span className="match-stats">
-          <span className="kda">{m.kills}/{m.deaths}/{m.assists}</span>
+          {compact && <><span className="kda">{m.kills}/{m.deaths}/{m.assists}</span><br /></>}
+          <span className="match-meta">{mapLabel[m.mode] ?? modeLabel[m.mode] ?? m.mode}</span>
           <br />
-          <span className="secondary match-meta">{m.csPerMin !== null ? `${num(m.csPerMin)} CS/min` : `KDA ${num(m.kda, 2)}`}</span>
+          <span className="match-meta">{duration(m.durationSec)} · {compact ? ago(m.startedAt) : shortDate(m.startedAt)}</span>
+          {!compact && <><br /><span className="secondary match-meta">{m.csPerMin !== null ? `${num(m.csPerMin)} CS/min` : `KDA ${num(m.kda, 2)}`}</span></>}
         </span>
       </Link>
     </li>
