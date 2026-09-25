@@ -26,8 +26,9 @@ a { color: var(--accent); }
   padding: var(--space-3) 0; margin-bottom: var(--space-5);
   border-bottom: 1px solid var(--border);
 }
-.brand { display: flex; align-items: center; gap: var(--space-2); font-family: var(--font-display); font-weight: 700; letter-spacing: 0.06em; color: var(--text-primary); text-decoration: none; }
-.nav { display: flex; gap: var(--space-1); flex: 1; overflow-x: auto; }
+.brand { display: flex; align-items: center; flex-shrink: 0; white-space: nowrap; gap: var(--space-2); font-family: var(--font-display); font-weight: 700; letter-spacing: 0.06em; color: var(--text-primary); text-decoration: none; }
+/* The tabs never shrink (a clipped "Perfil" is easy to miss); the search box gives way instead. */
+.nav { display: flex; gap: var(--space-1); flex: 0 0 auto; overflow-x: auto; }
 .nav a {
   color: var(--text-secondary); text-decoration: none; padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-s); white-space: nowrap; transition: color 0.15s, background 0.15s;
@@ -159,15 +160,18 @@ tr.me td { color: var(--accent); font-weight: 600; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
-@media (max-width: 640px) {
+/* Too narrow for brand + tabs + search on one line: the tabs get their own row. */
+@media (max-width: 1000px) {
   .topbar { flex-wrap: wrap; }
   .nav { order: 3; flex: 1 1 100%; }
+}
+@media (max-width: 640px) {
   .card { padding: var(--space-4); }
   .match-stats .secondary { display: none; }
 }
 
 /* search */
-.search { position: relative; flex: 0 1 340px; min-width: 0; }
+.search { position: relative; flex: 1 1 340px; max-width: 340px; min-width: 160px; margin-left: auto; }
 .search input { width: 100%; }
 .search-results {
   position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 30; list-style: none; margin: 0; padding: 6px;
