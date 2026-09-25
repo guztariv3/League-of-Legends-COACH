@@ -104,5 +104,11 @@ Esta build no incluye el updater: no busca actualizaciones ni necesita claves.
 ### Limitaciones
 
 - Si el repositorio es **privado**, las apps instaladas no pueden leer `latest.json` de GitHub Releases sin autenticación. En ese caso hay que publicar el feed en otro sitio (por ejemplo, el propio servicio de Render).
-- **No hay firma de código del sistema operativo** (Authenticode en Windows ni notarización en macOS): Windows SmartScreen y Gatekeeper mostrarán avisos. Hace falta un certificado de pago, que es una decisión de coste pendiente.
+- **No hay firma de código del sistema operativo** (Authenticode en Windows ni notarización en macOS): Windows SmartScreen y Gatekeeper mostrarán avisos. Hace falta un certificado de pago, que es una decisión de coste pendiente. Hay tres opciones:
+  - un certificado **EV**, que da confianza inmediata en SmartScreen;
+  - uno **OV**, que gana reputación con el tiempo;
+  - un servicio de firma en la nube como **Azure Trusted Signing**, que Tauri admite con `bundle.windows.signCommand`.
+  
+  Cualquiera de ellas se configura en `tauri.conf.json` y en los *secrets* de GitHub, sin cambiar la app.
+- El instalador NSIS está en español (en inglés si Windows está en inglés) y se instala solo para el usuario actual, sin pedir permisos de administrador.
 - Los minutos de GitHub Actions en macOS cuentan 10× en repositorios privados.
