@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("onboarding → dashboard → matches → match detail → settings", async ({ page }, info) => {
   const player = `E2E${info.project.name}`;
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Kairos Coach" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "KOI Master" })).toBeVisible();
   await expect(page.getByText("Datos sintéticos")).toBeVisible();
 
   await page.getByLabel("Tu nombre").fill(player);

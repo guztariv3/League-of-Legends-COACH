@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Kairos Coach",
+  "productName": "KOI Master",
   "version": "0.1.0",
   "identifier": "app.kairoscoach.desktop",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "live",
-        "title": "Kairos · Live Coach",
+        "title": "KOI Master · Live Coach",
         "width": 380,
         "height": 560,
         "minWidth": 300,

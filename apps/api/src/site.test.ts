@@ -17,7 +17,7 @@ const auth = `Basic ${Buffer.from(`kairos:${PASSWORD}`).toString("base64")}`;
 beforeAll(async () => {
   database = await openDatabase(undefined, undefined);
   const dist = mkdtempSync(join(tmpdir(), "kairos-web-"));
-  writeFileSync(join(dist, "index.html"), "<!doctype html><title>Kairos Coach</title><div id=root></div>");
+  writeFileSync(join(dist, "index.html"), "<!doctype html><title>KOI Master</title><div id=root></div>");
   writeFileSync(join(dist, "app.js"), "console.log('ok')");
   const cfg = loadConfig({ NODE_ENV: "production", PROTOTYPE_PASSWORD: PASSWORD, DEV_LOGIN: "1", WEB_DIST: dist, RENDER_EXTERNAL_URL: "https://kairos.example" });
   const knowledge = await bootKnowledge(database.db, syntheticKnowledge());
@@ -39,7 +39,7 @@ describe("production site", () => {
     expect(await (await site.request("/app.js", { headers: { Authorization: auth } })).text()).toContain("ok");
     const deep = await site.request("/matches/EUW1_1/review", { headers: { Authorization: auth } });
     expect(deep.status).toBe(200);
-    expect(await deep.text()).toContain("Kairos Coach");
+    expect(await deep.text()).toContain("KOI Master");
     // Unknown API paths never fall back to the HTML shell (they answer JSON, here "session required").
     const api = await site.request("/api/nope", { headers: { Authorization: auth } });
     expect(api.status).not.toBe(200);

@@ -46,7 +46,7 @@ export function Settings() {
             <button
               className="btn btn-danger"
               onClick={async () => {
-                if (!confirm(`¿Desvincular ${a.riotId}? Se borrará su historial analizado en Kairos.`)) return;
+                if (!confirm(`¿Desvincular ${a.riotId}? Se borrará su historial analizado en KOI Master.`)) return;
                 await api.deleteAccount(a.id);
                 await refresh();
               }}
@@ -82,7 +82,7 @@ export function Settings() {
           <button
             className="btn btn-danger"
             onClick={async () => {
-              if (!confirm("¿Borrar tu cuenta de Kairos y todos tus datos? No se puede deshacer.")) return;
+              if (!confirm("¿Borrar tu cuenta de KOI Master y todos tus datos? No se puede deshacer.")) return;
               await api.deleteMe();
               await refresh();
               navigate("/");

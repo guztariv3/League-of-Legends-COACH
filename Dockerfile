@@ -1,4 +1,4 @@
-# Kairos Coach — API + web from a single container (decision D-08).
+# KOI Master — API + web from a single container (decision D-08).
 # Build:  docker build -t kairos .
 # Run:    docker run -p 8787:8787 -e DATABASE_URL=... kairos
 FROM node:22-slim AS base

@@ -12,7 +12,7 @@ export function CoachAvatar({ expression = "idle", quiet = false }: { expression
     concerned: <><path d="M22 27l6 2" /><path d="M42 27l-6 2" /><ellipse cx="25" cy="31.5" rx="2.2" ry="2.8" /><ellipse cx="39" cy="31.5" rx="2.2" ry="2.8" /></>,
   }[expression];
   return (
-    <svg className={`coach-avatar${quiet ? " quiet" : ""}`} viewBox="0 0 64 64" role="img" aria-label="Kairos, tu coach">
+    <svg className={`coach-avatar${quiet ? " quiet" : ""}`} viewBox="0 0 64 64" role="img" aria-label="KOI Master, tu coach">
       <defs>
         <linearGradient id="wisp-body" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#b8fff4" />
