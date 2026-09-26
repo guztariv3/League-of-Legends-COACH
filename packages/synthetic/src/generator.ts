@@ -8,6 +8,9 @@ import { SYNTHETIC_CHAMPIONS, SYNTHETIC_ITEMS, type SyntheticChampion } from "./
  *
  * Bump SYNTHETIC_DATASET_VERSION whenever the output for a given seed changes.
  */
+
+/** Standard Q-max order used for synthetic level-ups (1 = Q … 4 = R). */
+const SKILL_ORDER = [1, 2, 3, 1, 1, 4, 1, 2, 1, 2, 4, 2, 2, 3, 3, 4, 3, 3] as const;
 export const SYNTHETIC_DATASET_VERSION = "syn-1";
 
 export type Scenario =
@@ -329,6 +332,20 @@ function generateGame(
       }
     }
 
+    // Level-ups follow a fixed Q-max order; no RNG, so the rest of the game is unchanged.
+    const levelAt = (m: number) => Math.min(18, 1 + Math.floor(m * (isAram ? 0.9 : 0.62)));
+    for (let level = minute === 1 ? 1 : levelAt(minute - 1) + 1; level <= levelAt(minute); level++) {
+      for (const p of players) {
+        events.push({
+          type: "SKILL_LEVEL_UP",
+          timestamp: (minute - 1) * 60_000 + 30_000 + level,
+          participantId: p.participantId,
+          skillSlot: SKILL_ORDER[level - 1],
+          levelUpType: "NORMAL",
+        });
+      }
+    }
+
     events.sort((a, b) => a.timestamp - b.timestamp);
     frames.push(snapshot(minute, events));
   }
@@ -374,6 +391,7 @@ function generateGame(
           neutralMinionsKilled: Math.round(p.role === "JUNGLE" ? p.cs * 0.85 : 0),
           goldEarned: Math.round(p.gold),
           totalDamageDealtToChampions: Math.round(p.gold * dmgFactor * rng.float(1.1, 1.8)),
+          totalDamageTaken: Math.round(p.gold * (dmgFactor < 1 ? 1.9 : 1.3)),
           visionScore: isAram ? 0 : Math.round(durationMin * (p.role === "UTILITY" ? 2.2 : p.role === "JUNGLE" ? 1.2 : 0.7) * rng.float(0.7, 1.3)),
           champLevel: Math.min(18, 1 + Math.floor(durationMin * (isAram ? 0.9 : 0.62))),
           item0: items[0]!, item1: items[1]!, item2: items[2]!, item3: items[3]!, item4: items[4]!, item5: items[5]!, item6: 0,

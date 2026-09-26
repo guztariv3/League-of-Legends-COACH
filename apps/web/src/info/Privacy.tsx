@@ -16,7 +16,7 @@ export function Privacy() {
       <h2>What we store</h2>
       <ul>
         <li><strong>Your KOI Master account:</strong> a display name and your preferences (level of detail, what the coach may remember).</li>
-        <li><strong>Your linked Riot accounts:</strong> Riot ID, region and Riot's player identifier (PUUID).</li>
+        <li><strong>Your linked Riot accounts:</strong> Riot ID, region and Riot's player identifier (PUUID), plus your ranked tier and LP each time they change (Riot keeps no history, so this is what draws your LP graph).</li>
         <li><strong>Match data</strong> provided by Riot Games' official API: your games and, within them, the other players' public statistics as Riot publishes them.</li>
         <li><strong>What the coach produces:</strong> the analysis of your games, your goals, what the coach remembers (you can turn this off by category) and the recommendation history.</li>
         <li><strong>The connected desktop app:</strong> its name, when it was connected and when it was last used. For the code and the token we only store a fingerprint (hash), never the value.</li>

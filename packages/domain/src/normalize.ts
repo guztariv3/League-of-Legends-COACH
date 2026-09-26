@@ -22,6 +22,8 @@ export interface NormalizedParticipant {
   cs: number;
   gold: number;
   damageToChampions: number;
+  /** null on payloads without the field. */
+  damageTaken: number | null;
   visionScore: number | null;
   level: number;
   items: number[];
@@ -29,6 +31,10 @@ export interface NormalizedParticipant {
   spells: number[];
   /** Keystone and rune paths; null when the payload has no runes (e.g. some special modes). */
   runes: { keystone: number | null; primary: number | null; secondary: number | null };
+  /** Every rune picked, primary path first (keystone included). Empty when the payload has no runes. */
+  perks: number[];
+  /** Rune shards [offense, flex, defense]; empty when the payload has none. */
+  shards: number[];
 }
 
 export interface NormalizedMatch {
@@ -92,6 +98,7 @@ export function normalizeMatch(raw: RawMatch): NormalizedMatch {
       cs: p.totalMinionsKilled + p.neutralMinionsKilled,
       gold: p.goldEarned,
       damageToChampions: p.totalDamageDealtToChampions,
+      damageTaken: p.totalDamageTaken ?? null,
       visionScore: p.visionScore ?? null,
       level: p.champLevel,
       items: [p.item0, p.item1, p.item2, p.item3, p.item4, p.item5, p.item6].filter((i) => i > 0),
@@ -101,6 +108,8 @@ export function normalizeMatch(raw: RawMatch): NormalizedMatch {
         primary: p.perks?.styles[0]?.style ?? null,
         secondary: p.perks?.styles[1]?.style ?? null,
       },
+      perks: (p.perks?.styles ?? []).slice(0, 2).flatMap((st) => st.selections.map((sel) => sel.perk)),
+      shards: p.perks?.statPerks ? [p.perks.statPerks.offense, p.perks.statPerks.flex, p.perks.statPerks.defense] : [],
     })),
   };
 }

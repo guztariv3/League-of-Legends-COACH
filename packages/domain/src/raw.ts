@@ -24,6 +24,7 @@ export const RawParticipant = z.looseObject({
   neutralMinionsKilled: num,
   goldEarned: num,
   totalDamageDealtToChampions: num,
+  totalDamageTaken: num.optional(),
   visionScore: num.optional(),
   champLevel: num,
   item0: num, item1: num, item2: num, item3: num, item4: num, item5: num, item6: num,
@@ -32,6 +33,8 @@ export const RawParticipant = z.looseObject({
   // Runes: styles[0] is the primary path (its first selection is the keystone), styles[1] the secondary.
   perks: z.looseObject({
     styles: z.array(z.looseObject({ style: num, selections: z.array(z.looseObject({ perk: num })) })),
+    // Rune shards: offense, flex and defense rows.
+    statPerks: z.looseObject({ offense: num, flex: num, defense: num }).optional(),
   }).optional(),
   riotIdGameName: z.string().optional(),
   riotIdTagline: z.string().optional(),

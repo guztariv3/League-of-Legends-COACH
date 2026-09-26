@@ -4,6 +4,7 @@ import { RiotApiError } from "@coach/riot";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { schema, type Db } from "./db/index.js";
 import { riotFailure } from "./errors.js";
+import { recordRank } from "./rank.js";
 import { forgetPlayers } from "./retention.js";
 import type { MatchSource } from "./sources.js";
 
@@ -99,6 +100,7 @@ export class SyncService {
         this.progress.get(accountId)!.done++;
       }
       await this.reanalyze(account);
+      await recordRank(this.db, this.source, account);
 
       await this.db.update(schema.riotAccounts)
         .set({ syncStatus: "ok", lastSyncedAt: new Date() })

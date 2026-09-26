@@ -1,7 +1,13 @@
 import {
+  csDiffAt,
   findParticipant,
   goldDiffAt,
   laneOpponent,
+  purchasesOf,
+  skillOrderOf,
+  soloDeathsOf,
+  type Purchase,
+  type SkillSlot,
   type AnalysisMode,
   type NormalizedMatch,
   type RawTimeline,
@@ -11,8 +17,10 @@ import {
 /**
  * Bump whenever per-match analysis output changes. Old rows keep their version (history is immutable).
  * v3: loadout (champion level, items, summoner spells, runes, gold) for the match-history view.
+ * v4: skill order, purchases, full runes and shards, CS diff @15, gold share, damage per minute,
+ *     damage taken and solo deaths.
  */
-export const ANALYSIS_VERSION = 3;
+export const ANALYSIS_VERSION = 4;
 
 const EARLY_GAME_MS = 14 * 60_000;
 const MID_GAME_MS = 15 * 60_000;
@@ -60,6 +68,23 @@ export interface MatchAnalysis {
   items: number[];
   spells: number[];
   runes: { keystone: number | null; primary: number | null; secondary: number | null };
+  /** Every rune and the three shards. v4+ */
+  perks: number[];
+  shards: number[];
+  /** Lane (+ jungle) creep score difference with the lane opponent at 15:00. v4+ */
+  csDiff15: number | null;
+  /** Share of the team's gold. v4+ */
+  goldShare: number | null;
+  /** Damage to champions per minute. v4+ */
+  damagePerMin: number;
+  /** v4+; null when the payload lacks it. */
+  damageTaken: number | null;
+  /** Deaths with no assisting enemy; requires the timeline. v4+ */
+  soloDeaths: number | null;
+  /** Abilities in levelling order (1 = Q … 4 = R); requires the timeline. v4+ */
+  skillOrder: SkillSlot[] | null;
+  /** Items bought (undos removed) with the second they were bought; requires the timeline. v4+ */
+  purchases: Purchase[] | null;
 }
 
 export function analyzeMatch(match: NormalizedMatch, timeline: RawTimeline | null, puuid: string): MatchAnalysis | null {
@@ -69,6 +94,7 @@ export function analyzeMatch(match: NormalizedMatch, timeline: RawTimeline | nul
   const team = match.participants.filter((p) => p.teamId === me.teamId);
   const teamKills = team.reduce((s, p) => s + p.kills, 0);
   const teamDamage = team.reduce((s, p) => s + p.damageToChampions, 0);
+  const teamGold = team.reduce((s, p) => s + p.gold, 0);
   const sr = match.mode === "summoners_rift";
   const opp = sr ? laneOpponent(match, me) : undefined;
 
@@ -103,6 +129,10 @@ export function analyzeMatch(match: NormalizedMatch, timeline: RawTimeline | nul
     timeline && opp && match.durationSec / 60 >= minute
       ? goldDiffAt(timeline, me.participantId, opp.participantId, minute) ?? null
       : null;
+
+  const csd15 = timeline && opp && match.durationSec / 60 >= 15
+    ? csDiffAt(timeline, me.participantId, opp.participantId, 15) ?? null
+    : null;
 
   return {
     analysisVersion: ANALYSIS_VERSION,
@@ -140,5 +170,14 @@ export function analyzeMatch(match: NormalizedMatch, timeline: RawTimeline | nul
     items: me.items,
     spells: me.spells,
     runes: me.runes,
+    perks: me.perks,
+    shards: me.shards,
+    csDiff15: csd15,
+    goldShare: teamGold > 0 ? me.gold / teamGold : null,
+    damagePerMin: me.damageToChampions / minutes,
+    damageTaken: me.damageTaken,
+    soloDeaths: timeline ? soloDeathsOf(timeline, me.participantId) : null,
+    skillOrder: timeline ? skillOrderOf(timeline, me.participantId) : null,
+    purchases: timeline ? purchasesOf(timeline, me.participantId) : null,
   };
 }
