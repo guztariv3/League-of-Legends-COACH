@@ -236,3 +236,4 @@ export class KnowledgeRegistry {
     return this.active()?.champions.find((c) => c.key === key);
   }
 }
+export * from "./abilities.js";

@@ -205,15 +205,22 @@ export interface SearchResult {
   href: string;
 }
 
+export interface Ability { key: "P" | "Q" | "W" | "E" | "R"; name: string; description: string; cooldown: string | null; cost: string | null; range: string | null; image: string }
+
 export interface ChampionDetail {
-  champion: { id: string; key: number; name: string; title: string; tags: string[] } | null;
+  champion: { id: string; key: number; name: string; title: string; tags: string[]; info?: { attack: number; defense: number; magic: number; difficulty: number } } | null;
   knowledgeVersion: string | null;
+  abilities: { abilities: Ability[]; allyTips: string[]; enemyTips: string[] } | null;
   personal: {
     games: number;
     wins: number;
     interval: { low: number; high: number };
     comparisons: { label: string; value: string; others: string | null; verdict: "better" | "worse" | "similar"; sample: number }[];
-    opponents: { opponent: string; games: number; wins: number }[];
+    opponents: { opponent: string; games: number; wins: number; kda: number | null; csDiff15: number | null; goldDiff15: number | null }[];
+    loadout: GamePlan["loadout"];
+    /** Most common levelling order with the champion (1 = Q … 4 = R). */
+    skillOrder: number[] | null;
+    build: { games: number; items: { id: number; name: string; games: number; wins: number }[]; note: string | null };
     recent: { matchId: string; win: boolean; kills: number; deaths: number; assists: number; startedAt: number; mode: Mode }[];
   };
 }

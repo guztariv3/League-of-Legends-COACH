@@ -52,6 +52,14 @@ test("profile, goals, memory, search and champion page", async ({ page }, info) 
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Champions" }).click();
   await page.getByRole("link", { name: /Aurelith/ }).first().click();
   await expect(page.getByRole("heading", { name: "Aurelith", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Abilities" })).toBeVisible();
+  await page.getByRole("tab", { name: "Build" }).click();
+  await expect(page.getByRole("heading", { name: /Your usual setup/ })).toBeVisible();
+  await page.getByRole("tab", { name: "Skills" }).click();
+  await expect(page.getByRole("heading", { name: "Your skill order" })).toBeVisible();
+  await page.getByRole("tab", { name: "Matchups" }).click();
+  await expect(page.getByRole("heading", { name: "Your matchups" })).toBeVisible();
+  await page.getByRole("tab", { name: "Your stats" }).click();
   await expect(page.getByText(/vs your other champions/)).toBeVisible();
   await page.screenshot({ path: `test-results/champion-${info.project.name}.png`, fullPage: true });
 });

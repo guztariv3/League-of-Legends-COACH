@@ -9,7 +9,9 @@ import {
   suggestGoals,
   type GoalMetric,
 } from "@coach/insights";
-import type { KnowledgeRegistry } from "@coach/knowledge";
+import { usualLoadout, usualSkillOrder } from "@coach/coach";
+import { fetchChampionAbilities, type KnowledgeRegistry } from "@coach/knowledge";
+import { personalBuild } from "./build.js";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -247,19 +249,29 @@ export function personalRoutes({ db, knowledge, services }: { db: Db; source: Ma
       };
     };
 
-    const byOpponent = new Map<string, { games: number; wins: number }>();
+    // Matchup pool: your record and lane numbers against each opponent (Summoner's Rift).
+    type Row = { games: number; wins: number; kda: number[]; csd15: number[]; gd15: number[] };
+    const byOpponent = new Map<string, Row>();
     for (const a of sr) {
       if (!a.laneOpponentChampion) continue;
-      const m = byOpponent.get(a.laneOpponentChampion) ?? { games: 0, wins: 0 };
+      const m = byOpponent.get(a.laneOpponentChampion) ?? { games: 0, wins: 0, kda: [], csd15: [], gd15: [] };
       m.games++;
       if (a.win) m.wins++;
+      m.kda.push(a.kda);
+      if (a.csDiff15 != null) m.csd15.push(a.csDiff15);
+      if (a.goldDiff15 != null) m.gd15.push(a.goldDiff15);
       byOpponent.set(a.laneOpponentChampion, m);
     }
+    const avg = (xs: number[]) => (xs.length ? Math.round(mean(xs) * 10) / 10 : null);
+    const bundle = knowledge.active();
+    const abilities = champ && bundle?.source === "ddragon" ? await fetchChampionAbilities(bundle.version, champ.id) : null;
     const wins = games.filter((a) => a.win).length;
 
     return c.json({
       champion: champ ?? null,
       knowledgeVersion: knowledge.active()?.version ?? null,
+      /** Riot's ability data (Data Dragon); null offline and for the synthetic catalog. */
+      abilities,
       personal: {
         games: games.length,
         wins,
@@ -271,9 +283,12 @@ export function personalRoutes({ db, knowledge, services }: { db: Db; source: Ma
           compare("Kill participation", (a) => a.killParticipation, true, 2),
         ].filter((x) => x !== null),
         opponents: [...byOpponent.entries()]
-          .map(([opponent, m]) => ({ opponent, ...m }))
+          .map(([opponent, m]) => ({ opponent, games: m.games, wins: m.wins, kda: avg(m.kda), csDiff15: avg(m.csd15), goldDiff15: avg(m.gd15) }))
           .sort((a, b) => b.games - a.games)
-          .slice(0, 8),
+          .slice(0, 20),
+        loadout: usualLoadout(sr, bundle),
+        skillOrder: usualSkillOrder(sr),
+        build: personalBuild(analyses, champ?.id ?? name, "summoners_rift", bundle),
         recent: games.slice(0, 5).map((a) => ({ matchId: a.matchId, win: a.win, kills: a.kills, deaths: a.deaths, assists: a.assists, startedAt: a.startedAt, mode: a.mode })),
       },
     });
