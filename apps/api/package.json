@@ -10,9 +10,12 @@
   "dependencies": {
     "@coach/ai": "workspace:*",
     "@coach/analysis": "workspace:*",
+    "@coach/coach": "workspace:*",
     "@coach/domain": "workspace:*",
+    "@coach/draft": "workspace:*",
     "@coach/insights": "workspace:*",
     "@coach/knowledge": "workspace:*",
+    "@coach/review": "workspace:*",
     "@coach/riot": "workspace:*",
     "@coach/synthetic": "workspace:*",
     "@electric-sql/pglite": "^0.5.8",
@@ -21,9 +24,7 @@
     "hono": "^4.13.9",
     "pg": "^8.23.0",
     "tsx": "^4.23.15",
-    "zod": "^4.6.5",
-    "@coach/draft": "workspace:*",
-    "@coach/review": "workspace:*"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/pg": "^8.23.1"

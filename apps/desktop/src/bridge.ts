@@ -80,6 +80,10 @@ export const fetchScout = <T>(baseUrl: string, token: string) => site<T>("deskto
 export const fetchBuild = <T>(baseUrl: string, token: string, champion: string, mode: "summoners_rift" | "aram") =>
   site<T>("desktop_build", { baseUrl, token, champion, mode });
 
+/** The Coach's game plan for the champions of this game (champions only). */
+export const fetchPlan = <T>(baseUrl: string, token: string, c: { me: string; allies: string[]; enemies: string[]; opponent: string | null }) =>
+  site<T>("desktop_plan", { baseUrl, token, me: c.me, allies: c.allies.join(","), enemies: c.enemies.join(","), opponent: c.opponent ?? "" });
+
 /** What the optional overlay shows (D-11): the gold difference and the next items. */
 export interface OverlayState {
   art: { cdn: string | null; version: string | null };

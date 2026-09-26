@@ -35,6 +35,13 @@ test("match review, manual draft and scouting", async ({ page }, info) => {
   await page.getByLabel("Enemy 3").selectOption({ label: "Nimue" });
   await page.getByRole("button", { name: "Analyze" }).click();
   await expect(page.getByText("This is what matters most").first()).toBeVisible();
+  // The Coach's game plan, each line with what it rests on.
+  const plan = page.getByRole("region", { name: "Coach game plan" });
+  await expect(plan).toBeVisible();
+  await expect(plan).toContainText("Biggest threat");
+  await expect(plan).toContainText("Your power spike");
+  await expect(plan).toContainText(/Your usual setup \(\d+ games\)/);
+  await page.screenshot({ path: `test-results/gameplan-${info.project.name}.png`, fullPage: true });
 
   await page.getByRole("button", { name: "Find my game" }).click();
   await expect(page.getByRole("heading", { name: "Your opponents" })).toBeVisible({ timeout: 30_000 });

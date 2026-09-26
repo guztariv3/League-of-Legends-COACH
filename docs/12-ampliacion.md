@@ -44,3 +44,9 @@ Tabla `rank_snapshots` (migración 0005): tras cada sincronización se guarda el
 
 ## F2b — overlay opcional (hecho, D-11)
 Ventana `overlay` (tauri.conf): transparente, sin bordes, siempre encima, fuera de la barra de tareas y **oculta por defecto**. `set_overlay` (Rust) la muestra en el borde izquierdo y le activa `set_ignore_cursor_events(true)`, así que los clics pasan al juego. No se engancha al juego ni lee nada suyo: solo pinta lo que le envía la ventana del Coach por un evento (`overlay-state`: diferencia de oro por ítems, totales, próximos ítems y tu oro). Su capacidad solo permite escuchar eventos. Se activa en Settings; se oculta fuera de partida y al pausar el Coach. Requiere el juego en ventana o pantalla completa sin bordes.
+
+## F3a — COACH GAME PLAN (hecho)
+`gamePlan` (coach) sobre el análisis de draft y tu historial: objetivo principal (lo que más separa tus victorias de tus derrotas con ese campeón; si no hay datos, llegar a tu power spike), objetivo secundario (perfil de daño), mayor amenaza (la de mayor rating de daño entre asesinos, tiradores y magos), tu power spike (tu primer ítem grande y el minuto mediano en que lo completas, de tus timelines; sin datos, nivel 6), power spike enemigo (tendencia general de la clase, etiquetada así), qué evitar (tus muertes tempranas contra esa clase de rival si son claramente más altas, o la composición) y qué buscar. Cada línea dice en qué se apoya. Más tu setup habitual con ese campeón (keystone, hechizos, orden de maxeo, primer ítem), solo de la Grieta. Web: tarjeta "Coach game plan" en Pre-game (`/api/draft` devuelve `plan`). App: pestaña **Plan**, pedida una vez por partida a `/api/desktop/plan` (solo campeones, D-03). Riot no da estadísticas por campeón; cuando llegue F7 se añadirán como evidencia de apoyo.
+
+## F3b — selección de campeones por la LCU (pendiente del registro ante Riot)
+Ver `13-registro-lcu.md`. El código se hará cuando el registro esté enviado.

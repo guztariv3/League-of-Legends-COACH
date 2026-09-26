@@ -7,6 +7,7 @@ import { hashToken, type AuthVars } from "./auth.js";
 import { schema, type Db } from "./db/index.js";
 import { userAccounts } from "./queries.js";
 import { personalBuild } from "./build.js";
+import { prepareGame } from "./game.js";
 import { scoutForUser } from "./scout.js";
 import type { Services } from "./services.js";
 import type { MatchSource } from "./sources.js";
@@ -16,9 +17,9 @@ import type { MatchSource } from "./sources.js";
  *
  * 1. Signed in on the web, the player asks for a code (valid 10 minutes, single use).
  * 2. The desktop app exchanges it at /desktop/claim for a device token.
- * 3. With `Authorization: Bearer <token>` the app can only read /desktop/scout and /desktop/build.
+ * 3. With `Authorization: Bearer <token>` the app can only read /desktop/scout, /desktop/build and /desktop/plan.
  * Only SHA-256 hashes are stored; the player can revoke a device from the web at any time.
- * /desktop/claim, /desktop/scout and /desktop/build are the only API routes the site's password gate lets through,
+ * /desktop/claim, /desktop/scout, /desktop/build and /desktop/plan are the only API routes the site's password gate lets through,
  * because they carry their own authentication.
  */
 export const PAIRING_CODE_TTL_MS = 10 * 60_000;
@@ -146,6 +147,36 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
     if (!q.success) return c.json({ error: "invalid_query" }, 400);
     const { analyses } = await deps.services.profileAnalyses(device.userId);
     return c.json(personalBuild(analyses, q.data.champion, q.data.mode, deps.knowledge.active()));
+  });
+
+  /** The Coach's game plan for the champions of the game that is starting (champions only, D-03). */
+  r.get("/desktop/plan", async (c) => {
+    const device = await deviceFor(c);
+    if (!device) return disconnected(c);
+    const id = z.string().regex(/^[A-Za-z0-9]{1,40}$/);
+    const list = z.string().max(250).optional().transform((v) => (v ? v.split(",").filter(Boolean) : [])).pipe(z.array(id).max(5));
+    const q = z.object({ me: id, allies: list, enemies: list, opponent: id.optional() }).safeParse({
+      me: c.req.query("me"), allies: c.req.query("allies"), enemies: c.req.query("enemies"), opponent: c.req.query("opponent") || undefined,
+    });
+    if (!q.success) return c.json({ error: "invalid_query" }, 400);
+    const { analyses } = await deps.services.profileAnalyses(device.userId);
+    const { draft, plan } = prepareGame({ myChampion: q.data.me, allies: q.data.allies, enemies: q.data.enemies, laneOpponent: q.data.opponent }, analyses, deps.knowledge.active());
+    return c.json({ plan, keyPoints: draft.keyPoints, limits: draft.limits });
+  });
+
+  /** The Coach's game plan for the champions of the game that is starting (champions only, D-03). */
+  r.get("/desktop/plan", async (c) => {
+    const device = await deviceFor(c);
+    if (!device) return disconnected(c);
+    const id = z.string().regex(/^[A-Za-z0-9]{1,40}$/);
+    const list = z.string().max(250).optional().transform((v) => (v ? v.split(",").filter(Boolean) : [])).pipe(z.array(id).max(5));
+    const q = z.object({ me: id, allies: list, enemies: list, opponent: id.optional() }).safeParse({
+      me: c.req.query("me"), allies: c.req.query("allies"), enemies: c.req.query("enemies"), opponent: c.req.query("opponent") || undefined,
+    });
+    if (!q.success) return c.json({ error: "invalid_query" }, 400);
+    const { analyses } = await deps.services.profileAnalyses(device.userId);
+    const { draft, plan } = prepareGame({ myChampion: q.data.me, allies: q.data.allies, enemies: q.data.enemies, laneOpponent: q.data.opponent }, analyses, deps.knowledge.active());
+    return c.json({ plan, keyPoints: draft.keyPoints, limits: draft.limits });
   });
 
   return r;

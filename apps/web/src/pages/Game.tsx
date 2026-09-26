@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ChampionIcon } from "../assets";
 import { RivalCard } from "../components/RivalCard";
-import { api, type DraftAnalysis, type DraftPoint, type ScoutResult } from "../api";
+import { api, type DraftAnalysis, type DraftPoint, type GamePlan, type PlanLine, type ScoutResult } from "../api";
 import { ErrorNotice, Loading, SyntheticBadge } from "../components/ui";
 import { useLoad } from "../session";
 
@@ -49,6 +49,52 @@ function Points({ draft }: { draft: DraftAnalysis }) {
         <ul className="tile-note">{draft.limits.map((l) => <li key={l}>{l}</li>)}</ul>
       </details>
     </div>
+  );
+}
+
+const PLAN_ROWS: [keyof Omit<GamePlan, "loadout">, string][] = [
+  ["primaryObjective", "Primary objective"],
+  ["secondaryObjective", "Secondary objective"],
+  ["biggestThreat", "Biggest threat"],
+  ["yourPowerSpike", "Your power spike"],
+  ["enemyPowerSpike", "Enemy power spike"],
+  ["avoid", "What to avoid"],
+  ["lookFor", "What to look for"],
+];
+const basisLabel = { fact: "Game data", observation: "Your games", hypothesis: "Coach's read" } as const;
+
+/** COACH GAME PLAN: the Coach's voice (hextech blue), each line with what it rests on. */
+export function GamePlanCard({ plan }: { plan: GamePlan }) {
+  const rows = PLAN_ROWS.flatMap(([key, label]) => (plan[key] ? [[label, plan[key]] as [string, PlanLine]] : []));
+  const l = plan.loadout;
+  return (
+    <section className="coach-plan" aria-labelledby="h-plan">
+      <h3 id="h-plan" className="coach-plan-title">Coach game plan</h3>
+      <dl className="coach-plan-rows">
+        {rows.map(([label, line]) => (
+          <div key={label} className="coach-plan-row">
+            <dt>{label}</dt>
+            <dd>
+              <strong>{line.text}</strong>
+              <span className="coach-plan-why">{line.why} <span className="coach-plan-basis">· {basisLabel[line.basis]}</span></span>
+            </dd>
+          </div>
+        ))}
+      </dl>
+      {l.games > 0 ? (
+        <p className="tile-note" style={{ margin: 0 }}>
+          Your usual setup ({l.games} games):{" "}
+          {[
+            l.keystone && `${l.keystone.name}`,
+            l.spells && l.spells.names.join(" + "),
+            l.maxOrder && `max ${l.maxOrder.join(" → ")}`,
+            l.firstItem && `first item ${l.firstItem.name}`,
+          ].filter(Boolean).join(" · ") || "not enough games yet"}
+        </p>
+      ) : (
+        <p className="tile-note" style={{ margin: 0 }}>No games with this champion yet: the plan uses the game's data and general class tendencies.</p>
+      )}
+    </section>
   );
 }
 
@@ -153,6 +199,7 @@ function ManualDraft() {
         <div><button className="btn btn-primary" disabled={!me}>Analyze</button></div>
       </form>
       {result.error ? <ErrorNotice error={result.error} /> : null}
+      {result.data?.plan && <GamePlanCard plan={result.data.plan} />}
       {result.data && <Points draft={result.data} />}
     </section>
   );

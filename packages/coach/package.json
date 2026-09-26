@@ -7,8 +7,15 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@coach/analysis": "workspace:*",
+    "@coach/draft": "workspace:*",
     "@coach/insights": "workspace:*",
     "@coach/itemization": "workspace:*",
+    "@coach/knowledge": "workspace:*",
     "@coach/live": "workspace:*"
+  },
+  "devDependencies": {
+    "@coach/domain": "workspace:*",
+    "@coach/synthetic": "workspace:*"
   }
 }

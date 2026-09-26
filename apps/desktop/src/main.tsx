@@ -1,9 +1,9 @@
 import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { DEFAULT_CONTROLS, LiveEngine, modeInfo, type Delivery, type EngineTick, type Intensity, type LiveControls } from "@coach/live";
+import { DEFAULT_CONTROLS, laneOpponent, LiveEngine, modeInfo, type Delivery, type EngineTick, type Intensity, type LiveControls } from "@coach/live";
 import { CoachAvatar } from "@coach/ui";
-import { checkUpdate, fetchBuild, inTauri, installUpdate, minimizeWindow, readLoad, readSnapshot, setOverlay, type UpdateInfo } from "./bridge";
-import { Board, useArt, useCatalog, type PersonalBuild } from "./board";
+import { checkUpdate, fetchBuild, fetchPlan, inTauri, installUpdate, minimizeWindow, readLoad, readSnapshot, setOverlay, type UpdateInfo } from "./bridge";
+import { Board, useArt, useCatalog, type PersonalBuild, type PlanResponse } from "./board";
 import { ConnectForm, RivalsPanel, useRivals } from "./rivals";
 import "./live.css";
 
@@ -44,6 +44,7 @@ function LiveWindow() {
   const catalog = useCatalog(art);
   const [showConnect, setShowConnect] = useState(false);
   const [build, setBuild] = useState<PersonalBuild | null | "loading">(null);
+  const [plan, setPlan] = useState<PlanResponse | null>(null);
   // Item names arrive with the game's own data; the engine fills this map as it reads.
   const itemNames = useRef(new Map<number, string>());
   const controlsRef = useRef(controls);
@@ -121,6 +122,20 @@ function LiveWindow() {
   useEffect(() => { void setOverlay(overlayVisible); }, [overlayVisible]);
   useEffect(() => { try { localStorage.setItem(OVERLAY_KEY, overlay ? "on" : "off"); } catch { /* per-viewer convenience only */ } }, [overlay]);
 
+  // The Coach's game plan, once per game, for the champions of this game (Summoner's Rift only).
+  const st = mode === "live" ? tick?.state : undefined;
+  const planKey = st?.me && st.map === 11 && st.enemies.length ? [st.me.championId, ...st.allies.map((a) => a.championId), "|", ...st.enemies.map((e) => e.championId)].join(",") : null;
+  useEffect(() => {
+    setPlan(null);
+    const link = rivals.link;
+    if (!link || !planKey || !st?.me) return;
+    let stopped = false;
+    const opponent = laneOpponent(st)?.championId ?? null;
+    void fetchPlan<PlanResponse>(link.origin, link.token, { me: st.me.championId, allies: st.allies.map((a) => a.championId), enemies: st.enemies.map((e) => e.championId), opponent })
+      .then((r) => { if (!stopped) setPlan(r.ok ? r.data : null); });
+    return () => { stopped = true; };
+  }, [rivals.link, planKey]);
+
   // Updates are checked at start-up and offered only outside a game (the game always comes first).
   useEffect(() => { void checkUpdate().then(setUpdate); }, []);
 
@@ -166,7 +181,7 @@ function LiveWindow() {
       <RivalsPanel scout={rivals.scout} collapsed={mode === "live"} />
 
       {tick?.state.me && (
-        <Board state={tick.state} names={itemNames.current} art={art} catalog={catalog} demo={mode === "demo"} build={mode === "demo" ? null : build} connected={Boolean(rivals.link) && mode !== "demo"} overlay={overlayVisible} />
+        <Board state={tick.state} names={itemNames.current} art={art} catalog={catalog} demo={mode === "demo"} build={mode === "demo" ? null : build} connected={Boolean(rivals.link) && mode !== "demo"} overlay={overlayVisible} plan={mode === "demo" ? null : plan} />
       )}
 
       {!rivals.link && mode === "waiting" && (

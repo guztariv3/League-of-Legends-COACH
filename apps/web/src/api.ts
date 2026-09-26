@@ -263,7 +263,27 @@ export interface Composition {
   unrated: number;
 }
 
+export interface PlanLine { text: string; basis: "fact" | "observation" | "hypothesis"; why: string }
+export interface GamePlan {
+  primaryObjective: PlanLine | null;
+  secondaryObjective: PlanLine | null;
+  biggestThreat: PlanLine | null;
+  yourPowerSpike: PlanLine | null;
+  enemyPowerSpike: PlanLine | null;
+  avoid: PlanLine | null;
+  lookFor: PlanLine | null;
+  loadout: {
+    games: number;
+    keystone: { id: number; name: string; games: number } | null;
+    spells: { ids: number[]; names: string[]; games: number } | null;
+    maxOrder: string[] | null;
+    firstItem: { id: number; name: string; games: number; medianMinute: number | null } | null;
+  };
+}
+
 export interface DraftAnalysis {
+  /** The Coach's game plan for these champions. */
+  plan?: GamePlan;
   ally: Composition;
   enemy: Composition;
   keyPoints: DraftPoint[];

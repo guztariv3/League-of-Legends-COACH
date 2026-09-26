@@ -26,6 +26,9 @@ importers:
       '@coach/analysis':
         specifier: workspace:*
         version: link:../../packages/analysis
+      '@coach/coach':
+        specifier: workspace:*
+        version: link:../../packages/coach
       '@coach/domain':
         specifier: workspace:*
         version: link:../../packages/domain
@@ -171,15 +174,31 @@ importers:
 
   packages/coach:
     dependencies:
+      '@coach/analysis':
+        specifier: workspace:*
+        version: link:../analysis
+      '@coach/draft':
+        specifier: workspace:*
+        version: link:../draft
       '@coach/insights':
         specifier: workspace:*
         version: link:../insights
       '@coach/itemization':
         specifier: workspace:*
         version: link:../itemization
+      '@coach/knowledge':
+        specifier: workspace:*
+        version: link:../knowledge
       '@coach/live':
         specifier: workspace:*
         version: link:../live
+    devDependencies:
+      '@coach/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@coach/synthetic':
+        specifier: workspace:*
+        version: link:../synthetic
 
   packages/domain:
     dependencies:
