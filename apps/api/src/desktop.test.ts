@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { parseChampionKits, parseItems, syntheticSource as syntheticKnowledge } from "@coach/knowledge";
+import { parseChampionKits, parseItems, parseRunes, parseSummonerSpells, syntheticSource as syntheticKnowledge } from "@coach/knowledge";
 import { gameData } from "@coach/knowledge/test-data";
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
@@ -15,7 +15,10 @@ beforeAll(async () => {
   const knowledge = await bootKnowledge(database.db, syntheticKnowledge());
   // The build engine's facts: the real game data snapshot (the synthetic catalog has fictional champions).
   const d = gameData();
-  const facts = { version: d.meta.ddragonVersion, items: parseItems(d.ddragonItems, d.merakiItems), kits: parseChampionKits(d.ddragonChampions, d.merakiChampions) };
+  const facts = {
+    version: d.meta.ddragonVersion, items: parseItems(d.ddragonItems, d.merakiItems), kits: parseChampionKits(d.ddragonChampions, d.merakiChampions),
+    runes: parseRunes(d.perks, d.perkStyles), spells: parseSummonerSpells(d.summoners),
+  };
   const gameFacts = { get: async () => facts };
   ctx = createApp({ cfg: loadConfig({ NODE_ENV: "test" }), db: database.db, source: syntheticSource(() => Date.UTC(2026, 5, 1)), knowledge, aiProviders: [], gameFacts });
 }, 30_000);
@@ -146,6 +149,8 @@ describe("desktop pairing", () => {
     expect(tank.body.build.first.why.length).toBeGreaterThan(0);
     expect(tank.body.build.enemyDamage.magic).toBeGreaterThan(0.8);
     expect(tank.body.build.attribution.license).toContain("creativecommons");
+    expect(tank.body.build.setup.runes.keystone.why.length).toBeGreaterThan(0);
+    expect(tank.body.build.setup.spells).toHaveLength(2);
     expect(JSON.stringify([tank.body.build.first, ...tank.body.build.next, ...tank.body.build.situational])).not.toContain("Randuin");
     expect((await call("/desktop/plan?me=Malphite&position=mid", { headers: auth })).res.status).toBe(400);
 

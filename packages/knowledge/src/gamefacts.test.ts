@@ -12,6 +12,9 @@ function fakeFetch(fail = false) {
     if (fail) return new Response("no", { status: 503 });
     const body = url.endsWith("item.json") && url.includes("ddragon") ? data.ddragonItems
       : url.endsWith("championFull.json") ? data.ddragonChampions
+      : url.endsWith("summoner.json") ? data.summoners
+      : url.endsWith("perkstyles.json") ? data.perkStyles
+      : url.endsWith("perks.json") ? data.perks
       : url.endsWith("items.json") ? data.merakiItems
       : data.merakiChampions;
     return new Response(JSON.stringify(body), { status: 200 });
@@ -27,9 +30,11 @@ describe("game facts source", () => {
     expect(a?.version).toBe(version);
     expect(a!.items.some((i) => i.purchasable && i.detail === "full")).toBe(true);
     expect(a!.kits.length).toBeGreaterThan(100);
+    expect(a!.runes.trees).toHaveLength(5);
+    expect(a!.spells.some((s) => s.name === "Flash")).toBe(true);
     await src.get();
-    expect(f.calls).toHaveLength(4);
-    expect(f.calls.filter((u) => u.includes(`/cdn/${version}/data/en_US/`))).toHaveLength(2);
+    expect(f.calls).toHaveLength(7);
+    expect(f.calls.filter((u) => u.includes(`/cdn/${version}/data/en_US/`))).toHaveLength(3);
   });
 
   it("refetches when the patch changes, and keeps the last good copy when a download fails", async () => {

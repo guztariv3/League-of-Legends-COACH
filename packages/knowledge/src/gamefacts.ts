@@ -1,15 +1,19 @@
-import { parseChampionKits, parseItems, type ChampionKit, type ItemFacts } from "./gamedata.js";
+import { parseChampionKits, parseItems, parseRunes, parseSummonerSpells, type ChampionKit, type ItemFacts, type RuneData, type SummonerSpellFacts } from "./gamedata.js";
 
 /**
  * The game facts the build engine needs, downloaded by the server: Data Dragon's items and full
- * champion files for the active patch, and Meraki's items and champions (League of Legends Wiki,
- * CC BY-SA 3.0). Parsed once and kept in memory; refreshed daily or when the patch changes.
+ * champion files and summoner spells for the active patch, Meraki's items and champions (League of
+ * Legends Wiki, CC BY-SA 3.0) and CommunityDragon's rune files (perks and perk styles). Parsed once
+ * and kept in memory; refreshed daily or when the patch changes.
  * A failed download keeps the last good copy; nothing is used half-parsed.
  */
 export interface GameFacts {
   version: string;
   items: ItemFacts[];
   kits: ChampionKit[];
+  runes: RuneData;
+  /** Summoner's Rift summoner spells. */
+  spells: SummonerSpellFacts[];
 }
 
 export interface GameFactsSource {
@@ -19,6 +23,7 @@ export interface GameFactsSource {
 
 const MERAKI_BASE = "https://cdn.merakianalytics.com/riot/lol/resources/latest/en-US";
 const DDRAGON = "https://ddragon.leagueoflegends.com/cdn";
+const CDRAGON = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1";
 
 export function gameFactsSource(opts: {
   /** The active Data Dragon version (from the knowledge registry). */
@@ -46,12 +51,17 @@ export function gameFactsSource(opts: {
       json(`${DDRAGON}/${version}/data/en_US/championFull.json`),
       json(`${MERAKI_BASE}/items.json`),
       json(`${MERAKI_BASE}/champions.json`),
+      json(`${DDRAGON}/${version}/data/en_US/summoner.json`),
+      json(`${CDRAGON}/perks.json`),
+      json(`${CDRAGON}/perkstyles.json`),
     ])
-      .then(([ddItems, ddChamps, mItems, mChamps]) => {
+      .then(([ddItems, ddChamps, mItems, mChamps, ddSpells, perks, perkStyles]) => {
         const items = parseItems(ddItems, mItems);
         const kits = parseChampionKits(ddChamps, mChamps);
-        if (items.filter((i) => i.purchasable).length < 100 || kits.length < 100) throw new Error("incomplete game data");
-        data = { version, items, kits };
+        const runes = parseRunes(perks, perkStyles);
+        const spells = parseSummonerSpells(ddSpells);
+        if (items.filter((i) => i.purchasable).length < 100 || kits.length < 100 || runes.trees.length < 5 || spells.length < 5) throw new Error("incomplete game data");
+        data = { version, items, kits, runes, spells };
         fetchedAt = now();
       })
       .catch((err) => {
