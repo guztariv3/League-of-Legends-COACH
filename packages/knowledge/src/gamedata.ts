@@ -359,6 +359,59 @@ export interface AbilityFacts {
   targeting: string | null;
   /** Plain-text description of every effect. */
   text: string;
+  /** What its values scale with (from the Wiki's per-rank values); empty when unknown. */
+  scalings: Scaling[];
+  /** Names of the Wiki's per-rank values ("Magic Damage", "Slow", "Heal", "Shield Strength"…). */
+  values: string[];
+}
+
+export type Scaling =
+  | "AP" | "AD" | "bonusAD" | "health" | "bonusHealth" | "armor" | "magicResist" | "mana" | "critChance" | "attackSpeed" | "lethality"
+  | "targetMaxHealth" | "targetMissingHealth" | "targetCurrentHealth";
+
+/** A Wiki value unit ("% bonus AD", "% of target's maximum health") as what it scales with. */
+export function scalingOf(unit: string): Scaling | null {
+  const u = unit.toLowerCase();
+  if (/target|enemy/.test(u)) {
+    if (/missing health/.test(u)) return "targetMissingHealth";
+    if (/current health/.test(u)) return "targetCurrentHealth";
+    if (/maximum health|max health|bonus health/.test(u)) return "targetMaxHealth";
+    return null; // e.g. "% of target's armor"
+  }
+  if (/\bap\b/.test(u)) return "AP";
+  if (/bonus ad\b/.test(u)) return "bonusAD";
+  if (/\bad\b/.test(u)) return "AD";
+  if (/critical strike/.test(u)) return "critChance";
+  if (/attack speed/.test(u)) return "attackSpeed";
+  if (/lethality/.test(u)) return "lethality";
+  if (/bonus health/.test(u)) return "bonusHealth";
+  if (/maximum health|max health/.test(u)) return "health";
+  if (/armor/.test(u)) return "armor";
+  if (/magic resist/.test(u)) return "magicResist";
+  if (/mana/.test(u)) return "mana";
+  return null;
+}
+
+function abilityValues(a: Json): { scalings: Scaling[]; values: string[] } {
+  const scalings = new Set<Scaling>();
+  const values = new Set<string>();
+  for (const e of arr(a["effects"])) {
+    // Some scalings are only written in the text: "(based on critical strike chance)".
+    const text = str(obj(e)?.["description"]) ?? "";
+    if (/based on (?:bonus )?critical strike chance/i.test(text)) scalings.add("critChance");
+    if (/based on (?:bonus )?attack speed|per \d+% bonus attack speed/i.test(text)) scalings.add("attackSpeed");
+    for (const lv of arr(obj(e)?.["leveling"])) {
+      const attr = str(obj(lv)?.["attribute"]);
+      if (attr) values.add(attr);
+      for (const m of arr(obj(lv)?.["modifiers"])) {
+        for (const u of arr(obj(m)?.["units"])) {
+          const sc = typeof u === "string" ? scalingOf(u) : null;
+          if (sc) scalings.add(sc);
+        }
+      }
+    }
+  }
+  return { scalings: [...scalings], values: [...values] };
 }
 
 export interface ChampionStats {
@@ -432,6 +485,7 @@ function wikiAbilities(m: Json): AbilityFacts[] {
       slot, name, resource: resource === "NONE" ? null : resource,
       cost: plainPerRank(a["cost"]), cooldown: plainPerRank(a["cooldown"]),
       damageType: damageType(a["damageType"]), targeting: str(a["targeting"]), text,
+      ...abilityValues(a),
     };
   }).filter((x): x is AbilityFacts => x !== null));
 }
@@ -444,11 +498,11 @@ function ddragonAbilities(d: Json, resource: string): AbilityFacts[] {
     return c && c.some((v) => v > 0) ? c : null;
   };
   return [
-    ...(passive ? [{ slot: "P" as Slot, name: str(passive["name"]) ?? "Passive", resource: null, cost: null, cooldown: null, damageType: null, targeting: null, text: htmlText(str(passive["description"]) ?? "") }] : []),
+    ...(passive ? [{ slot: "P" as Slot, name: str(passive["name"]) ?? "Passive", resource: null, cost: null, cooldown: null, damageType: null, targeting: null, text: htmlText(str(passive["description"]) ?? ""), scalings: [], values: [] }] : []),
     ...spells.slice(0, 4).map((s, i): AbilityFacts => ({
       slot: SLOTS[i + 1]!, name: str(s["name"]) ?? SLOTS[i + 1]!,
       resource: costs(s) ? resource : null, cost: costs(s), cooldown: nums(s["cooldown"]),
-      damageType: null, targeting: null, text: htmlText(str(s["description"]) ?? ""),
+      damageType: null, targeting: null, text: htmlText(str(s["description"]) ?? ""), scalings: [], values: [],
     })),
   ];
 }

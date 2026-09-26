@@ -26,6 +26,9 @@ importers:
       '@coach/analysis':
         specifier: workspace:*
         version: link:../../packages/analysis
+      '@coach/build':
+        specifier: workspace:*
+        version: link:../../packages/build
       '@coach/coach':
         specifier: workspace:*
         version: link:../../packages/coach
@@ -174,6 +177,12 @@ importers:
       '@coach/synthetic':
         specifier: workspace:*
         version: link:../synthetic
+
+  packages/build:
+    dependencies:
+      '@coach/knowledge':
+        specifier: workspace:*
+        version: link:../knowledge
 
   packages/coach:
     dependencies:

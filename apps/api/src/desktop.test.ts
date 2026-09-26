@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { syntheticSource as syntheticKnowledge } from "@coach/knowledge";
+import { parseChampionKits, parseItems, syntheticSource as syntheticKnowledge } from "@coach/knowledge";
+import { gameData } from "@coach/knowledge/test-data";
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { openDatabase, schema, type Database } from "./db/index.js";
@@ -12,7 +13,11 @@ let ctx: ReturnType<typeof createApp>;
 beforeAll(async () => {
   database = await openDatabase(undefined, undefined);
   const knowledge = await bootKnowledge(database.db, syntheticKnowledge());
-  ctx = createApp({ cfg: loadConfig({ NODE_ENV: "test" }), db: database.db, source: syntheticSource(() => Date.UTC(2026, 5, 1)), knowledge, aiProviders: [] });
+  // The build engine's facts: the real game data snapshot (the synthetic catalog has fictional champions).
+  const d = gameData();
+  const facts = { version: d.meta.ddragonVersion, items: parseItems(d.ddragonItems, d.merakiItems), kits: parseChampionKits(d.ddragonChampions, d.merakiChampions) };
+  const gameFacts = { get: async () => facts };
+  ctx = createApp({ cfg: loadConfig({ NODE_ENV: "test" }), db: database.db, source: syntheticSource(() => Date.UTC(2026, 5, 1)), knowledge, aiProviders: [], gameFacts });
 }, 30_000);
 afterAll(() => database.close());
 
@@ -129,6 +134,20 @@ describe("desktop pairing", () => {
     expect((await call("/desktop/plan?me=../x", { headers: auth })).res.status).toBe(400);
     expect((await call(`/desktop/plan?me=${main}&enemies=a,b,c,d,e,f`, { headers: auth })).res.status).toBe(400);
     expect((await call(`/desktop/plan?me=${main}`)).res.status).toBe(401);
+    // Champions the build data doesn't know (the synthetic ones) get no build rather than a guess.
+    expect(plan.body.build).toBeNull();
+
+    // The pre-game build for real champions: starting items, first item with its reasons, rule-outs.
+    const tank = await call("/desktop/plan?me=Malphite&enemies=Syndra,Brand,Lux,Veigar,Annie&opponent=Syndra&position=top", { headers: auth });
+    expect(tank.res.status).toBe(200);
+    expect(tank.body.build.champion).toBe("Malphite");
+    expect(tank.body.build.enemiesKnown).toBe(5);
+    expect(tank.body.build.starter.items.length).toBeGreaterThan(0);
+    expect(tank.body.build.first.why.length).toBeGreaterThan(0);
+    expect(tank.body.build.enemyDamage.magic).toBeGreaterThan(0.8);
+    expect(tank.body.build.attribution.license).toContain("creativecommons");
+    expect(JSON.stringify([tank.body.build.first, ...tank.body.build.next, ...tank.body.build.situational])).not.toContain("Randuin");
+    expect((await call("/desktop/plan?me=Malphite&position=mid", { headers: auth })).res.status).toBe(400);
 
     // Home between games: the same profile as the website, only with the device token.
     const home = await call("/desktop/home", { headers: auth });

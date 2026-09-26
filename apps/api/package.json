@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@coach/ai": "workspace:*",
+    "@coach/build": "workspace:*",
     "@coach/analysis": "workspace:*",
     "@coach/coach": "workspace:*",
     "@coach/domain": "workspace:*",
