@@ -2,8 +2,8 @@ import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { DEFAULT_CONTROLS, laneOpponent, LiveEngine, modeInfo, type Delivery, type EngineTick, type Intensity, type LiveControls } from "@coach/live";
 import { CoachAvatar } from "@coach/ui";
-import { checkUpdate, fetchBuild, fetchPlan, inTauri, installUpdate, minimizeWindow, readLoad, readSnapshot, setOverlay, type UpdateInfo } from "./bridge";
-import { Board, useArt, useCatalog, type PersonalBuild, type PlanResponse } from "./board";
+import { checkUpdate, fetchBuild, fetchPlan, inTauri, installUpdate, minimizeWindow, readChampSelect, readLoad, readSnapshot, setOverlay, type ChampSelect, type UpdateInfo } from "./bridge";
+import { Board, ChampArt, PlanTab, useArt, useCatalog, type PersonalBuild, type PlanResponse } from "./board";
 import { ConnectForm, RivalsPanel, useRivals } from "./rivals";
 import "./live.css";
 
@@ -136,6 +136,40 @@ function LiveWindow() {
     return () => { stopped = true; };
   }, [rivals.link, planKey]);
 
+  // Champion select (D-13): read-only polling of the League Client while no game is running.
+  const [champSelect, setChampSelect] = useState<ChampSelect | null>(null);
+  const [csPlan, setCsPlan] = useState<PlanResponse | null>(null);
+  useEffect(() => {
+    if (!inTauri || mode !== "waiting") { setChampSelect(null); return; }
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const loop = async () => {
+      const r = await readChampSelect();
+      if (stopped) return;
+      setChampSelect(r.ok ? r.data : null);
+      // Faster inside champion select, slow when the client is closed.
+      timer = setTimeout(loop, !r.ok ? 10_000 : r.data.phase === "ChampSelect" ? 2000 : 4000);
+    };
+    void loop();
+    return () => { stopped = true; clearTimeout(timer); };
+  }, [mode]);
+
+  const inSelect = champSelect?.phase === "ChampSelect";
+  const csMe = inSelect ? champSelect.me?.championId ?? 0 : 0;
+  const csKey = csMe ? [csMe, "|", ...(champSelect?.allies ?? []), "|", ...(champSelect?.enemies ?? [])].join(",") : null;
+  useEffect(() => {
+    const link = rivals.link;
+    if (!link || !csKey || !champSelect) { if (!csKey) setCsPlan(null); return; }
+    let stopped = false;
+    // Hovers change quickly: wait a moment before asking for a plan.
+    const t = setTimeout(() => {
+      void fetchPlan<PlanResponse>(link.origin, link.token, {
+        me: String(csMe), allies: (champSelect.allies ?? []).map(String), enemies: (champSelect.enemies ?? []).map(String), opponent: null,
+      }).then((r) => { if (!stopped) setCsPlan(r.ok ? r.data : null); });
+    }, 700);
+    return () => { stopped = true; clearTimeout(t); };
+  }, [rivals.link, csKey]);
+
   // Updates are checked at start-up and offered only outside a game (the game always comes first).
   useEffect(() => { void checkUpdate().then(setUpdate); }, []);
 
@@ -176,6 +210,27 @@ function LiveWindow() {
             </div>
           )}
         </div>
+      )}
+
+      {inSelect && mode === "waiting" && (
+        <section className="connect-card" aria-labelledby="cs-h">
+          <h2 id="cs-h">Champion select</h2>
+          {csMe === 0 ? (
+            <p className="quiet">Pick or hover a champion to see your game plan.</p>
+          ) : (
+            <>
+              {csPlan?.champion && (
+                <div className="bar">
+                  <ChampArt id={csPlan.champion} name={csPlan.champion} size={32} art={art} />
+                  <strong>{csPlan.champion}</strong>
+                  <span className="quiet small">{champSelect?.me?.locked ? "locked in" : "hovering"}{champSelect?.me?.position ? ` · ${champSelect.me.position}` : ""}</span>
+                </div>
+              )}
+              <PlanTab plan={csPlan} connected={Boolean(rivals.link)} />
+            </>
+          )}
+          <p className="quiet small">Read from your League client, read-only: nothing is changed there, and only champions are used, never other players' names.</p>
+        </section>
       )}
 
       <RivalsPanel scout={rivals.scout} collapsed={mode === "live"} />

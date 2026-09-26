@@ -149,7 +149,11 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
     return c.json(personalBuild(analyses, q.data.champion, q.data.mode, deps.knowledge.active()));
   });
 
-  /** The Coach's game plan for the champions of the game that is starting (champions only, D-03). */
+  /**
+   * The Coach's game plan for the champions of the game that is starting (champions only, D-03).
+   * Champions come as Data Dragon ids ("MonkeyKing", from the game) or numeric keys ("62", from
+   * champion select); numeric keys are mapped with the active catalog.
+   */
   r.get("/desktop/plan", async (c) => {
     const device = await deviceFor(c);
     if (!device) return disconnected(c);
@@ -159,24 +163,16 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
       me: c.req.query("me"), allies: c.req.query("allies"), enemies: c.req.query("enemies"), opponent: c.req.query("opponent") || undefined,
     });
     if (!q.success) return c.json({ error: "invalid_query" }, 400);
+    const bundle = deps.knowledge.active();
+    const byKey = new Map((bundle?.champions ?? []).map((ch) => [String(ch.key), ch.id]));
+    const resolve = (x: string) => (/^\d+$/.test(x) ? byKey.get(x) ?? null : x);
+    const me = resolve(q.data.me);
+    if (!me) return c.json({ error: "unknown_champion" }, 400);
+    const known = (xs: string[]) => xs.map(resolve).filter((x): x is string => x !== null);
+    const opponent = q.data.opponent ? resolve(q.data.opponent) ?? undefined : undefined;
     const { analyses } = await deps.services.profileAnalyses(device.userId);
-    const { draft, plan } = prepareGame({ myChampion: q.data.me, allies: q.data.allies, enemies: q.data.enemies, laneOpponent: q.data.opponent }, analyses, deps.knowledge.active());
-    return c.json({ plan, keyPoints: draft.keyPoints, limits: draft.limits });
-  });
-
-  /** The Coach's game plan for the champions of the game that is starting (champions only, D-03). */
-  r.get("/desktop/plan", async (c) => {
-    const device = await deviceFor(c);
-    if (!device) return disconnected(c);
-    const id = z.string().regex(/^[A-Za-z0-9]{1,40}$/);
-    const list = z.string().max(250).optional().transform((v) => (v ? v.split(",").filter(Boolean) : [])).pipe(z.array(id).max(5));
-    const q = z.object({ me: id, allies: list, enemies: list, opponent: id.optional() }).safeParse({
-      me: c.req.query("me"), allies: c.req.query("allies"), enemies: c.req.query("enemies"), opponent: c.req.query("opponent") || undefined,
-    });
-    if (!q.success) return c.json({ error: "invalid_query" }, 400);
-    const { analyses } = await deps.services.profileAnalyses(device.userId);
-    const { draft, plan } = prepareGame({ myChampion: q.data.me, allies: q.data.allies, enemies: q.data.enemies, laneOpponent: q.data.opponent }, analyses, deps.knowledge.active());
-    return c.json({ plan, keyPoints: draft.keyPoints, limits: draft.limits });
+    const { draft, plan } = prepareGame({ myChampion: me, allies: known(q.data.allies), enemies: known(q.data.enemies), laneOpponent: opponent }, analyses, bundle);
+    return c.json({ champion: me, plan, keyPoints: draft.keyPoints, limits: draft.limits });
   });
 
   return r;

@@ -121,6 +121,11 @@ describe("desktop pairing", () => {
     expect(plan.body.plan.enemyPowerSpike.text).toBe("Korvane: level 6 and their first completed item");
     expect(plan.body.plan.loadout.games).toBe(played);
     expect(plan.body.keyPoints.length).toBeGreaterThan(0);
+    // Champion select sends numeric keys: they map to the same champions (Aurelith = 9001, Korvane = 9002, Brannoc = 9003).
+    const byKey = await call(`/desktop/plan?me=9001&allies=9003&enemies=9002`, { headers: auth });
+    expect(byKey.res.status).toBe(200);
+    expect(byKey.body.champion).toBe("Aurelith");
+    expect((await call(`/desktop/plan?me=424242`, { headers: auth })).res.status).toBe(400);
     expect((await call("/desktop/plan?me=../x", { headers: auth })).res.status).toBe(400);
     expect((await call(`/desktop/plan?me=${main}&enemies=a,b,c,d,e,f`, { headers: auth })).res.status).toBe(400);
     expect((await call(`/desktop/plan?me=${main}`)).res.status).toBe(401);
