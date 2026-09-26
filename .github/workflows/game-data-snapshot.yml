@@ -1,0 +1,42 @@
+name: Game data snapshot
+
+# Downloads the current game data (Data Dragon, Meraki / League of Legends Wiki, CommunityDragon)
+# with scripts/snapshot-game-data.mjs and pushes it to the "game-data-snapshot" branch, from where it
+# is copied into packages/knowledge/fixtures/game-data/ for the recommendation engine's tests.
+# The app itself fetches the same sources live; this copy only makes tests use real, current data.
+# Run it from Actions → "Game data snapshot" → "Run workflow" after a patch.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "scripts/snapshot-game-data.mjs"
+      - ".github/workflows/game-data-snapshot.yml"
+
+concurrency:
+  group: game-data-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    name: Download and publish game data
+    # Same-repo only: forks never get a token that can push.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/snapshot-game-data.mjs
+      - name: Push to the game-data-snapshot branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan game-data-snapshot
+          git rm -rq --cached .
+          git add packages/knowledge/fixtures/game-data
+          git commit -qm "Game data snapshot $(jq -r .ddragonVersion packages/knowledge/fixtures/game-data/meta.json)"
+          git push -f origin game-data-snapshot
