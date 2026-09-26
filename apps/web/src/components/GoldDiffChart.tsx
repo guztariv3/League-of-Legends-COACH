@@ -15,7 +15,7 @@ export function GoldDiffChart({ curve, events }: { curve: NonNullable<MatchDetai
   const titleId = useId();
 
   if (points.length < 2) {
-    return <p className="page-sub">No hay rival de línea identificable en esta partida, así que no mostramos la diferencia de oro.</p>;
+    return <p className="page-sub">There is no identifiable lane opponent in this game, so the gold difference is not shown.</p>;
   }
 
   const W = 640, H = 220, L = 52, R = 12, T = 12, B = 28;
@@ -29,7 +29,7 @@ export function GoldDiffChart({ curve, events }: { curve: NonNullable<MatchDetai
   const ticks = [-top, -top / 2, 0, top / 2, top];
   const deaths = new Set((events ?? []).filter((e) => e.type === "death").map((e) => e.minute + 1));
   const a = active !== null ? points[active] : undefined;
-  const fmt = (v: number) => `${v > 0 ? "+" : ""}${Math.round(v).toLocaleString("es-ES")}`;
+  const fmt = (v: number) => `${v > 0 ? "+" : ""}${Math.round(v).toLocaleString("en-US")}`;
 
   const onMove = (e: React.PointerEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -48,7 +48,7 @@ export function GoldDiffChart({ curve, events }: { curve: NonNullable<MatchDetai
   return (
     <figure style={{ margin: 0 }}>
       <figcaption id={titleId} className="tile-label" style={{ marginBottom: 8 }}>
-        Diferencia de oro frente a tu rival de línea (por minuto)
+        Gold difference vs your lane opponent (per minute)
       </figcaption>
       <div className="chart-wrap">
         <svg
@@ -74,7 +74,7 @@ export function GoldDiffChart({ curve, events }: { curve: NonNullable<MatchDetai
           <path d={path} fill="none" stroke="var(--series-1)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
           {points.filter((p) => deaths.has(p.minute)).map((p) => (
             <circle key={p.minute} cx={x(p.minute)} cy={y(p.diff)} r={4.5} fill="var(--surface-1)" stroke="var(--text-secondary)" strokeWidth={2}>
-              <title>Moriste en el minuto {p.minute - 1}</title>
+              <title>You died at minute {p.minute - 1}</title>
             </circle>
           ))}
           {a && (
@@ -86,16 +86,16 @@ export function GoldDiffChart({ curve, events }: { curve: NonNullable<MatchDetai
         </svg>
         {a && (
           <div className="chart-tooltip" role="status" style={{ left: `${Math.min(80, (x(a.minute) / W) * 100)}%`, top: 4 }}>
-            <strong>{fmt(a.diff)} oro</strong>
-            <span style={{ color: "var(--text-muted)" }}> · minuto {a.minute}{deaths.has(a.minute) ? " · moriste" : ""}</span>
+            <strong>{fmt(a.diff)} gold</strong>
+            <span style={{ color: "var(--text-muted)" }}> · minute {a.minute}{deaths.has(a.minute) ? " · you died" : ""}</span>
           </div>
         )}
       </div>
       <details className="layer">
-        <summary>Ver como tabla</summary>
+        <summary>View as table</summary>
         <div className="table-scroll">
           <table>
-            <thead><tr><th>Minuto</th><th>Diferencia de oro</th></tr></thead>
+            <thead><tr><th>Minute</th><th>Gold difference</th></tr></thead>
             <tbody>{points.map((p) => <tr key={p.minute}><td>{p.minute}</td><td>{fmt(p.diff)}</td></tr>)}</tbody>
           </table>
         </div>

@@ -127,7 +127,7 @@ export function syntheticSource(now: () => number = Date.now): MatchSource {
         const other = `synthetic-scout-${hash(`${puuid}:${i}`).toString(16)}`;
         const champ = pick();
         if (!isMe) history(platform, other, `Rival ${i}`, "SYN");
-        participants.push({ puuid: isMe ? puuid : other, teamId, championId: champ.key, riotId: isMe ? null : `${teamId === 100 ? "Aliado" : "Rival"} ${i}#SYN` });
+        participants.push({ puuid: isMe ? puuid : other, teamId, championId: champ.key, riotId: isMe ? null : `${teamId === 100 ? "Ally" : "Enemy"} ${i}#SYN` });
       }
       return { gameMode: "CLASSIC", mapId: 11, queueId: 420, simulated: true, participants };
     },

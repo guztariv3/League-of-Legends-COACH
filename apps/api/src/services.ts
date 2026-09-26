@@ -13,7 +13,7 @@ export const MemoryCategories = z.object({
 
 export const Preferences = z.object({
   level: z.enum(["beginner", "intermediate", "advanced", "expert"]).default("intermediate"),
-  language: z.enum(["es", "en"]).default("es"),
+  language: z.enum(["es", "en"]).default("en"),
   /** Which Coach memory categories are used and recorded (brief §48). */
   memory: MemoryCategories.default({ focus: true, correction: true, note: true }),
 });

@@ -359,7 +359,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (init.body) headers.set("Content-Type", "application/json");
   const res = await fetch(`/api${path}`, { ...init, headers, credentials: "same-origin" });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, body.error ?? "error", body.message ?? "No se pudo completar la acción.");
+  if (!res.ok) throw new ApiError(res.status, body.error ?? "error", body.message ?? "Could not complete the action.");
   return body as T;
 }
 

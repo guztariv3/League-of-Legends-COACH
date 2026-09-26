@@ -182,9 +182,9 @@ describe("game modes", () => {
 
   it("labels the mode the game reports, and unknown modes by their own code", () => {
     const e = new LiveEngine(cfg);
-    expect(modeInfo(e.tick(snap(60, []), DEFAULT_CONTROLS, null).state)).toEqual({ label: "ARAM · Abismo de los Lamentos", lanes: false });
+    expect(modeInfo(e.tick(snap(60, []), DEFAULT_CONTROLS, null).state)).toEqual({ label: "ARAM · Howling Abyss", lanes: false });
     const sr = new LiveEngine(cfg).tick(snap(60, [], { mode: "CLASSIC", map: 11, position: "MIDDLE" }), DEFAULT_CONTROLS, null).state;
-    expect(modeInfo(sr)).toEqual({ label: "Grieta del Invocador", lanes: true });
+    expect(modeInfo(sr)).toEqual({ label: "Summoner's Rift", lanes: true });
     const other = new LiveEngine(cfg).tick(snap(60, [], { mode: "NEWMODE", map: 99 }), DEFAULT_CONTROLS, null).state;
     expect(modeInfo(other)!.label).toBe("NEWMODE");
   });

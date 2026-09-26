@@ -36,5 +36,5 @@ it("tells the player when Riot rejects the API key instead of a generic server e
   expect(res.status).toBe(503);
   const body = (await res.json()) as { error: string; message: string };
   expect(body.error).toBe("riot_unavailable");
-  expect(body.message).toContain("clave");
+  expect(body.message).toContain("API key");
 });

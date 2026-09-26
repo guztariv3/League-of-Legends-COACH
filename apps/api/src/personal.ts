@@ -69,14 +69,14 @@ export function personalRoutes({ db, knowledge, services }: { db: Db; source: Ma
     if (!parsed.success) return c.json({ error: "invalid_body" }, 400);
     const userId = c.get("userId");
     if ((await services.activeGoals(userId)).length >= MAX_ACTIVE_GOALS) {
-      return c.json({ error: "too_many_goals", message: `Puedes tener como mucho ${MAX_ACTIVE_GOALS} objetivos activos a la vez.` }, 409);
+      return c.json({ error: "too_many_goals", message: `You can have at most ${MAX_ACTIVE_GOALS} active goals at a time.` }, 409);
     }
     const { analyses } = await services.profileAnalyses(userId);
     let target = parsed.data.target;
     let baselineRate: number;
     if (target === undefined) {
       const proposal = proposeTarget(parsed.data.metric, analyses);
-      if (!proposal) return c.json({ error: "insufficient_data", message: "Todavía no tengo suficientes partidas para proponer un objetivo medible en esta métrica." }, 422);
+      if (!proposal) return c.json({ error: "insufficient_data", message: "There are not enough games yet to propose a measurable goal for this metric." }, 422);
       target = proposal.spec.target;
       baselineRate = proposal.baselineRate;
     } else {
@@ -100,7 +100,7 @@ export function personalRoutes({ db, knowledge, services }: { db: Db; source: Ma
     await db.insert(schema.goals).values({ userId: c.get("userId"), metric: parsed.data.metric, target: 0, baselineRate: 0, status: "rejected", source: "coach" });
     await services.logDecision({
       userId: c.get("userId"), kind: "goal_suggestion", ref: parsed.data.metric,
-      title: `Objetivo sugerido: ${GOAL_METRICS[parsed.data.metric].label}`, context: { metric: parsed.data.metric }, decision: "rejected",
+      title: `Suggested goal: ${GOAL_METRICS[parsed.data.metric].label}`, context: { metric: parsed.data.metric }, decision: "rejected",
     });
     return c.json({ ok: true });
   });
@@ -144,13 +144,13 @@ export function personalRoutes({ db, knowledge, services }: { db: Db; source: Ma
     const userId = c.get("userId");
     const prefs = await services.prefsFor(userId);
     if (!prefs.memory[parsed.data.category]) {
-      return c.json({ error: "category_disabled", message: "Has desactivado esta categoría de memoria." }, 409);
+      return c.json({ error: "category_disabled", message: "You have turned off this memory category." }, 409);
     }
     if (parsed.data.category === "focus") {
       // One focus at a time: the new one replaces the old one.
       await db.delete(schema.coachMemory).where(and(eq(schema.coachMemory.userId, userId), eq(schema.coachMemory.category, "focus")));
       const [m] = await db.insert(schema.coachMemory).values({
-        userId, category: "focus", ref: parsed.data.metric, content: `Quiero centrarme en: ${GOAL_METRICS[parsed.data.metric].label}`,
+        userId, category: "focus", ref: parsed.data.metric, content: `I want to focus on: ${GOAL_METRICS[parsed.data.metric].label}`,
       }).returning();
       return c.json({ item: m }, 201);
     }
@@ -188,7 +188,7 @@ export function personalRoutes({ db, knowledge, services }: { db: Db; source: Ma
     if (!prefs.memory.correction) return c.json({ ok: true, stored: false });
     await db.insert(schema.coachMemory).values({
       userId, category: "correction", ref: parsed.data.insightId,
-      content: `No me resulta útil: ${parsed.data.title ?? parsed.data.insightId}`,
+      content: `Not useful to me: ${parsed.data.title ?? parsed.data.insightId}`,
     });
     await services.logDecision({ userId, kind: "insight", ref: parsed.data.insightId, title: parsed.data.title ?? parsed.data.insightId, decision: "dismissed" });
     return c.json({ ok: true, stored: true });
@@ -265,10 +265,10 @@ export function personalRoutes({ db, knowledge, services }: { db: Db; source: Ma
         wins,
         interval: wilson(wins, games.length),
         comparisons: [
-          compare("CS por minuto", (a) => a.csPerMin, true),
-          compare("Muertes por minuto", (a) => a.deathsPerMin, false, 2),
-          compare("Oro vs rival al 10", (a) => a.goldDiff10, true, 0),
-          compare("Participación en kills", (a) => a.killParticipation, true, 2),
+          compare("CS per minute", (a) => a.csPerMin, true),
+          compare("Deaths per minute", (a) => a.deathsPerMin, false, 2),
+          compare("Gold vs opponent at 10:00", (a) => a.goldDiff10, true, 0),
+          compare("Kill participation", (a) => a.killParticipation, true, 2),
         ].filter((x) => x !== null),
         opponents: [...byOpponent.entries()]
           .map(([opponent, m]) => ({ opponent, ...m }))

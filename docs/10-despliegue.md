@@ -110,5 +110,5 @@ Esta build no incluye el updater: no busca actualizaciones ni necesita claves.
   - un servicio de firma en la nube como **Azure Trusted Signing**, que Tauri admite con `bundle.windows.signCommand`.
   
   Cualquiera de ellas se configura en `tauri.conf.json` y en los *secrets* de GitHub, sin cambiar la app.
-- El instalador NSIS está en español (en inglés si Windows está en inglés) y se instala solo para el usuario actual, sin pedir permisos de administrador.
+- El instalador NSIS está en inglés (D-09) y se instala solo para el usuario actual, sin pedir permisos de administrador.
 - Los minutos de GitHub Actions en macOS cuentan 10× en repositorios privados.

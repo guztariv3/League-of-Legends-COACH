@@ -53,11 +53,11 @@ describe("decision history", () => {
     await call("/draft", { method: "POST", cookie, body: JSON.stringify({ myChampion: "Aurelith", enemies: ["Korvane"] }) });
 
     const { body } = await call("/history", { cookie });
-    expect(body.note).toMatch(/no demuestra/);
+    expect(body.note).toMatch(/does not prove/);
     const decisions = body.items.map((i: any) => i.decision).sort();
     expect(decisions).toEqual(["accepted", "dismissed", "none", "rejected"]);
     const accepted = body.items.find((i: any) => i.decision === "accepted");
-    expect(accepted.outcome).toMatch(/partidas/);
+    expect(accepted.outcome).toMatch(/games/);
 
     const other = await player("OtherHistorian");
     expect((await call("/history", { cookie: other })).body.items).toHaveLength(0);

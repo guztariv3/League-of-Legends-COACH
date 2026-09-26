@@ -19,7 +19,7 @@ describe("goals", () => {
     expect(p.spec.target).toBeGreaterThanOrEqual(0);
     expect(p.baselineRate).toBeGreaterThan(0);
     expect(p.baselineRate).toBeLessThan(1);
-    expect(describeTarget(p.spec)).toMatch(/como mucho/);
+    expect(describeTarget(p.spec)).toMatch(/at most/);
     expect(proposeTarget("earlyDeaths", all.slice(0, 3))).toBeNull();
   });
 

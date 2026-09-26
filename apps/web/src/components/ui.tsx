@@ -7,16 +7,16 @@ export const num = (x: number | null | undefined, d = 1) => (x === null || x ===
 export const duration = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
 export const ago = (ts: number) => {
   const h = Math.round((Date.now() - ts) / 3_600_000);
-  if (h < 1) return "hace un momento";
-  if (h < 24) return `hace ${h} h`;
+  if (h < 1) return "just now";
+  if (h < 24) return `${h} h ago`;
   const d = Math.round(h / 24);
-  return d === 1 ? "ayer" : `hace ${d} días`;
+  return d === 1 ? "yesterday" : `${d} days ago`;
 };
 export const roleLabel: Record<string, string> = {
-  TOP: "Top", JUNGLE: "Jungla", MIDDLE: "Mid", BOTTOM: "ADC", UTILITY: "Support", NONE: "—",
+  TOP: "Top", JUNGLE: "Jungle", MIDDLE: "Mid", BOTTOM: "ADC", UTILITY: "Support", NONE: "—",
 };
-export const modeLabel: Record<string, string> = { summoners_rift: "Grieta", aram: "ARAM", unsupported: "Otro modo" };
-const kindLabel: Record<Insight["kind"], string> = { fact: "Hecho", observation: "Observación", hypothesis: "Hipótesis" };
+export const modeLabel: Record<string, string> = { summoners_rift: "Rift", aram: "ARAM", unsupported: "Other mode" };
+const kindLabel: Record<Insight["kind"], string> = { fact: "Fact", observation: "Observation", hypothesis: "Hypothesis" };
 
 export function StatTile({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
@@ -30,15 +30,15 @@ export function StatTile({ label, value, note }: { label: string; value: string;
 
 export function SyntheticBadge() {
   return (
-    <span className="badge badge-synthetic" title="Datos generados para desarrollo; no son partidas reales">
-      ◆ Datos sintéticos
+    <span className="badge badge-synthetic" title="Data generated for development; these are not real games">
+      ◆ Synthetic data
     </span>
   );
 }
 
 export function ResultBadge({ win, analyzable }: { win: boolean; analyzable: boolean }) {
-  if (!analyzable) return <span className="badge">Sin análisis</span>;
-  return win ? <span className="badge badge-win">▲ Victoria</span> : <span className="badge badge-loss">▼ Derrota</span>;
+  if (!analyzable) return <span className="badge">Not analyzed</span>;
+  return win ? <span className="badge badge-win">▲ Victory</span> : <span className="badge badge-loss">▼ Defeat</span>;
 }
 
 /** Progressive disclosure: conclusion → context → evidence (brief §17). */
@@ -51,7 +51,7 @@ export function InsightView({ insight, children }: { insight: Insight; children?
       <p className="insight-title">{insight.title}</p>
       <p className="insight-detail">{insight.detail}</p>
       <details className="layer">
-        <summary>Ver evidencia</summary>
+        <summary>See evidence</summary>
         <dl>
           {insight.evidence.map((e) => (
             <div key={e.label} style={{ display: "contents" }}>
@@ -59,26 +59,26 @@ export function InsightView({ insight, children }: { insight: Insight; children?
               <dd>{e.value}</dd>
             </div>
           ))}
-          <dt>Muestra</dt>
-          <dd>{insight.sampleSize} partidas</dd>
-          <dt>Confianza</dt>
+          <dt>Sample</dt>
+          <dd>{insight.sampleSize} games</dd>
+          <dt>Confidence</dt>
           <dd>{pct(insight.confidence)}</dd>
         </dl>
       </details>
-      {insight.review && <p className="tile-note" style={{ margin: "6px 0 0" }}>Para revisar: {insight.review}</p>}
+      {insight.review && <p className="tile-note" style={{ margin: "6px 0 0" }}>To review: {insight.review}</p>}
       {children}
     </article>
   );
 }
 
-const mapLabel: Record<string, string> = { summoners_rift: "Grieta del Invocador", aram: "Abismo de los Lamentos" };
-const shortDate = (ts: number) => new Date(ts).toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" });
+const mapLabel: Record<string, string> = { summoners_rift: "Summoner's Rift", aram: "Howling Abyss" };
+const shortDate = (ts: number) => new Date(ts).toLocaleDateString("en-US", { day: "2-digit", month: "2-digit", year: "numeric" });
 
 /** Seven item slots like the client scoreboard: filled first, empty frames after. */
 export function ItemRow({ items, size = 30 }: { items: number[]; size?: number }) {
   const slots = [...items.slice(0, 7), ...Array(Math.max(0, 7 - items.length)).fill(null)] as (number | null)[];
   return (
-    <span className="item-row" aria-label="Objetos">
+    <span className="item-row" aria-label="Items">
       {slots.map((id, i) => (id ? <ItemIcon key={`${id}-${i}`} id={id} size={size} /> : <span key={`e${i}`} className="item-slot" style={{ width: size, height: size }} aria-hidden="true" />))}
     </span>
   );
@@ -97,7 +97,7 @@ export function Loadout({ spells, runes, size = 20 }: { spells: number[]; runes:
 
 /** One game as in the client's match history: portrait, result, loadout, build, score and when. */
 export function MatchItem({ m, compact = false }: { m: MatchRow; compact?: boolean }) {
-  const result = !m.analyzable ? "Sin análisis" : m.win ? "Victoria" : "Derrota";
+  const result = !m.analyzable ? "Not analyzed" : m.win ? "Victory" : "Defeat";
   return (
     <li>
       <Link className={`match mh${compact ? " mh-compact" : ""}`} to={`/matches/${encodeURIComponent(m.matchId)}`}>
@@ -117,7 +117,7 @@ export function MatchItem({ m, compact = false }: { m: MatchRow; compact?: boole
             <ItemRow items={m.items} />
             <span className="mh-score">
               <span className="kda">{m.kills} / {m.deaths} / {m.assists}</span>
-              <span className="match-meta">{m.cs} CS · {m.gold.toLocaleString("es-ES")} oro</span>
+              <span className="match-meta">{m.cs} CS · {m.gold.toLocaleString("en-US")} gold</span>
             </span>
           </span>
         )}
@@ -133,11 +133,11 @@ export function MatchItem({ m, compact = false }: { m: MatchRow; compact?: boole
   );
 }
 
-export function Loading({ label = "Cargando…" }: { label?: string }) {
+export function Loading({ label = "Loading…" }: { label?: string }) {
   return <p className="page-sub" role="status">{label}</p>;
 }
 
 export function ErrorNotice({ error }: { error: unknown }) {
-  const msg = error instanceof Error ? error.message : "No se pudo cargar esta información.";
+  const msg = error instanceof Error ? error.message : "Could not load this information.";
   return <div className="notice" role="alert">{msg}</div>;
 }

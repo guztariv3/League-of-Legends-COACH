@@ -23,14 +23,14 @@ export function Champions() {
     <div className="stack" style={{ gap: 20 }}>
       <header className="row">
         <div>
-          <h1 className="page-title">Campeones</h1>
-          <p className="page-sub" style={{ margin: 0 }}>Datos de la versión {data.version ?? "—"} y tu historial con cada uno.</p>
+          <h1 className="page-title">Champions</h1>
+          <p className="page-sub" style={{ margin: 0 }}>Data from version {data.version ?? "—"} and your history with each one.</p>
         </div>
         <span className="spacer" />
         {data.source === "synthetic" && <SyntheticBadge />}
       </header>
       <div className="field" style={{ maxWidth: 320 }}>
-        <label htmlFor="champ-search">Buscar campeón</label>
+        <label htmlFor="champ-search">Search champion</label>
         <input id="champ-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       <ul className="grid grid-2" style={{ listStyle: "none", padding: 0, margin: 0 }}>
@@ -46,11 +46,11 @@ export function Champions() {
               <div style={{ textAlign: "right" }}>
                 {c.personal.games ? (
                   <>
-                    <div className="match-title">{c.personal.games} partidas</div>
-                    <div className="tile-note">{pct(c.personal.wins / c.personal.games)} victorias</div>
+                    <div className="match-title">{c.personal.games} games</div>
+                    <div className="tile-note">{pct(c.personal.wins / c.personal.games)} win rate</div>
                   </>
                 ) : (
-                  <div className="tile-note">Sin partidas</div>
+                  <div className="tile-note">No games</div>
                 )}
               </div>
             </Link>

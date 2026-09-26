@@ -69,9 +69,9 @@ export interface MatchReview {
 }
 
 export const REVIEW_LIMITS = [
-  "Las posiciones son una foto por minuto: entre minutos no sabemos por dónde se movió nadie.",
-  "Con estos datos no se puede distinguir una mala decisión de una mala ejecución.",
-  "No sabemos qué información tenía cada jugador en cada momento ni qué pretendía.",
+  "Positions are one snapshot per minute: we do not know where anyone moved in between.",
+  "With this data a bad decision cannot be told apart from bad execution.",
+  "We do not know what information each player had at each moment, or what they intended.",
 ];
 
 const MAP_MAX = 15000;
@@ -96,10 +96,10 @@ function pos(e: Record<string, unknown>): { x: number; y: number } | null {
 }
 
 const MONSTER_LABEL: Record<string, string> = {
-  DRAGON: "Dragón",
-  BARON_NASHOR: "Barón Nashor",
-  RIFTHERALD: "Heraldo",
-  HORDE: "Larvas del Vacío",
+  DRAGON: "Dragon",
+  BARON_NASHOR: "Baron Nashor",
+  RIFTHERALD: "Rift Herald",
+  HORDE: "Voidgrubs",
   ATAKHAN: "Atakhan",
 };
 
@@ -156,7 +156,7 @@ export function buildReview(match: NormalizedMatch, timeline: RawTimeline, puuid
       events.push({
         t: e.timestamp,
         type: "kill",
-        label: killer && byId.get(killer) ? `${name(killer)} mata a ${name(victim)}` : `${name(victim)} muere`,
+        label: killer && byId.get(killer) ? `${name(killer)} kills ${name(victim)}` : `${name(victim)} dies`,
         position: pos(e),
         side: victimP.teamId === myTeam ? "enemy" : "ally",
         myInvolvement:
@@ -169,7 +169,7 @@ export function buildReview(match: NormalizedMatch, timeline: RawTimeline, puuid
       events.push({
         t: e.timestamp,
         type: "objective",
-        label: `${team === myTeam ? "Tu equipo" : "El enemigo"} consigue ${MONSTER_LABEL[monster] ?? "un objetivo"}`,
+        label: `${team === myTeam ? "Your team" : "The enemy"} takes ${MONSTER_LABEL[monster] ?? "an objective"}`,
         position: pos(e),
         side: team === myTeam ? "ally" : "enemy",
         myInvolvement: num(e, "killerId") === me.participantId ? "killer" : null,
@@ -182,7 +182,7 @@ export function buildReview(match: NormalizedMatch, timeline: RawTimeline, puuid
       events.push({
         t: e.timestamp,
         type: "structure",
-        label: ally ? "Tu equipo destruye una estructura" : "El enemigo destruye una estructura tuya",
+        label: ally ? "Your team destroys a structure" : "The enemy destroys one of your structures",
         position: pos(e),
         side: ally ? "ally" : "enemy",
         myInvolvement: num(e, "killerId") === me.participantId ? "killer" : null,
@@ -202,9 +202,9 @@ export function buildReview(match: NormalizedMatch, timeline: RawTimeline, puuid
     const lost = objectivesAfter(ev.t, "enemy");
     const isolated = nearest !== null && nearest > ISOLATION_DISTANCE;
     const evidence = [
-      { label: "Momento", value: fmtTime(ev.t) },
-      ...(nearest !== null ? [{ label: "Aliado más cercano (último minuto)", value: `${Math.round(nearest)} unidades` }] : []),
-      ...lost.map((o) => ({ label: "Después", value: `${o.label} (${fmtTime(o.t)})` })),
+      { label: "Time", value: fmtTime(ev.t) },
+      ...(nearest !== null ? [{ label: "Nearest ally (last snapshot)", value: `${Math.round(nearest)} units` }] : []),
+      ...lost.map((o) => ({ label: "After", value: `${o.label} (${fmtTime(o.t)})` })),
     ];
     const swing = swingAround(ev.t);
     if (isolated || lost.length) {
@@ -215,11 +215,11 @@ export function buildReview(match: NormalizedMatch, timeline: RawTimeline, puuid
         kind: "hypothesis",
         // Positions are up to a minute old, so isolation is only a hypothesis.
         confidence: isolated && lost.length ? 0.6 : 0.45,
-        title: isolated ? `Moriste lejos de tu equipo (${fmtTime(ev.t)})` : `Tras tu muerte, el enemigo consiguió un objetivo (${fmtTime(ev.t)})`,
+        title: isolated ? `You died far from your team (${fmtTime(ev.t)})` : `After your death, the enemy took an objective (${fmtTime(ev.t)})`,
         detail:
-          (isolated ? "En la última foto antes de morir, tu aliado más cercano estaba lejos. " : "") +
-          (lost.length ? `En los 90 s siguientes: ${lost.map((o) => o.label.toLowerCase()).join(", ")}. ` : "") +
-          "Es un momento para revisar, no una conclusión: no sabemos qué información tenías.",
+          (isolated ? "In the last snapshot before you died, your nearest ally was far away. " : "") +
+          (lost.length ? `In the next 90 s: ${lost.map((o) => o.label.toLowerCase()).join(", ")}. ` : "") +
+          "This is a moment to review, not a conclusion: we do not know what information you had.",
         evidence,
         goldSwing: swing,
         position: ev.position,
@@ -231,7 +231,7 @@ export function buildReview(match: NormalizedMatch, timeline: RawTimeline, puuid
         category: "event",
         kind: "fact",
         confidence: 1,
-        title: `Muerte (${fmtTime(ev.t)})`,
+        title: `Death (${fmtTime(ev.t)})`,
         detail: ev.label,
         evidence,
         goldSwing: swing,
@@ -250,9 +250,9 @@ export function buildReview(match: NormalizedMatch, timeline: RawTimeline, puuid
       category: "good",
       kind: "fact",
       confidence: 0.9,
-      title: `Participaste en una pelea que tu equipo convirtió en objetivo (${fmtTime(ev.t)})`,
-      detail: `${ev.label}; después: ${gained.map((g) => g.label.toLowerCase()).join(", ")}.`,
-      evidence: gained.map((g) => ({ label: "Después", value: `${g.label} (${fmtTime(g.t)})` })),
+      title: `You took part in a fight your team turned into an objective (${fmtTime(ev.t)})`,
+      detail: `${ev.label}; then: ${gained.map((g) => g.label.toLowerCase()).join(", ")}.`,
+      evidence: gained.map((g) => ({ label: "After", value: `${g.label} (${fmtTime(g.t)})` })),
       goldSwing: swingAround(ev.t),
       position: ev.position,
     });
@@ -276,11 +276,11 @@ export function buildReview(match: NormalizedMatch, timeline: RawTimeline, puuid
       category: "opportunity",
       kind: "hypothesis",
       confidence: 0.5,
-      title: `Pelea ganada sin objetivo después (${fmtTime(start.t)})`,
-      detail: `Tu equipo eliminó a ${fight.length} rivales (perdiendo ${lostInFight}) y no consiguió ningún objetivo en los 90 s siguientes. Puede que no hubiera ninguno disponible; revisa si lo había.`,
+      title: `Won fight with no objective after (${fmtTime(start.t)})`,
+      detail: `Your team killed ${fight.length} enemies (losing ${lostInFight}) and took no objective in the next 90 s. There may have been none available; check whether there was.`,
       evidence: [
-        { label: "Rivales eliminados", value: String(fight.length) },
-        { label: "Bajas propias", value: String(lostInFight) },
+        { label: "Enemies killed", value: String(fight.length) },
+        { label: "Own losses", value: String(lostInFight) },
       ],
       goldSwing: swingAround(start.t),
       position: start.position,

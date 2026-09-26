@@ -26,7 +26,7 @@ describe("draft analysis", () => {
     const d = analyzeDraft({ myChampion: "Aurelith", allies: ["Brannoc", "Oshra", "Sylvaine", "Harrow"], enemies: ["Veyl", "Myrr", "Aurelith", "Nimue", "Brannoc"] }, bundle.champions, history);
     const p = [...d.keyPoints, ...d.morePoints].find((x) => x.id === "enemy-damage")!;
     expect(p.kind).toBe("hypothesis");
-    expect(p.title).toMatch(/mágico/);
+    expect(p.title).toMatch(/magic/);
   });
 
   it("shows at most 3 key points and keeps the rest on demand", () => {

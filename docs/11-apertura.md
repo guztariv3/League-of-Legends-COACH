@@ -13,7 +13,7 @@ Objetivo: que cualquiera pueda usar la web y descargar la app de escritorio.
 
 ## Hecho (preparación)
 
-- **Páginas públicas sin contraseña:** `/info/` (qué es y descarga), `/info/privacidad` y `/info/terminos`. Son una entrada aparte de Vite (`apps/web/info`), sin sesión ni API. El gate solo deja pasar además `/assets/*` (los ficheros compilados, que no contienen datos) y `/favicon.svg`.
+- **Páginas públicas sin contraseña:** `/info/` (qué es y descarga), `/info/privacy` y `/info/terms` (en inglés, D-09). Son una entrada aparte de Vite (`apps/web/info`), sin sesión ni API. El gate solo deja pasar además `/assets/*` (los ficheros compilados, que no contienen datos) y `/favicon.svg`.
 - **Aviso legal de Riot** en todas las páginas (pie).
 - **Retención de datos** (`apps/api/src/retention.ts`), tal como la describe la política de privacidad:
   - Las partidas que no usa ninguna cuenta vinculada se borran a los 30 días.

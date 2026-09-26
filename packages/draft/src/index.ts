@@ -43,7 +43,7 @@ export interface DraftAnalysis {
   version: number;
   ally: Composition;
   enemy: Composition;
-  /** Up to 3 points, most important first ("esto es lo que más importa"). */
+  /** Up to 3 points, most important first ("this is what matters most"). */
   keyPoints: DraftPoint[];
   /** Everything else, on demand. */
   morePoints: DraftPoint[];
@@ -56,9 +56,9 @@ export interface DraftAnalysis {
 }
 
 export const DRAFT_LIMITS = [
-  "El perfil de daño es aproximado: se basa en las valoraciones generales de Data Dragon, no en builds ni habilidades concretas.",
-  "Las clases (Tank, Fighter…) son etiquetas oficiales generales; no describen engage, peel ni escalado.",
-  "En la selección de campeones no se consulta información de otros jugadores.",
+  "The damage profile is approximate: it is based on Data Dragon's general ratings, not on specific builds or abilities.",
+  "Classes (Tank, Fighter…) are general official tags; they do not describe engage, peel or scaling.",
+  "No information about other players is looked up during champion select.",
 ];
 
 export function composition(ids: string[], champions: Map<string, Champion>): Composition {
@@ -85,10 +85,10 @@ function personalWinCondition(games: MatchAnalysis[], name: string): DraftPoint 
   const losses = games.filter((g) => !g.win);
   if (wins.length < 5 || losses.length < 5) return null;
   const metrics: [string, (a: MatchAnalysis) => number | null, boolean, number][] = [
-    ["muertes antes del minuto 14", (a) => a.earlyDeaths, false, 1],
-    ["CS por minuto", (a) => a.csPerMin, true, 1],
-    ["participación en kills", (a) => a.killParticipation, true, 2],
-    ["oro frente a tu rival al 10", (a) => a.goldDiff10, true, 0],
+    ["deaths before minute 14", (a) => a.earlyDeaths, false, 1],
+    ["CS per minute", (a) => a.csPerMin, true, 1],
+    ["kill participation", (a) => a.killParticipation, true, 2],
+    ["gold vs your opponent at 10:00", (a) => a.goldDiff10, true, 0],
   ];
   let best: { label: string; w: number; l: number; t: number; digits: number } | null = null;
   for (const [label, pick, , digits] of metrics) {
@@ -98,12 +98,12 @@ function personalWinCondition(games: MatchAnalysis[], name: string): DraftPoint 
     if (cmp.consolidated && (!best || Math.abs(cmp.t) > Math.abs(best.t))) best = { label, w: cmp.a, l: cmp.b, t: cmp.t, digits };
   }
   if (!best) return null;
-  const fmt = (x: number) => (best!.label.startsWith("participación") ? pct(x) : x.toFixed(best!.digits));
+  const fmt = (x: number) => (best!.label.startsWith("kill participation") ? pct(x) : x.toFixed(best!.digits));
   return {
     id: "personal-wincon",
     kind: "observation",
-    title: `Con ${name}, lo que más separa tus victorias de tus derrotas es tu ${best.label}`,
-    detail: `${fmt(best.w)} en victorias frente a ${fmt(best.l)} en derrotas (${wins.length} victorias, ${losses.length} derrotas). Es una diferencia observada en tus partidas, no una causa demostrada.`,
+    title: `On ${name}, what separates your wins from your losses most is your ${best.label}`,
+    detail: `${fmt(best.w)} in wins versus ${fmt(best.l)} in losses (${wins.length} wins, ${losses.length} losses). It is a difference observed in your games, not a proven cause.`,
     weight: 0.9,
   };
 }
@@ -125,8 +125,8 @@ export function analyzeDraft(input: DraftInput, knowledge: Champion[], history: 
       points.push({
         id: "enemy-damage",
         kind: "hypothesis",
-        title: `El daño rival parece sobre todo ${magic ? "mágico" : "físico"}`,
-        detail: `Según las valoraciones de Data Dragon, alrededor del ${pct(magic ? enemy.magicShare : 1 - enemy.magicShare)} de su perfil de daño es ${magic ? "mágico" : "físico"}. Si compras defensas, la ${magic ? "resistencia mágica" : "armadura"} probablemente rinda más. Confírmalo con sus builds en la partida.`,
+        title: `The enemy damage looks mostly ${magic ? "magic" : "physical"}`,
+        detail: `Based on Data Dragon's ratings, around ${pct(magic ? enemy.magicShare : 1 - enemy.magicShare)} of their damage profile is ${magic ? "magic" : "physical"}. If you buy defense, ${magic ? "magic resist" : "armor"} will likely pay off more. Check it against their builds in game.`,
         weight: 0.8,
       });
     }
@@ -136,8 +136,8 @@ export function analyzeDraft(input: DraftInput, knowledge: Champion[], history: 
     points.push({
       id: "ally-damage",
       kind: "hypothesis",
-      title: `Tu equipo depende mucho del daño ${magic ? "mágico" : "físico"}`,
-      detail: `Si el rival acumula ${magic ? "resistencia mágica" : "armadura"}, a tu equipo le puede costar más. Es una estimación a partir de valoraciones generales.`,
+      title: `Your team relies heavily on ${magic ? "magic" : "physical"} damage`,
+      detail: `If the enemy stacks ${magic ? "magic resist" : "armor"}, your team may struggle more. It is an estimate from general ratings.`,
       weight: 0.6,
     });
   }
@@ -147,16 +147,16 @@ export function analyzeDraft(input: DraftInput, knowledge: Champion[], history: 
     points.push({
       id: "no-frontline",
       kind: "hypothesis",
-      title: "Tu equipo no tiene primera línea clara",
-      detail: "Ningún aliado tiene la etiqueta Tank o Fighter. Las peleas largas de frente podrían costaros; pelear con ventaja de posición suele importar más.",
+      title: "Your team has no clear frontline",
+      detail: "No ally has the Tank or Fighter tag. Long head-on fights may be hard for you; fighting with a positional advantage usually matters more.",
       weight: 0.7,
     });
   } else if (enemy.frontline >= 3 && ally.frontline <= 1) {
     points.push({
       id: "frontline-gap",
       kind: "hypothesis",
-      title: "El rival tiene bastante más primera línea",
-      detail: `${enemy.frontline} rivales son Tank o Fighter frente a ${ally.frontline} de tu equipo.`,
+      title: "The enemy has much more frontline",
+      detail: `${enemy.frontline} enemies are Tank or Fighter versus ${ally.frontline} on your team.`,
       weight: 0.55,
     });
   }
@@ -164,8 +164,8 @@ export function analyzeDraft(input: DraftInput, knowledge: Champion[], history: 
     points.push({
       id: "enemy-assassins",
       kind: "hypothesis",
-      title: "Varios asesinos en el equipo rival",
-      detail: "Con dos o más campeones de tipo Assassin, suelen buscar eliminaciones sobre objetivos frágiles; la visión y no ir solo cobran importancia.",
+      title: "Several assassins on the enemy team",
+      detail: "With two or more Assassin champions, they usually look for picks on squishy targets; vision and not walking alone become more important.",
       weight: 0.5,
     });
   }
@@ -176,13 +176,13 @@ export function analyzeDraft(input: DraftInput, knowledge: Champion[], history: 
   const vs = input.laneOpponent ? mine.filter((a) => a.laneOpponentChampion === input.laneOpponent) : null;
   const opponentName = input.laneOpponent ? champions.get(input.laneOpponent)?.name ?? input.laneOpponent : null;
   if (mine.length === 0) {
-    points.push({ id: "new-champion", kind: "fact", title: `Aún no tienes partidas analizadas con ${myName}`, detail: "No hay historial propio en el que apoyarse para este campeón.", weight: 0.4 });
+    points.push({ id: "new-champion", kind: "fact", title: `You have no analyzed games on ${myName} yet`, detail: "There is no personal history to lean on for this champion.", weight: 0.4 });
   } else {
     points.push({
       id: "champion-record",
       kind: "fact",
-      title: `Con ${myName}: ${wins} ${wins === 1 ? "victoria" : "victorias"} en ${mine.length} ${mine.length === 1 ? "partida" : "partidas"}`,
-      detail: mine.length < 10 ? "Es una muestra pequeña; tómalo como referencia, no como tendencia." : `Rango probable de victorias: ${pct(wilson(wins, mine.length).low)}–${pct(wilson(wins, mine.length).high)}.`,
+      title: `On ${myName}: ${wins} ${wins === 1 ? "win" : "wins"} in ${mine.length} ${mine.length === 1 ? "game" : "games"}`,
+      detail: mine.length < 10 ? "It is a small sample; take it as a reference, not a trend." : `Likely win-rate range: ${pct(wilson(wins, mine.length).low)}–${pct(wilson(wins, mine.length).high)}.`,
       weight: 0.45,
     });
   }
@@ -191,8 +191,8 @@ export function analyzeDraft(input: DraftInput, knowledge: Champion[], history: 
     points.push({
       id: "matchup-record",
       kind: "fact",
-      title: vs.length ? `Contra ${opponentName} en línea: ${vsWins} de ${vs.length}` : `No tienes partidas con ${myName} contra ${opponentName} en línea`,
-      detail: vs.length && vs.length < 5 ? "Muy pocas partidas para sacar conclusiones." : "",
+      title: vs.length ? `Against ${opponentName} in lane: ${vsWins} of ${vs.length}` : `You have no games on ${myName} against ${opponentName} in lane`,
+      detail: vs.length && vs.length < 5 ? "Too few games to draw conclusions." : "",
       weight: vs.length >= 3 ? 0.65 : 0.35,
     });
   }

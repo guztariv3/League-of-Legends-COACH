@@ -116,10 +116,10 @@ describe("search", () => {
     const vs = await s("Aurelith vs Korvane");
     expect(vs[0]).toMatchObject({ type: "matchup", href: "/matches?champion=Aurelith&opponent=Korvane" });
 
-    const last = await s("mis últimas 10 partidas con Aurelith");
+    const last = await s("my last 10 games on Aurelith");
     expect(last.find((r) => r.type === "matches").href).toBe("/matches?champion=Aurelith&limit=10");
 
-    const lane = await s("¿por qué pierdo la línea?");
+    const lane = await s("why do I lose my lane?");
     expect(lane.some((r) => r.type === "profile" && r.href === "/profile#lane")).toBe(true);
 
     expect(await s("x")).toEqual([]);

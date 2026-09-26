@@ -121,16 +121,16 @@ export async function scoutActiveGame(
   myHistory: MatchAnalysis[],
 ): Promise<ScoutResult> {
   const game = await deps.source.activeGame(account.platform, account.puuid);
-  if (!game) return { inGame: false, message: "No estás en una partida ahora mismo. El scouting empieza en la pantalla de carga." };
+  if (!game) return { inGame: false, message: "You are not in a game right now. Scouting starts at the loading screen." };
 
   const champs = deps.knowledge.active()?.champions ?? [];
   const byKey = new Map(champs.map((c) => [c.key, c]));
   const champ = (key: number) => {
     const c = byKey.get(key);
-    return { id: c?.id ?? String(key), name: c?.name ?? `Campeón ${key}` };
+    return { id: c?.id ?? String(key), name: c?.name ?? `Champion ${key}` };
   };
   const me = game.participants.find((p) => p.puuid === account.puuid);
-  if (!me) return { inGame: false, message: "No encontramos tu cuenta dentro de la partida." };
+  if (!me) return { inGame: false, message: "We could not find your account in the game." };
 
   const allies = game.participants.filter((p) => p.teamId === me.teamId && p !== me).map((p) => champ(p.championId));
   const enemyParticipants = game.participants.filter((p) => p.teamId !== me.teamId);
@@ -140,7 +140,7 @@ export async function scoutActiveGame(
     const c = champ(p.championId);
     const base = { riotId: p.riotId, championId: c.id, championName: c.name };
     if (!p.puuid) {
-      enemies.push({ ...base, available: false, games: 0, wins: 0, gamesOnChampion: 0, winsOnChampion: 0, mainRole: null, avgKda: null, smallSample: true, headline: "Información no disponible para este jugador.", rankStatus: "unavailable", rank: null, topChampions: [], topSource: null });
+      enemies.push({ ...base, available: false, games: 0, wins: 0, gamesOnChampion: 0, winsOnChampion: 0, mainRole: null, avgKda: null, smallSample: true, headline: "No information available for this player.", rankStatus: "unavailable", rank: null, topChampions: [], topSource: null });
       continue;
     }
     const puuid = p.puuid;
@@ -168,10 +168,10 @@ export async function scoutActiveGame(
       ...rankOf(league),
       ...topChampionsOf(mastery, list, champ),
       headline: !list.length
-        ? "Sin partidas recientes analizables."
+        ? "No recent games that can be analyzed."
         : onChamp.length === 0
-          ? `No ha jugado ${c.name} en sus últimas ${list.length} partidas.`
-          : `${onChamp.length} de sus últimas ${list.length} partidas con ${c.name}.`,
+          ? `Has not played ${c.name} in their last ${list.length} games.`
+          : `${onChamp.length} of their last ${list.length} games on ${c.name}.`,
     });
   }
 
@@ -200,7 +200,7 @@ export async function scoutForUser(
 ): Promise<ScoutResult & { account?: string }> {
   const cached = scoutCache.get(userId);
   if (cached && Date.now() - cached.at < SCOUT_CACHE_MS) return cached.result;
-  let last: ScoutResult = { inGame: false, message: "No hay cuentas vinculadas." };
+  let last: ScoutResult = { inGame: false, message: "No linked accounts." };
   for (const account of accounts) {
     last = await scoutActiveGame(deps, account, myHistory);
     if (last.inGame) {

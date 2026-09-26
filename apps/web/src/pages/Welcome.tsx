@@ -24,10 +24,10 @@ export function Welcome() {
     setBusy(true);
     setError(null);
     try {
-      await api.devLogin(name.trim() || "Jugador");
+      await api.devLogin(name.trim() || "Player");
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo iniciar sesión.");
+      setError(err instanceof Error ? err.message : "Could not sign in.");
     } finally {
       setBusy(false);
     }
@@ -36,7 +36,7 @@ export function Welcome() {
   const link = async (e: React.FormEvent) => {
     e.preventDefault();
     const [gameName, tagLine] = riotId.split("#").map((s) => s.trim());
-    if (!gameName || !tagLine) return setError("Escribe tu Riot ID completo, por ejemplo: Nombre#EUW");
+    if (!gameName || !tagLine) return setError("Enter your full Riot ID, for example: Name#EUW");
     setBusy(true);
     setError(null);
     try {
@@ -44,7 +44,7 @@ export function Welcome() {
       await refresh();
       navigate("/");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "No se pudo vincular la cuenta.");
+      setError(err instanceof Error ? err.message : "Could not link the account.");
     } finally {
       setBusy(false);
     }
@@ -57,7 +57,7 @@ export function Welcome() {
           <CoachAvatar expression="happy" />
           <h1 className="page-title">KOI Master</h1>
           <p className="page-sub" style={{ margin: 0 }}>
-            Tu analista personal de League. Entiende tus partidas y te avisa solo cuando importa.
+            Your personal League analyst. It understands your games and only speaks up when it matters.
           </p>
           {config?.dataSource === "synthetic" && <SyntheticBadge />}
         </div>
@@ -67,37 +67,37 @@ export function Welcome() {
             config?.auth.devLogin ? (
               <form className="stack" onSubmit={login}>
                 <div className="notice">
-                  <strong>Inicio de sesión de desarrollo.</strong> El acceso con Riot (RSO) se activará cuando Riot apruebe la
-                  aplicación. Mientras tanto, entra con un nombre local.
+                  <strong>Development sign-in.</strong> Riot sign-in (RSO) will be turned on once Riot approves the
+                  application. Until then, sign in with a local name.
                 </div>
                 <div className="field">
-                  <label htmlFor="name">Tu nombre</label>
-                  <input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Jugador" maxLength={40} autoComplete="nickname" />
+                  <label htmlFor="name">Your name</label>
+                  <input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Player" maxLength={40} autoComplete="nickname" />
                 </div>
-                <button className="btn btn-primary" disabled={busy}>Entrar</button>
+                <button className="btn btn-primary" disabled={busy}>Sign in</button>
               </form>
             ) : (
               <div className="notice" role="alert">
-                El inicio de sesión con Riot todavía no está disponible. Vuelve pronto.
+                Riot sign-in is not available yet. Check back soon.
               </div>
             )
           ) : (
             <form className="stack" onSubmit={link}>
-              <p style={{ margin: 0 }}>Vincula tu cuenta de Riot. Analizaremos tus últimas 50 partidas.</p>
+              <p style={{ margin: 0 }}>Link your Riot account. We will analyze your last 50 games.</p>
               <div className="field">
                 <label htmlFor="riotid">Riot ID</label>
-                <input id="riotid" value={riotId} onChange={(e) => setRiotId(e.target.value)} placeholder="Nombre#TAG" required autoComplete="off" />
+                <input id="riotid" value={riotId} onChange={(e) => setRiotId(e.target.value)} placeholder="Name#TAG" required autoComplete="off" />
               </div>
               <div className="field">
-                <label htmlFor="platform">Región</label>
+                <label htmlFor="platform">Region</label>
                 <select id="platform" value={platform} onChange={(e) => setPlatform(e.target.value)}>
                   {config?.platforms.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
                 </select>
               </div>
               <p className="tile-note" style={{ margin: 0 }}>
-                La cuenta se marcará como <em>no verificada</em> hasta que el inicio de sesión con Riot esté disponible.
+                The account will be marked as <em>unverified</em> until Riot sign-in is available.
               </p>
-              <button className="btn btn-primary" disabled={busy}>{busy ? "Vinculando…" : "Vincular y analizar"}</button>
+              <button className="btn btn-primary" disabled={busy}>{busy ? "Linking…" : "Link and analyze"}</button>
             </form>
           )}
           {error && <p role="alert" style={{ color: "var(--bad)", margin: 0 }}>{error}</p>}

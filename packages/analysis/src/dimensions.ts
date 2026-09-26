@@ -144,27 +144,27 @@ export function buildProfile(analyses: MatchAnalysis[]): ModeProfile[] {
     const dims: (Dimension | null)[] = [];
     if (mode === "summoners_rift") {
       dims.push(
-        metricDimension("lane", "Fase de líneas", roleGames, (a) => a.goldDiff10, true,
-          (avg) => `Oro frente a tu rival al minuto 10: ${signed(avg)}`,
-          (v) => [{ label: "Partidas por delante al 10", value: pct(v.filter((x) => x > 0).length / v.length) }]),
+        metricDimension("lane", "Laning phase", roleGames, (a) => a.goldDiff10, true,
+          (avg) => `Gold vs your lane opponent at minute 10: ${signed(avg)}`,
+          (v) => [{ label: "Games ahead at 10:00", value: pct(v.filter((x) => x > 0).length / v.length) }]),
         mainRole === "UTILITY"
           ? null // CS is not a meaningful measure for supports
-          : metricDimension("farm", "Farmeo", roleGames, (a) => a.csPerMin, true, (avg) => `CS por minuto: ${f1(avg)}`),
-        metricDimension("vision", "Visión", roleGames, (a) => a.visionPerMin, true, (avg) => `Visión por minuto: ${f2(avg)}`),
+          : metricDimension("farm", "Farming", roleGames, (a) => a.csPerMin, true, (avg) => `CS per minute: ${f1(avg)}`),
+        metricDimension("vision", "Vision", roleGames, (a) => a.visionPerMin, true, (avg) => `Vision per minute: ${f2(avg)}`),
       );
     }
     dims.push(
-      metricDimension("risk", "Riesgo", games, (a) => a.deathsPerMin, false,
-        (avg) => `Muertes por minuto: ${f2(avg)}`,
+      metricDimension("risk", "Risk", games, (a) => a.deathsPerMin, false,
+        (avg) => `Deaths per minute: ${f2(avg)}`,
         () => {
           const early = values(games, (a) => a.earlyDeaths);
-          return early.length ? [{ label: "Muertes antes del 14 (media)", value: f1(mean(early)) }] : [];
+          return early.length ? [{ label: "Deaths before 14:00 (average)", value: f1(mean(early)) }] : [];
         }),
-      metricDimension("teamfight", "Peleas en equipo", games, (a) => a.killParticipation, true,
-        (avg) => `Participación en kills: ${pct(avg)}`,
+      metricDimension("teamfight", "Teamfights", games, (a) => a.killParticipation, true,
+        (avg) => `Kill participation: ${pct(avg)}`,
         () => {
           const dmg = values(games, (a) => a.damageShare);
-          return dmg.length ? [{ label: "Daño del equipo (media)", value: pct(mean(dmg)) }] : [];
+          return dmg.length ? [{ label: "Team damage share (average)", value: pct(mean(dmg)) }] : [];
         }),
     );
 
@@ -175,17 +175,17 @@ export function buildProfile(analyses: MatchAnalysis[]): ModeProfile[] {
         const ahead = split[0]!;
         const behind = split[2]!;
         const parts: string[] = [];
-        if (ahead.games >= 3) parts.push(`por delante al 15 ganas ${ahead.wins} de ${ahead.games}`);
-        if (behind.games >= 3) parts.push(`por detrás remontas ${behind.wins} de ${behind.games}`);
+        if (ahead.games >= 3) parts.push(`ahead at 15:00 you win ${ahead.wins} of ${ahead.games}`);
+        if (behind.games >= 3) parts.push(`behind you come back in ${behind.wins} of ${behind.games}`);
         dims.push({
           id: "state",
-          label: "Según cómo va la partida",
-          headline: parts.length ? `Cuando vas ${parts.join("; cuando vas ")}` : "Aún hay pocas partidas claramente por delante o por detrás",
+          label: "By game state",
+          headline: parts.length ? `When ${parts.join("; when ")}` : "Still few games clearly ahead or behind",
           metrics: split.map((b) => ({
-            label: { ahead: "Por delante", even: "Igualada", behind: "Por detrás" }[b.state],
+            label: { ahead: "Ahead", even: "Even", behind: "Behind" }[b.state],
             value: b.games
-              ? `${b.wins}/${b.games} victorias${b.lateDeathsPerMin !== null ? ` · ${f2(b.lateDeathsPerMin)} muertes/min tras el 15` : ""}`
-              : "sin partidas",
+              ? `${b.wins}/${b.games} wins${b.lateDeathsPerMin !== null ? ` · ${f2(b.lateDeathsPerMin)} deaths/min after 15:00` : ""}`
+              : "no games",
           })),
           sampleSize: known,
           confidence: Math.round(sampleConfidence(known) * 100) / 100,
@@ -199,9 +199,9 @@ export function buildProfile(analyses: MatchAnalysis[]): ModeProfile[] {
     const top = [...counts.entries()].sort((a, b) => b[1] - a[1]);
     dims.push({
       id: "pool",
-      label: "Campeones",
-      headline: `${counts.size} campeones distintos; los 3 más jugados suman el ${pct(top.slice(0, 3).reduce((s, [, n]) => s + n, 0) / games.length)}`,
-      metrics: top.slice(0, 5).map(([c, n]) => ({ label: c, value: `${n} partidas` })),
+      label: "Champions",
+      headline: `${counts.size} different champions; your 3 most played make up ${pct(top.slice(0, 3).reduce((s, [, n]) => s + n, 0) / games.length)}`,
+      metrics: top.slice(0, 5).map(([c, n]) => ({ label: c, value: `${n} games` })),
       sampleSize: games.length,
       confidence: 1,
       trend: "unknown",

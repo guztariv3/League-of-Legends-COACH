@@ -20,18 +20,18 @@ export function Settings() {
   return (
     <div className="stack" style={{ gap: 20 }}>
       <header>
-        <h1 className="page-title">Ajustes</h1>
+        <h1 className="page-title">Settings</h1>
       </header>
 
       <section className="card stack" aria-labelledby="acc-h">
-        <h2 id="acc-h">Cuentas de Riot</h2>
+        <h2 id="acc-h">Riot accounts</h2>
         {me!.accounts.map((a) => (
           <div key={a.id} className="row tile">
             <div>
               <div className="match-title">{a.riotId}</div>
               <div className="tile-note">
-                {config?.platforms.find((p) => p.id === a.platform)?.label ?? a.platform} · {a.verified ? "verificada" : "no verificada"}
-                {a.sync.status === "error" && ` · error de sincronización: ${a.sync.error}`}
+                {config?.platforms.find((p) => p.id === a.platform)?.label ?? a.platform} · {a.verified ? "verified" : "unverified"}
+                {a.sync.status === "error" && ` · sync error: ${a.sync.error}`}
               </div>
             </div>
             <span className="spacer" />
@@ -41,22 +41,22 @@ export function Settings() {
                 checked={a.includeInProfile}
                 onChange={async (e) => { await api.updateAccount(a.id, e.target.checked); await refresh(); }}
               />
-              Incluir en mi perfil
+              Include in my profile
             </label>
             <button
               className="btn btn-danger"
               onClick={async () => {
-                if (!confirm(`¿Desvincular ${a.riotId}? Se borrará su historial analizado en KOI Master.`)) return;
+                if (!confirm(`Unlink ${a.riotId}? Its analyzed history in KOI Master will be deleted.`)) return;
                 await api.deleteAccount(a.id);
                 await refresh();
               }}
             >
-              Desvincular
+              Unlink
             </button>
           </div>
         ))}
         <div>
-          <button className="btn" onClick={() => navigate("/link")}>Añadir otra cuenta</button>
+          <button className="btn" onClick={() => navigate("/link")}>Add another account</button>
         </div>
       </section>
 
@@ -65,32 +65,32 @@ export function Settings() {
       <section className="card stack" aria-labelledby="coach-h">
         <h2 id="coach-h">Coach</h2>
         <div className="field" style={{ maxWidth: 320 }}>
-          <label htmlFor="level">Nivel de detalle de las explicaciones</label>
+          <label htmlFor="level">Level of detail in explanations</label>
           <select id="level" value={prefs.level} onChange={(e) => savePrefs({ ...prefs, level: e.target.value as Preferences["level"] })}>
-            <option value="beginner">Principiante</option>
-            <option value="intermediate">Intermedio</option>
-            <option value="advanced">Avanzado</option>
-            <option value="expert">Experto</option>
+            <option value="beginner">Beginner</option>
+            <option value="intermediate">Intermediate</option>
+            <option value="advanced">Advanced</option>
+            <option value="expert">Expert</option>
           </select>
         </div>
-        <p className="tile-note" role="status" style={{ margin: 0 }}>{saved ? "Guardado" : " "}</p>
+        <p className="tile-note" role="status" style={{ margin: 0 }}>{saved ? "Saved" : " "}</p>
       </section>
 
       <section className="card stack" aria-labelledby="data-h">
-        <h2 id="data-h">Tus datos</h2>
-        <p className="page-sub" style={{ margin: 0 }}>Tus datos son privados. Puedes borrarlo todo cuando quieras.</p>
+        <h2 id="data-h">Your data</h2>
+        <p className="page-sub" style={{ margin: 0 }}>Your data is private. You can delete all of it whenever you want.</p>
         <div className="row">
-          <button className="btn" onClick={async () => { await api.logout(); await refresh(); navigate("/"); }}>Cerrar sesión</button>
+          <button className="btn" onClick={async () => { await api.logout(); await refresh(); navigate("/"); }}>Sign out</button>
           <button
             className="btn btn-danger"
             onClick={async () => {
-              if (!confirm("¿Borrar tu cuenta de KOI Master y todos tus datos? No se puede deshacer.")) return;
+              if (!confirm("Delete your KOI Master account and all your data? This cannot be undone.")) return;
               await api.deleteMe();
               await refresh();
               navigate("/");
             }}
           >
-            Borrar todos mis datos
+            Delete all my data
           </button>
         </div>
       </section>
@@ -98,7 +98,7 @@ export function Settings() {
   );
 }
 
-const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" }) : "nunca");
+const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-US", { dateStyle: "short", timeStyle: "short" }) : "never");
 
 /** Connect the desktop app with a one-time code; the app never sees the site password. */
 function DesktopLink() {
@@ -127,7 +127,7 @@ function DesktopLink() {
       setCode({ code: r.code, expiresAt: Date.now() + r.expiresInSec * 1000 });
       setNow(Date.now());
     } catch {
-      setError("No se pudo generar el código. Inténtalo de nuevo.");
+      setError("Could not generate the code. Please try again.");
     }
   };
 
@@ -135,40 +135,40 @@ function DesktopLink() {
 
   return (
     <section className="card stack" aria-labelledby="desk-h">
-      <h2 id="desk-h">App de escritorio</h2>
+      <h2 id="desk-h">Desktop app</h2>
       <p className="page-sub" style={{ margin: 0 }}>
-        Conecta la app para que te muestre a tus rivales en la pantalla de carga. Escribe en la app la dirección de esta web y el código.
-        La app no guarda tu contraseña y solo puede leer el análisis de rivales.
+        Connect the app so it shows your opponents at the loading screen. In the app, enter this website's address and the code.
+        The app never stores your password and can only read the opponent analysis.
       </p>
       {code ? (
         <div className="pair-code" role="status">
-          <span className="pair-code-value" aria-label={`Código ${code.code.split("").join(" ")}`}>{code.code}</span>
-          <span className="tile-note">Caduca en {Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")} · un solo uso</span>
-          <span className="tile-note">Dirección: <code>{window.location.origin}</code></span>
+          <span className="pair-code-value" aria-label={`Code ${code.code.split("").join(" ")}`}>{code.code}</span>
+          <span className="tile-note">Expires in {Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")} · single use</span>
+          <span className="tile-note">Address: <code>{window.location.origin}</code></span>
         </div>
       ) : (
-        <div><button className="btn btn-primary" onClick={generate}>Generar código de conexión</button></div>
+        <div><button className="btn btn-primary" onClick={generate}>Generate connection code</button></div>
       )}
       {error && <p className="tile-note" role="alert" style={{ margin: 0 }}>{error}</p>}
       {devices && devices.length > 0 && (
         <div className="stack" style={{ gap: 8 }}>
-          <h3 className="tile-note" style={{ margin: 0 }}>Apps conectadas</h3>
+          <h3 className="tile-note" style={{ margin: 0 }}>Connected apps</h3>
           {devices.map((d) => (
             <div key={d.id} className="row tile">
               <div>
                 <div className="match-title">{d.label}</div>
-                <div className="tile-note">Conectada {when(d.claimedAt)} · último uso {when(d.lastUsedAt)}</div>
+                <div className="tile-note">Connected {when(d.claimedAt)} · last used {when(d.lastUsedAt)}</div>
               </div>
               <span className="spacer" />
               <button
                 className="btn btn-danger"
                 onClick={async () => {
-                  if (!confirm(`¿Desconectar "${d.label}"? La app dejará de funcionar hasta que la vuelvas a conectar.`)) return;
+                  if (!confirm(`Disconnect "${d.label}"? The app will stop working until you connect it again.`)) return;
                   await api.desktopRevoke(d.id);
                   await load();
                 }}
               >
-                Desconectar
+                Disconnect
               </button>
             </div>
           ))}

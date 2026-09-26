@@ -2,11 +2,11 @@ import { expect, test } from "@playwright/test";
 
 async function onboard(page: import("@playwright/test").Page, player: string) {
   await page.goto("/");
-  await page.getByLabel("Tu nombre").fill(player);
-  await page.getByRole("button", { name: "Entrar" }).click();
+  await page.getByLabel("Your name").fill(player);
+  await page.getByRole("button", { name: "Sign in" }).click();
   await page.getByLabel("Riot ID").fill(`${player}#EUW`);
-  await page.getByRole("button", { name: "Vincular y analizar" }).click();
-  await expect(page.getByText(/Basado en \d+ partidas analizables/)).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Link and analyze" }).click();
+  await expect(page.getByText(/Based on \d+ analyzable games/)).toBeVisible({ timeout: 30_000 });
 }
 
 test("match review, manual draft and scouting", async ({ page }, info) => {
@@ -16,30 +16,30 @@ test("match review, manual draft and scouting", async ({ page }, info) => {
   // Match review from a Summoner's Rift game
   await page.goto("/matches?mode=summoners_rift");
   await page.locator(".match").first().click();
-  await page.getByRole("link", { name: "Revisar la partida en el mapa" }).click();
-  await expect(page.getByRole("heading", { name: "Revisión de la partida" })).toBeVisible();
-  await expect(page.getByRole("img", { name: /Posiciones en el minuto \d+/ })).toBeVisible();
-  await page.getByRole("button", { name: "Avanzar un minuto" }).click();
-  await page.getByRole("button", { name: "Siguiente momento" }).click();
-  await page.getByText("Qué no puede saber esta revisión").click();
-  await expect(page.getByText(/foto por minuto/)).toBeVisible();
+  await page.getByRole("link", { name: "Review the game on the map" }).click();
+  await expect(page.getByRole("heading", { name: "Game review" })).toBeVisible();
+  await expect(page.getByRole("img", { name: /Positions at minute \d+/ })).toBeVisible();
+  await page.getByRole("button", { name: "Forward one minute" }).click();
+  await page.getByRole("button", { name: "Next moment" }).click();
+  await page.getByText("What this review cannot know").click();
+  await expect(page.getByText(/one snapshot per minute/)).toBeVisible();
   await page.screenshot({ path: `test-results/review-${info.project.name}.png`, fullPage: true });
-  await page.getByLabel("Mapa de impacto").check();
-  await expect(page.getByRole("img", { name: /Mapa de impacto/ })).toBeVisible();
+  await page.getByLabel("Impact map").check();
+  await expect(page.getByRole("img", { name: /Impact map/ })).toBeVisible();
 
   // Pre-game area
-  await page.getByRole("navigation", { name: "Principal" }).getByRole("link", { name: "Antes de jugar" }).click();
-  await page.getByLabel("Tu campeón").selectOption({ label: "Aurelith" });
-  await page.getByLabel("Rival 1").selectOption({ label: "Veyl" });
-  await page.getByLabel("Rival 2").selectOption({ label: "Myrr" });
-  await page.getByLabel("Rival 3").selectOption({ label: "Nimue" });
-  await page.getByRole("button", { name: "Analizar" }).click();
-  await expect(page.getByText("Esto es lo que más importa").first()).toBeVisible();
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Pre-game" }).click();
+  await page.getByLabel("Your champion").selectOption({ label: "Aurelith" });
+  await page.getByLabel("Enemy 1").selectOption({ label: "Veyl" });
+  await page.getByLabel("Enemy 2").selectOption({ label: "Myrr" });
+  await page.getByLabel("Enemy 3").selectOption({ label: "Nimue" });
+  await page.getByRole("button", { name: "Analyze" }).click();
+  await expect(page.getByText("This is what matters most").first()).toBeVisible();
 
-  await page.getByRole("button", { name: "Buscar mi partida" }).click();
-  await expect(page.getByRole("heading", { name: "Rivales" })).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator("article.rival").filter({ hasText: /Rival \d#SYN/ })).toHaveCount(5);
+  await page.getByRole("button", { name: "Find my game" }).click();
+  await expect(page.getByRole("heading", { name: "Your opponents" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator("article.rival").filter({ hasText: /Enemy \d#SYN/ })).toHaveCount(5);
   // Honest about what Riot did not provide in the synthetic environment.
-  await expect(page.locator("article.rival").first()).toContainText("Rango no disponible");
+  await expect(page.locator("article.rival").first()).toContainText("Rank unavailable");
   await page.screenshot({ path: `test-results/game-${info.project.name}.png`, fullPage: true });
 });

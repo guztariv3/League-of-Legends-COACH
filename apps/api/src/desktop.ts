@@ -107,7 +107,7 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
         isNull(schema.deviceLinks.revokedAt),
       ))
       .returning();
-    if (!claimed.length) return c.json({ error: "invalid_code", message: "Código incorrecto o caducado. Genera uno nuevo en la web." }, 401);
+    if (!claimed.length) return c.json({ error: "invalid_code", message: "Wrong or expired code. Generate a new one on the website." }, 401);
     return c.json({ token });
   });
 
@@ -121,14 +121,14 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
     await db.update(schema.deviceLinks).set({ lastUsedAt: new Date() }).where(eq(schema.deviceLinks.id, device.id));
     return device;
   };
-  const disconnected = (c: Context) => c.json({ error: "unauthenticated", message: "Esta app ya no está conectada. Vuelve a conectarla desde la web." }, 401);
+  const disconnected = (c: Context) => c.json({ error: "unauthenticated", message: "This app is no longer connected. Connect it again from the website." }, 401);
 
   r.get("/desktop/scout", async (c) => {
     const device = await deviceFor(c);
     if (!device) return disconnected(c);
 
     const accounts = (await userAccounts(db, device.userId)).filter((a) => a.includeInProfile);
-    if (!accounts.length) return c.json({ inGame: false, message: "No hay cuentas vinculadas en la web." });
+    if (!accounts.length) return c.json({ inGame: false, message: "No accounts are linked on the website." });
     const { analyses } = await deps.services.profileAnalyses(device.userId);
     const result = await scoutForUser(deps, device.userId, accounts, analyses);
     const bundle = deps.knowledge.active();

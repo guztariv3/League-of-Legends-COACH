@@ -9,12 +9,12 @@ import "./live.css";
 
 const CONTROLS_KEY = "live.controls";
 const categoryLabel: Record<string, string> = {
-  own_level_spike: "Tus niveles clave (6/11/16)",
-  own_item_spike: "Tus objetos completados",
-  enemy_level_spike: "Nivel 6 de tu rival de línea",
-  enemy_item_spike: "Objetos de tu rival de línea (sin líneas: del rival más fuerte)",
-  objective_taken: "Objetivos conseguidos",
-  goal_progress: "Progreso de tu enfoque",
+  own_level_spike: "Your key levels (6/11/16)",
+  own_item_spike: "Your completed items",
+  enemy_level_spike: "Your lane opponent's level 6",
+  enemy_item_spike: "Your lane opponent's items (no lanes: the strongest enemy)",
+  objective_taken: "Objectives taken",
+  goal_progress: "Progress on your focus",
 };
 
 function loadControls(): LiveControls {
@@ -124,32 +124,32 @@ function LiveWindow() {
 
   return (
     <main className={`live${reduced ? " reduced" : ""}`}>
-      <div className="bar" role="toolbar" aria-label="Controles del Live Coach">
-        {mode === "live" && <span className="chip chip-on">● En partida</span>}
-        {mode === "waiting" && <span className="chip">Esperando partida</span>}
-        {mode === "demo" && <span className="chip chip-demo">◆ Demostración</span>}
-        {tick?.safeMode && <span className="chip chip-safe" title="El ordenador va justo: el Coach ahorra recursos">Modo seguro</span>}
+      <div className="bar" role="toolbar" aria-label="Live Coach controls">
+        {mode === "live" && <span className="chip chip-on">● In game</span>}
+        {mode === "waiting" && <span className="chip">Waiting for a game</span>}
+        {mode === "demo" && <span className="chip chip-demo">◆ Demo</span>}
+        {tick?.safeMode && <span className="chip chip-safe" title="Your computer is under load: the Coach saves resources">Safe mode</span>}
         <span className="spacer" />
-        <button className="btn" aria-pressed={controls.paused} onClick={() => set({ paused: !controls.paused })}>{controls.paused ? "Reanudar" : "Pausar"}</button>
-        <button className="btn" aria-pressed={controls.muted} onClick={() => set({ muted: !controls.muted })}>{controls.muted ? "Activar" : "Silenciar"}</button>
-        <button className="btn" aria-pressed={controls.focus} onClick={() => set({ focus: !controls.focus })}>Enfoque</button>
-        {inTauri && <button className="btn" onClick={() => void minimizeWindow()} aria-label="Ocultar ventana">Ocultar</button>}
+        <button className="btn" aria-pressed={controls.paused} onClick={() => set({ paused: !controls.paused })}>{controls.paused ? "Resume" : "Pause"}</button>
+        <button className="btn" aria-pressed={controls.muted} onClick={() => set({ muted: !controls.muted })}>{controls.muted ? "Unmute" : "Mute"}</button>
+        <button className="btn" aria-pressed={controls.focus} onClick={() => set({ focus: !controls.focus })}>Focus</button>
+        {inTauri && <button className="btn" onClick={() => void minimizeWindow()} aria-label="Hide window">Hide</button>}
       </div>
 
       {update && mode !== "live" && (
         <div className="message compact" role="status">
           {updateState === "failed" ? (
-            <div>No se pudo instalar la actualización; sigues con la versión actual.</div>
+            <div>The update could not be installed; you are still on the current version.</div>
           ) : (
             <div className="bar">
-              <span>Versión {update.version} disponible.</span>
+              <span>Version {update.version} available.</span>
               <span className="spacer" />
               <button className="btn btn-primary" disabled={updateState === "installing"} onClick={async () => {
                 setUpdateState("installing");
                 const r = await installUpdate();
                 if (!r.ok) setUpdateState("failed");
-              }}>{updateState === "installing" ? "Instalando…" : "Instalar y reiniciar"}</button>
-              <button className="btn" onClick={() => setUpdate(null)}>Más tarde</button>
+              }}>{updateState === "installing" ? "Installing…" : "Install and restart"}</button>
+              <button className="btn" onClick={() => setUpdate(null)}>Later</button>
             </div>
           )}
         </div>
@@ -163,14 +163,14 @@ function LiveWindow() {
 
       {!rivals.link && mode === "waiting" && (
         <section className="connect-card" aria-labelledby="connect-h">
-          <h2 id="connect-h">Conecta con la web (opcional)</h2>
+          <h2 id="connect-h">Connect to the website (optional)</h2>
           {showConnect ? (
             <ConnectForm link={rivals.link} problem={rivals.problem} onConnect={(l) => { rivals.connect(l); setShowConnect(false); }} onDisconnect={rivals.disconnect} />
           ) : (
             <>
-              <p className="quiet">Opcional, si tienes cuenta en la web de KOI Master: añade tus rivales en la pantalla de carga y tu historial. Las sugerencias de objetos y el panel de partida funcionan sin conectar.</p>
+              <p className="quiet">Optional, if you have a KOI Master website account: adds your opponents at the loading screen and your history. Item suggestions and the game board work without connecting.</p>
               {rivals.problem && <p className="quiet" role="alert">{rivals.problem}</p>}
-              <button className="btn btn-primary" onClick={() => setShowConnect(true)}>Conectar</button>
+              <button className="btn btn-primary" onClick={() => setShowConnect(true)}>Connect</button>
             </>
           )}
         </section>
@@ -182,46 +182,46 @@ function LiveWindow() {
             <CoachAvatar expression={message.signal.category.startsWith("enemy") ? "concerned" : "happy"} />
             <div className={`message${message.compact ? " compact" : ""}`}>
               <div>{message.signal.text}</div>
-              <div className="when">minuto {Math.floor(message.shownAt / 60)}</div>
+              <div className="when">minute {Math.floor(message.shownAt / 60)}</div>
             </div>
           </div>
         ) : (
           <div className="presence">
             <CoachAvatar quiet expression={controls.paused ? "thinking" : "idle"} />
             <span className="quiet">
-              {controls.paused ? "En pausa." : controls.muted ? "Silenciado." : mode === "waiting" ? (inTauri ? "Te avisaré solo cuando algo importe." : "Abre la app de escritorio durante una partida, o prueba la demostración.") : "Nada importante ahora mismo."}
+              {controls.paused ? "Paused." : controls.muted ? "Muted." : mode === "waiting" ? (inTauri ? "I will only speak up when something matters." : "Open the desktop app during a game, or try the demo.") : "Nothing important right now."}
             </span>
           </div>
         )}
       </section>
 
       {game && (
-        <div className="mode-line" title={game.lanes ? undefined : "Sin líneas: en lugar de tu rival de línea, te aviso del rival con más objetos grandes."}>
-          {game.label}{game.lanes ? "" : " · sin líneas"}
+        <div className="mode-line" title={game.lanes ? undefined : "No lanes: instead of your lane opponent, I tell you about the enemy with the most major items."}>
+          {game.label}{game.lanes ? "" : " · no lanes"}
         </div>
       )}
       {me && (
-        <div className="stats" aria-label="Tu partida">
+        <div className="stats" aria-label="Your game">
           <span>{Math.floor(minutes)}:{String(Math.floor(tick!.state.time % 60)).padStart(2, "0")}</span>
-          <span>Nivel {me.level}</span>
+          <span>Level {me.level}</span>
           <span>{me.kills}/{me.deaths}/{me.assists}</span>
           {minutes >= 1 && <span>{(me.cs / minutes).toFixed(1)} CS/min</span>}
         </div>
       )}
 
       <details>
-        <summary>Ajustes</summary>
+        <summary>Settings</summary>
         <label>
-          Intensidad
+          Intensity
           <select value={controls.intensity} onChange={(e) => set({ intensity: e.target.value as Intensity })}>
-            <option value="low">Baja</option>
+            <option value="low">Low</option>
             <option value="normal">Normal</option>
-            <option value="high">Alta</option>
+            <option value="high">High</option>
           </select>
         </label>
-        <label><input type="checkbox" checked={focusCs} onChange={(e) => setFocusCs(e.target.checked)} /> Quiero centrarme en el CS</label>
+        <label><input type="checkbox" checked={focusCs} onChange={(e) => setFocusCs(e.target.checked)} /> I want to focus on CS</label>
         <fieldset style={{ border: 0, padding: 0, margin: "6px 0" }}>
-          <legend>Qué puede avisarte</legend>
+          <legend>What it can tell you about</legend>
           {Object.entries(categoryLabel).map(([k, label]) => (
             <label key={k}>
               <input type="checkbox" checked={controls.categories[k] ?? false} onChange={(e) => set({ categories: { ...controls.categories, [k]: e.target.checked } })} />
@@ -230,13 +230,13 @@ function LiveWindow() {
           ))}
         </fieldset>
         <p className="quiet">
-          El Coach solo lee los datos que el propio juego publica y nunca te da órdenes. No rastrea definitivas ni hechizos de invocador rivales.
+          The Coach only reads the data the game itself publishes and never gives you orders. It does not track enemy ultimates or summoner spells.
         </p>
-        <h3>Conexión con la web</h3>
+        <h3>Website connection</h3>
         {rivals.link
           ? <ConnectForm link={rivals.link} problem={rivals.problem} onConnect={rivals.connect} onDisconnect={rivals.disconnect} />
-          : <p className="quiet">No conectada. Usa el botón <strong>Conectar</strong> de la pantalla principal (fuera de partida).</p>}
-        <button className="btn" onClick={() => setMode((m) => (m === "demo" ? "waiting" : "demo"))}>{mode === "demo" ? "Salir de la demostración" : "Probar demostración"}</button>
+          : <p className="quiet">Not connected. Use the <strong>Connect</strong> button on the main screen (outside a game).</p>}
+        <button className="btn" onClick={() => setMode((m) => (m === "demo" ? "waiting" : "demo"))}>{mode === "demo" ? "Exit demo" : "Try the demo"}</button>
       </details>
     </main>
   );
