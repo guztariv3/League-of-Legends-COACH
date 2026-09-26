@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
-import { api, type KeyMoment, type MatchReview as Review, type MomentCategory } from "../api";
+import { api, type CoachReview as CoachReviewData, type KeyMoment, type MatchReview as Review, type MomentCategory } from "../api";
+import { CoachReview } from "../components/CoachReview";
 import { ErrorNotice, Loading, pct, SyntheticBadge } from "../components/ui";
 import { useLoad } from "../session";
 
@@ -37,10 +38,10 @@ export function MatchReview() {
       </div>
     );
   }
-  return <ReviewPlayer review={data.review} synthetic={data.dataSource === "synthetic"} />;
+  return <ReviewPlayer review={data.review} coach={data.coach} synthetic={data.dataSource === "synthetic"} />;
 }
 
-function ReviewPlayer({ review, synthetic }: { review: Review; synthetic: boolean }) {
+function ReviewPlayer({ review, coach, synthetic }: { review: Review; coach: CoachReviewData; synthetic: boolean }) {
   const last = review.frames.length - 1;
   const highlights = review.highlights.map((id) => review.moments.find((m) => m.id === id)!).filter(Boolean);
   const [minute, setMinute] = useState(() => (highlights[0] ? Math.min(last, Math.ceil(highlights[0].t / 60_000)) : 0));
@@ -72,12 +73,20 @@ function ReviewPlayer({ review, synthetic }: { review: Review; synthetic: boolea
       <header className="row">
         <div>
           <h1 className="page-title">Game review</h1>
-          <p className="page-sub" style={{ margin: 0 }}>You played {me.championName}. Reconstructed from the timeline, minute by minute.</p>
+          <p className="page-sub" style={{ margin: 0 }}>You played {me.championName}. The Coach's read of the game, then the map minute by minute.</p>
         </div>
         <span className="spacer" />
         {synthetic && <SyntheticBadge />}
       </header>
 
+      <CoachReview review={coach} onMoment={(id) => {
+        const m = review.moments.find((x) => x.id === id);
+        if (!m) return;
+        jump(m);
+        document.getElementById("review-map")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }} />
+
+      <h2 id="review-map" style={{ margin: "8px 0 0", scrollMarginTop: 80 }}>Map review</h2>
       {highlights.length > 0 && (
         <section aria-labelledby="h-key" className="stack">
           <h2 id="h-key" className="tile-label" style={{ margin: 0 }}>The most instructive moments</h2>

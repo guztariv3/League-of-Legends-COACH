@@ -252,7 +252,27 @@ export interface MatchReview {
   limits: string[];
 }
 
-export type ReviewResponse = { available: true; dataSource: "riot" | "synthetic"; review: MatchReview } | { available: false; message: string };
+/** A Coach recommendation or finding (the engine's CoachDecision shape). */
+export interface CoachDecision {
+  id: string;
+  kind: string;
+  basis: "fact" | "observation" | "hypothesis";
+  priority: "critical" | "important" | "info";
+  confidence: number;
+  headline: string;
+  ref?: string;
+  reasons: string[];
+  evidence: { label: string; value: string; source: "this_game" | "your_games" | "game_data" | "global_stats"; sampleSize?: number }[];
+  alternatives: { label: string; ref?: string; reason?: string }[];
+}
+
+export type ReviewSectionId = "went_well" | "hurt" | "biggest_mistake" | "missed_opportunity" | "build" | "skills" | "macro" | "focus";
+export interface CoachReview {
+  sections: { id: ReviewSectionId; title: string; decisions: CoachDecision[]; empty: string | null }[];
+  baseline: { games: number; scope: string };
+}
+
+export type ReviewResponse = { available: true; dataSource: "riot" | "synthetic"; review: MatchReview; coach: CoachReview } | { available: false; message: string };
 
 export interface DraftPoint {
   id: string;

@@ -16,8 +16,15 @@ test("match review, manual draft and scouting", async ({ page }, info) => {
   // Match review from a Summoner's Rift game
   await page.goto("/matches?mode=summoners_rift");
   await page.locator(".match").first().click();
-  await page.getByRole("link", { name: "Review the game on the map" }).click();
+  await page.getByRole("link", { name: "Coach Review and map" }).click();
   await expect(page.getByRole("heading", { name: "Game review" })).toBeVisible();
+  // Coach Review: eight sections, each with its lines or an honest "not enough data".
+  const coachReview = page.getByRole("region", { name: "Coach Review" });
+  for (const title of ["What went well", "What hurt your game", "Biggest mistake", "Missed opportunity", "Build decision", "Skill decision", "Macro decision", "Next-game focus"]) {
+    await expect(coachReview.getByRole("heading", { name: title })).toBeVisible();
+  }
+  await expect(coachReview.getByText(/Item data for this patch isn't loaded/)).toBeVisible();
+  await expect(coachReview.getByText(/Epic monsters: your team \d+, enemy \d+/)).toBeVisible();
   await expect(page.getByRole("img", { name: /Positions at minute \d+/ })).toBeVisible();
   await page.getByRole("button", { name: "Forward one minute" }).click();
   await page.getByRole("button", { name: "Next moment" }).click();

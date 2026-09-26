@@ -51,7 +51,7 @@ export function MatchDetail() {
       {data.headline && <p className="insight insight-title">{data.headline}</p>}
       {sr && a.analyzable && a.hasTimeline && (
         <div>
-          <Link className="btn btn-primary" to={`/matches/${encodeURIComponent(a.matchId)}/review`}>Review the game on the map</Link>
+          <Link className="btn btn-primary" to={`/matches/${encodeURIComponent(a.matchId)}/review`}>Coach Review and map</Link>
         </div>
       )}
 
