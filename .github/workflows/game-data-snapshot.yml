@@ -37,7 +37,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout --orphan game-data-snapshot
-          git rm -rq --cached .
+          git rm -rqf --cached .
           git add packages/knowledge/fixtures/game-data
           git commit -qm "Game data snapshot $(jq -r .ddragonVersion packages/knowledge/fixtures/game-data/meta.json)"
           git push -f origin game-data-snapshot
