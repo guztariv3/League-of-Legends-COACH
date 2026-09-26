@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: "Publicar como versión de prueba pública (Releases)"
+        description: "Publish as a public test release (Releases)"
         type: boolean
         default: false
   pull_request:
@@ -62,5 +62,5 @@ jobs:
           tag="desktop-test-${{ github.run_number }}"
           gh release create "$tag" apps/desktop/src-tauri/target/release/bundle/nsis/*.exe \
             --repo "${{ github.repository }}" --target "${{ github.sha }}" --latest \
-            --title "KOI Master para Windows (versión de prueba ${{ github.run_number }})" \
-            --notes "Descarga el archivo .exe y ábrelo. Windows mostrará \"Windows protegió su PC\" porque el instalador aún no tiene firma de Microsoft: pulsa Más información → Ejecutar de todas formas. Esta versión no se actualiza sola: para una versión nueva, descárgala de nuevo desde aquí."
+            --title "KOI Master for Windows (test build ${{ github.run_number }})" \
+            --notes "Download the .exe file and open it. Windows will show \"Windows protected your PC\" because the installer is not signed by Microsoft yet: click More info → Run anyway. This version does not update itself: to get a new version, download it again from here."

@@ -90,7 +90,7 @@ Para probar la app de escritorio antes de configurar la firma:
 
 Esta build no incluye el updater: no busca actualizaciones ni necesita claves.
 
-**Publicarla para cualquiera (sin cuenta de GitHub):** al ejecutar **Desktop test build** a mano, marca **Publicar como versión de prueba pública**. Se crea un Release `desktop-test-N` marcado como el más reciente con el `.exe`. El botón de descarga de `/info/` (`/releases/latest`) apunta a él. Estas versiones no se actualizan solas: cada versión nueva hay que volver a descargarla. Cuando estén configuradas las claves de firma, `desktop-release.yml` sustituye a este camino.
+**Publicarla para cualquiera (sin cuenta de GitHub):** al ejecutar **Desktop test build** a mano, marca **Publish as a public test release**. Se crea un Release `desktop-test-N` marcado como el más reciente con el `.exe`. El botón de descarga de `/info/` (`/releases/latest`) apunta a él. Estas versiones no se actualizan solas: cada versión nueva hay que volver a descargarla. Cuando estén configuradas las claves de firma, `desktop-release.yml` sustituye a este camino.
 
 ### Configuración inicial (una vez)
 
