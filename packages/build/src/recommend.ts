@@ -184,7 +184,7 @@ function starter(input: BuildInput, p: ChampionProfile, e: EnemyPicture, s: Stat
     const fitText = adds.length
       ? ` ${best.name}'s companion adds ${list(adds as string[])}${adds.includes("damage") && p.offense >= 0.6 ? `, which suits ${p.name}'s damage-focused kit` : adds.includes("defense") && p.frontline >= 0.5 ? `, which suits ${p.name}'s tanky kit` : ""}.`
       : "";
-    return withPotions(best, [`Jungle companions are the jungle's starting item.${fitText}${others.length ? ` The others (${list(others)}) upgrade Smite differently; any of them works.` : ""}`]);
+    return withPotions(best, [`Jungle companions are the jungle's starting item.${fitText}${others.length ? ` The others (${list(others)}) upgrade your jungle spell differently; any of them works.` : ""}`]);
   }
   if (position === "UTILITY" || position === "SUPPORT") {
     const quest = starters.find((i) => i.effects.some((x) => /quest/i.test(x.name ?? "")));

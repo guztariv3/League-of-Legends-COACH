@@ -2,6 +2,7 @@ import { ItemArt, type Art } from "./board";
 
 /** The pre-game build from /api/desktop/plan (see packages/build): every item with its reasons. */
 export interface ItemPick { id: number; name: string; gold: number; score: number; why: string[] }
+export interface RunePick { id: number; name: string; why: string }
 export interface PreGameBuild {
   champion: string;
   kit: string[];
@@ -13,6 +14,14 @@ export interface PreGameBuild {
   boots: ItemPick | null;
   situational: (ItemPick & { when: string })[];
   ruledOut: { id: number; name: string; why: string }[];
+  /** Runes and summoner spells (packages/build/src/setup.ts). */
+  setup?: {
+    runes: {
+      primaryTree: string; keystone: RunePick; primary: RunePick[];
+      secondaryTree: string; secondary: RunePick[]; shards: RunePick[];
+    } | null;
+    spells: { id: string; key: number; name: string; why: string }[];
+  };
   version: string;
   enemiesKnown: number;
   attribution: { text: string; license: string };
@@ -45,6 +54,42 @@ export function PreGameBuildView({ build, art }: { build: PreGameBuild; art: Art
             ? "Enemy champions aren't visible yet: this reads your champion's kit only and updates as they lock in."
             : `${build.enemiesKnown} of 5 enemy champions known: it updates as the rest lock in.`}
         </p>
+      )}
+
+      {build.setup && (build.setup.spells.length > 0 || build.setup.runes) && (
+        <div className="prebuild-block" aria-label="Runes and summoner spells">
+          {build.setup.spells.length > 0 && (
+            <>
+              <div className="prebuild-title">Summoner spells</div>
+              <ul className="prebuild-list">
+                {build.setup.spells.map((s) => (
+                  <li key={s.id}>
+                    <details>
+                      <summary className="bar"><strong>{s.name}</strong></summary>
+                      <p className="quiet small" style={{ margin: 0 }}>{s.why}</p>
+                    </details>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {build.setup.runes && (
+            <>
+              <div className="prebuild-title">Runes</div>
+              <details>
+                <summary className="bar">
+                  <strong>{build.setup.runes.keystone.name}</strong>
+                  <span className="quiet small">{build.setup.runes.primaryTree} + {build.setup.runes.secondaryTree}</span>
+                </summary>
+                <ul className="reasons">
+                  {[build.setup.runes.keystone, ...build.setup.runes.primary].map((r) => <li key={r.id}><strong>{r.name}</strong>: {r.why}</li>)}
+                  {build.setup.runes.secondary.map((r) => <li key={r.id}><strong>{r.name}</strong> ({build.setup!.runes!.secondaryTree}): {r.why}</li>)}
+                  <li>Shards: {build.setup.runes.shards.map((r) => r.name).join(" · ")}</li>
+                </ul>
+              </details>
+            </>
+          )}
+        </div>
       )}
 
       {build.starter && (

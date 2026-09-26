@@ -39,6 +39,15 @@ test("desktop: game plan during champion select", async ({ page }) => {
                 boots: { id: 3020, name: "Sorcerer's Shoes", gold: 1100, score: 0.9, why: ["Gives 12 magic penetration."] },
                 situational: [{ id: 3102, name: "Banshee's Veil", gold: 3000, score: 1, why: [], when: "Against the burst damage from Zed." }],
                 ruledOut: [{ id: 3143, name: "Randuin's Omen", why: "Its passive reduces damage from critical strikes, and no enemy relies on critical strikes." }],
+                setup: {
+                  runes: {
+                    primaryTree: "Domination", keystone: { id: 8112, name: "Electrocute", why: "Hitting a champion with 3 separate attacks or abilities in 3s deals bonus adaptive damage. Fits: Ahri relies on abilities." },
+                    primary: [{ id: 8143, name: "Sudden Impact", why: "Bonus true damage after a dash." }],
+                    secondaryTree: "Sorcery", secondary: [{ id: 8210, name: "Transcendence", why: "Ability haste." }, { id: 8226, name: "Manaflow Band", why: "Mana." }],
+                    shards: [{ id: 5008, name: "Adaptive Force", why: "+9 Adaptive Force." }],
+                  },
+                  spells: [{ id: "SummonerFlash", key: 4, name: "Flash", why: "Instantly repositions you a short distance." }, { id: "SummonerDot", key: 14, name: "Ignite", why: "Extra damage to win early fights." }],
+                },
                 version: "16.19.1",
                 enemiesKnown: 1,
                 attribution: { text: "Game data: Riot Data Dragon; League of Legends Wiki (CC BY-SA 3.0) via Meraki Analytics.", license: "https://creativecommons.org/licenses/by-sa/3.0/" },
@@ -82,6 +91,13 @@ test("desktop: game plan during champion select", async ({ page }) => {
   await expect(build.getByText("Against the burst damage from Zed.")).toBeVisible();
   await expect(build.getByText(/Randuin's Omen/)).toBeVisible();
   await expect(build.getByText(/1 of 5 enemy champions known/)).toBeVisible();
+  const setup = build.getByLabel("Runes and summoner spells");
+  await expect(setup.getByText("Flash", { exact: true })).toBeVisible();
+  await expect(setup.getByText("Ignite", { exact: true })).toBeVisible();
+  const keystone = setup.locator("summary").filter({ hasText: "Electrocute" });
+  await expect(keystone).toContainText("Domination + Sorcery");
+  await keystone.click();
+  await expect(setup.getByText(/Fits: Ahri relies on abilities/)).toBeVisible();
 
   const plan = await page.evaluate(() => (window as unknown as { __calls: { cmd: string; args: Record<string, unknown> }[] }).__calls.find((c) => c.cmd === "desktop_plan")?.args);
   expect(plan).toMatchObject({ me: "103", allies: "64", enemies: "238", opponent: "", position: "middle" });

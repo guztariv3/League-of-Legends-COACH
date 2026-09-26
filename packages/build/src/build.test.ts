@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { parseChampionKits, parseItems } from "@coach/knowledge";
+import { parseChampionKits, parseItems, parseRunes, parseSummonerSpells } from "@coach/knowledge";
 import { gameData } from "@coach/knowledge/test-data";
 import { championProfile, COUNTERS, enemyPicture, itemProfile, recommendBuild, statGoldValues, type BuildRecommendation } from "./index.js";
 
@@ -206,10 +206,12 @@ describe("L — pre-game build: starting items by position", () => {
 });
 
 describe("no champion or item is named in the engine", () => {
-  it("the engine's source names no champion and no item (decisions come from data)", () => {
+  it("the engine's source names no champion, item, rune or summoner spell (decisions come from data)", () => {
     const dir = fileURLToPath(new URL(".", import.meta.url));
     const source = readdirSync(dir).filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts")).map((f) => readFileSync(dir + f, "utf8")).join("\n");
-    const names = [...kits.map((k) => k.name), ...items.filter((i) => i.purchasable).map((i) => i.name)].filter((n) => n.length >= 6);
+    const runeNames = parseRunes(data.perks, data.perkStyles).runes.map((r) => r.name);
+    const spellNames = parseSummonerSpells(data.summoners).map((s) => s.name);
+    const names = [...kits.map((k) => k.name), ...items.filter((i) => i.purchasable).map((i) => i.name), ...runeNames, ...spellNames].filter((n) => n.length >= 5);
     expect(names.filter((n) => new RegExp(`\\b${n.replace(/[.*+?^${}()|[\]\\']/g, "\\$&")}\\b`).test(source))).toEqual([]);
   });
 });

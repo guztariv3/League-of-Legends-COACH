@@ -1,6 +1,6 @@
 import { randomBytes, randomInt } from "node:crypto";
 import { GAME_DATA_ATTRIBUTION, type GameFactsSource, type KnowledgeRegistry } from "@coach/knowledge";
-import { recommendBuild } from "@coach/build";
+import { recommendBuild, recommendSetup } from "@coach/build";
 import { championPool } from "@coach/coach";
 import { challengeTitle, evaluateChallenge, type ChallengeKind, type GoalMetric } from "@coach/insights";
 import { and, asc, desc, eq, gt, inArray, isNull } from "drizzle-orm";
@@ -184,14 +184,12 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
     const facts = await deps.gameFacts?.get(2500) ?? null;
     const kits = new Map((facts?.kits ?? []).map((k) => [k.id, k]));
     const myKit = kits.get(me);
+    const enemyInput = enemies.map((e) => kits.get(e)).filter((k) => k !== undefined).map((k) => ({ kit: k, laneOpponent: k.id === opponent }));
     const build = facts && myKit
       ? {
-          ...recommendBuild({
-            me: myKit,
-            enemies: enemies.map((e) => kits.get(e)).filter((k) => k !== undefined).map((k) => ({ kit: k, laneOpponent: k.id === opponent })),
-            items: facts.items,
-            position: q.data.position ?? null,
-          }),
+          ...recommendBuild({ me: myKit, enemies: enemyInput, items: facts.items, position: q.data.position ?? null }),
+          // Runes and summoner spells, decided the same way (packages/build/src/setup.ts).
+          setup: recommendSetup({ me: myKit, enemies: enemyInput, runes: facts.runes, spells: facts.spells, position: q.data.position ?? null }),
           version: facts.version,
           enemiesKnown: enemies.length,
           attribution: GAME_DATA_ATTRIBUTION,
