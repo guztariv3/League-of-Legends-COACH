@@ -11,6 +11,7 @@ on:
     paths:
       - "scripts/snapshot-game-data.mjs"
       - ".github/workflows/game-data-snapshot.yml"
+      - "scripts/game-data/**"
 
 concurrency:
   group: game-data-snapshot
