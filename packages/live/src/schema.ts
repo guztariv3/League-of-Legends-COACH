@@ -23,6 +23,8 @@ const Item = z.looseObject({
   count: z.number().optional(),
 });
 
+const AbilityRank = z.looseObject({ abilityLevel: z.number().optional(), displayName: z.string().optional() });
+
 export const LivePlayer = z.looseObject({
   championName: z.string(),
   /** e.g. "game_character_displayname_MissFortune": the suffix is the Data Dragon id. */
@@ -52,6 +54,13 @@ export const AllGameData = z.looseObject({
     summonerName: z.string().optional(),
     level: z.number().optional(),
     currentGold: z.number().optional(),
+    /** The player's own ability ranks (Q, W, E, R); only ever reported for the active player. */
+    abilities: z.looseObject({
+      Q: AbilityRank.optional(),
+      W: AbilityRank.optional(),
+      E: AbilityRank.optional(),
+      R: AbilityRank.optional(),
+    }).optional(),
   }),
   allPlayers: z.array(LivePlayer),
   events: z.looseObject({ Events: z.array(LiveEvent).default([]) }).default({ Events: [] }),

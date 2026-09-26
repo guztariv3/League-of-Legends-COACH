@@ -26,3 +26,12 @@ Directiva del usuario del 2026-09-26 (D-10). La auditoría completa (25 seccione
 
 ## F1b — rango y LP (hecho)
 Tabla `rank_snapshots` (migración 0005): tras cada sincronización se guarda el rango de Solo/Duo y Flex de league-v4, solo si algo cambió. `GET /api/rank` devuelve el rango actual y el historial por cola; `lpChange` solo aparece cuando entre dos fotos hubo exactamente una partida (si no, no se sabe cuánto LP dio cada una). `ladderPoints` pone todas las divisiones en una escala (100 por división; Master+ comparten base) para medir cambios con ascensos y descensos. Un fallo de league-v4 nunca rompe la sincronización. El historial empieza el día en que se despliega: Riot no guarda el pasado. Las filas se borran con la cuenta.
+
+## F1c — capa de decisiones del Coach (hecho)
+`packages/coach`: `CoachDecision` (qué, por qué —nunca vacío—, evidencia con su fuente: `this_game`, `your_games`, `game_data` o `global_stats`, confianza, base fact/observation/hypothesis y alternativas). `rankDecisions`, `pickNow` (la tarjeta "Now" no parpadea entre opciones parecidas) e `isAdjustment` (misma clase de recomendación que cambia → "Coach adjustment"). Adaptadores sin juicio propio: `fromItemSuggestions` y `fromInsight`.
+
+## F1d — datos en vivo (hecho)
+- Rangos de tus habilidades (`activePlayer.abilities`, solo del jugador activo) y puntos sin gastar (`skillPoints`), base del asesor de habilidades.
+- `goldDifference`: diferencia por enfrentamiento y total por equipo **por valor de ítems** (el juego no da el oro de los demás; es lo mismo que muestra la tabla TAB). Por posición en la Grieta; por orden donde no hay líneas.
+- `objectives`: dragones (con tipo), heraldos, barones, torres e inhibidores por equipo a partir del feed de eventos. Las estructuras se atribuyen por su dueño en el nombre (T1 = ORDER, T2 = CHAOS).
+- La tarjeta del Coach en la interfaz se hace en F2, donde se usa por primera vez. Todo aviso nuevo pasa por el `PolicyEngine` existente, que ya bloquea el lenguaje de órdenes (D-02, D-12).
