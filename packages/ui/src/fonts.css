@@ -1,6 +1,6 @@
-/* Self-hosted fonts (no third-party requests, CSP-safe): Cinzel for display, Inter for text. */
-@import "@fontsource/cinzel/600.css";
-@import "@fontsource/cinzel/700.css";
-@import "@fontsource/inter/400.css";
-@import "@fontsource/inter/600.css";
-@import "@fontsource/inter/700.css";
+/* Self-hosted fonts (no third-party requests, CSP-safe): Roboto for text, Roboto Condensed for big numbers. */
+@import "@fontsource/roboto/400.css";
+@import "@fontsource/roboto/500.css";
+@import "@fontsource/roboto/700.css";
+@import "@fontsource/roboto-condensed/500.css";
+@import "@fontsource/roboto-condensed/700.css";
