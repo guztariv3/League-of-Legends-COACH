@@ -35,6 +35,8 @@ describe("rune page", () => {
       expect(rows.every((i) => i > 0), me).toBe(true);
       r.shards.forEach((s, i) => expect(runes.shardRows[i]!.shards, me).toContain(s.id));
       expect([r.keystone, ...r.primary, ...r.secondary, ...r.shards].every((x) => x.why.length > 0), me).toBe(true);
+      // Every rune says how it fits, or says plainly that nothing in its row stands out.
+      for (const x of [r.keystone, ...r.primary, ...r.secondary]) expect(x.why, `${me}: ${x.name}`).toMatch(/Fits: |No rune in this row stands out/);
     }
   });
 

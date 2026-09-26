@@ -59,52 +59,44 @@ export function PreGameBuildView({ build, art }: { build: PreGameBuild; art: Art
       {build.setup && (build.setup.spells.length > 0 || build.setup.runes) && (
         <div className="prebuild-block" aria-label="Runes and summoner spells">
           {build.setup.spells.length > 0 && (
-            <>
-              <div className="prebuild-title">Summoner spells</div>
-              <ul className="prebuild-list">
-                {build.setup.spells.map((s) => (
-                  <li key={s.id}>
-                    <details>
-                      <summary className="bar"><strong>{s.name}</strong></summary>
-                      <p className="quiet small" style={{ margin: 0 }}>{s.why}</p>
-                    </details>
-                  </li>
-                ))}
-              </ul>
-            </>
+            <details>
+              <summary className="bar">
+                <span className="prebuild-title">Spells</span>
+                <strong>{build.setup.spells.map((s) => s.name).join(" + ")}</strong>
+              </summary>
+              <ul className="reasons">{build.setup.spells.map((s) => <li key={s.id}><strong>{s.name}</strong>: {s.why}</li>)}</ul>
+            </details>
           )}
           {build.setup.runes && (
-            <>
-              <div className="prebuild-title">Runes</div>
-              <details>
-                <summary className="bar">
-                  <strong>{build.setup.runes.keystone.name}</strong>
-                  <span className="quiet small">{build.setup.runes.primaryTree} + {build.setup.runes.secondaryTree}</span>
-                </summary>
-                <ul className="reasons">
-                  {[build.setup.runes.keystone, ...build.setup.runes.primary].map((r) => <li key={r.id}><strong>{r.name}</strong>: {r.why}</li>)}
-                  {build.setup.runes.secondary.map((r) => <li key={r.id}><strong>{r.name}</strong> ({build.setup!.runes!.secondaryTree}): {r.why}</li>)}
-                  <li>Shards: {build.setup.runes.shards.map((r) => r.name).join(" · ")}</li>
-                </ul>
-              </details>
-            </>
+            <details>
+              <summary className="bar">
+                <span className="prebuild-title">Runes</span>
+                <strong>{build.setup.runes.keystone.name}</strong>
+                <span className="quiet small">{build.setup.runes.primaryTree} + {build.setup.runes.secondaryTree}</span>
+              </summary>
+              <ul className="reasons">
+                {[build.setup.runes.keystone, ...build.setup.runes.primary].map((r) => <li key={r.id}><strong>{r.name}</strong>: {r.why}</li>)}
+                {build.setup.runes.secondary.map((r) => <li key={r.id}><strong>{r.name}</strong> ({build.setup!.runes!.secondaryTree}): {r.why}</li>)}
+                <li>Shards: {build.setup.runes.shards.map((r) => r.name).join(" · ")}</li>
+              </ul>
+            </details>
           )}
         </div>
       )}
 
       {build.starter && (
-        <div className="prebuild-block">
-          <div className="prebuild-title">Start</div>
-          <div className="bar">
+        <details className="prebuild-block">
+          <summary className="bar">
+            <span className="prebuild-title">Start</span>
             {starterLine(build.starter.items).map((g) => (
               <span key={g.id} className="prebuild-item">
                 <ItemArt id={g.id} name={g.name} size={24} art={art} />
                 <span>{g.n > 1 ? `${g.n} × ` : ""}{g.name}</span>
               </span>
             ))}
-          </div>
+          </summary>
           <ul className="reasons">{build.starter.why.map((w) => <li key={w}>{w}</li>)}</ul>
-        </div>
+        </details>
       )}
 
       {first && (
@@ -145,10 +137,15 @@ export function PreGameBuildView({ build, art }: { build: PreGameBuild; art: Art
           <div className="prebuild-title">If needed</div>
           <ul className="prebuild-list">
             {build.situational.map((x) => (
-              <li key={x.id} className="bar">
-                <ItemArt id={x.id} name={x.name} size={24} art={art} />
-                <span>{x.name}</span>
-                <span className="quiet small">{x.when}</span>
+              <li key={x.id}>
+                <details>
+                  <summary className="bar">
+                    <ItemArt id={x.id} name={x.name} size={24} art={art} />
+                    <span>{x.name}</span>
+                  </summary>
+                  <p className="quiet small" style={{ margin: 0 }}>{x.when}</p>
+                  <ul className="reasons">{x.why.map((w) => <li key={w}>{w}</li>)}</ul>
+                </details>
               </li>
             ))}
           </ul>
@@ -156,24 +153,24 @@ export function PreGameBuildView({ build, art }: { build: PreGameBuild; art: Art
       )}
 
       {build.ruledOut.length > 0 && (
-        <div className="prebuild-block">
-          <div className="prebuild-title">Not needed this game</div>
+        <details className="prebuild-block">
+          <summary className="bar"><span className="prebuild-title">Not needed this game</span><span className="quiet small">{build.ruledOut.map((x) => x.name).join(", ")}</span></summary>
           <ul className="reasons">{build.ruledOut.map((x) => <li key={x.id}><strong>{x.name}</strong>: {x.why}</li>)}</ul>
-        </div>
+        </details>
       )}
 
       {build.enemiesKnown > 0 && (
-        <div className="prebuild-block">
-          <div className="prebuild-title">Enemy team</div>
-          <p className="small" style={{ margin: 0 }}>
-            Damage: {pct(build.enemyDamage.physical)} physical · {pct(build.enemyDamage.magic)} magic{build.enemyDamage.true >= 0.05 ? ` · ${pct(build.enemyDamage.true)} true` : ""}
-          </p>
+        <details className="prebuild-block">
+          <summary className="bar">
+            <span className="prebuild-title">Enemy team</span>
+            <span className="quiet small">{pct(build.enemyDamage.physical)} physical · {pct(build.enemyDamage.magic)} magic{build.enemyDamage.true >= 0.05 ? ` · ${pct(build.enemyDamage.true)} true` : ""}</span>
+          </summary>
           <ul className="reasons">
             {build.threats.slice(0, 5).map((t) => (
               <li key={t.kind}>{THREAT_LABEL[t.kind] ?? t.kind}: {t.sources.slice(0, 3).map((s) => s.name).join(", ")}</li>
             ))}
           </ul>
-        </div>
+        </details>
       )}
 
       <p className="quiet small">

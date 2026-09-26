@@ -189,6 +189,8 @@ body.overlay-body { background: transparent; }
 .prebuild-why { font-size: 0.72rem; font-weight: 600; color: var(--text-muted); }
 .prebuild-item { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; }
 .prebuild-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.prebuild-list summary { cursor: pointer; list-style: none; }
-.prebuild-list summary::-webkit-details-marker { display: none; }
+.prebuild summary { cursor: pointer; list-style: none; }
+.prebuild summary::-webkit-details-marker { display: none; }
+.prebuild summary .prebuild-title { min-width: 3.6em; }
+.prebuild details[open] > summary { margin-bottom: 4px; }
 .prebuild-list .bar { flex-wrap: wrap; }

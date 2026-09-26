@@ -98,7 +98,7 @@ function traitValue(t: Trait, k: KitNeeds, e: EnemyPicture): [number, string | n
     case "haste": return [p.abilityReliance * 0.6, p.abilityReliance >= 0.6 ? `${name} relies on ability cooldowns` : null];
     case "defense": return [p.frontline * 0.8 + e.threats.burst.weight * 0.2, p.frontline >= 0.5 ? `${name} is built to take hits` : null];
     case "vsHealthy": return [e.threats.tanks.weight * 0.7, e.threats.tanks.weight >= 0.3 ? `the enemy has tanky champions (${e.threats.tanks.sources.slice(0, 2).map((s) => s.name).join(", ")})` : null];
-    case "execute": return [p.offense * 0.35, null];
+    case "execute": return [p.offense * 0.35, p.offense >= 0.6 ? `${name} is built to deal damage and finish fights` : null];
     case "movement": return [0.15, null];
     case "dash": return [k.mobility * 0.8, k.mobility >= 0.5 ? `${name} has dashes or blinks` : null];
     case "economy": return [0.05, null];
@@ -122,7 +122,8 @@ function scoreText(text: string, needs: KitNeeds, e: EnemyPicture): { score: num
 }
 
 const sentence = (s: string) => s.split(/(?<=\.)\s|\n/)[0]!.trim();
-const why = (r: { short: string }, facts: string[]) => `${sentence(r.short)}${facts.length ? ` Fits: ${facts.slice(0, 2).join("; ")}.` : ""}`;
+const why = (r: { short: string }, facts: string[]) =>
+  `${sentence(r.short)} ${facts.length ? `Fits: ${facts.slice(0, 2).join("; ")}.` : "No rune in this row stands out for this champion; this one is a reasonable default."}`;
 
 function recommendRunes(data: RuneData, k: KitNeeds, e: EnemyPicture): RuneRecommendation | null {
   const byId = new Map(data.runes.map((r) => [r.id, r]));
