@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { claimDevice, fetchScout, inTauri, type SiteError } from "./bridge";
 
 /** Link to the player's KOI Master site. Only the device token is kept, never the site password. */
-interface SiteLink { origin: string; token: string }
+export interface SiteLink { origin: string; token: string }
 const LINK_KEY = "koi.link";
 
 interface Rank { queue: "solo" | "flex"; tier: string | null; division: string | null; lp: number | null; wins: number; losses: number }

@@ -129,6 +129,15 @@ describe("desktop pairing", () => {
     expect((await call("/desktop/plan?me=../x", { headers: auth })).res.status).toBe(400);
     expect((await call(`/desktop/plan?me=${main}&enemies=a,b,c,d,e,f`, { headers: auth })).res.status).toBe(400);
     expect((await call(`/desktop/plan?me=${main}`)).res.status).toBe(401);
+
+    // Home between games: the same profile as the website, only with the device token.
+    const home = await call("/desktop/home", { headers: auth });
+    expect(home.res.status).toBe(200);
+    expect(home.body.accounts.length).toBeGreaterThan(0);
+    expect(home.body.record.wins).toBeLessThanOrEqual(home.body.record.games);
+    expect(home.body.recent.length).toBeGreaterThan(0);
+    expect(home.body.champions.length).toBeGreaterThan(0);
+    expect((await call("/desktop/home")).res.status).toBe(401);
   }, 60_000);
 
   it("rejects wrong, expired and malformed codes and tokens", async () => {

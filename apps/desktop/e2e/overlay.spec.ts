@@ -52,7 +52,7 @@ test("overlay: off by default; turning it on shows it and feeds it during a game
   await stubTauri(page);
   await page.goto("/");
   await expect(page.getByText("● In game")).toBeVisible();
-  await page.getByText("Settings", { exact: true }).click();
+  await page.getByRole("tablist", { name: "Sections" }).getByRole("tab", { name: "Settings" }).click();
   const toggle = page.getByLabel("Show the overlay over the game (gold difference and next items)");
   await expect(toggle).not.toBeChecked();
   expect((await calls(page)).some((c) => c.cmd === "set_overlay" && c.args.visible === true)).toBe(false);

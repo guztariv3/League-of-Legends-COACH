@@ -13,18 +13,19 @@
     "windows": [
       {
         "label": "live",
-        "title": "KOI Master \u00b7 Live Coach",
+        "title": "KOI Master",
         "width": 380,
         "height": 560,
         "minWidth": 300,
         "minHeight": 360,
         "resizable": true,
         "alwaysOnTop": true,
-        "focus": false
+        "focus": false,
+        "decorations": false
       },
       {
         "label": "overlay",
-        "title": "KOI Master \u00b7 Overlay",
+        "title": "KOI Master · Overlay",
         "url": "overlay.html",
         "width": 230,
         "height": 250,

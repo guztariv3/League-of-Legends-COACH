@@ -1,6 +1,8 @@
 import { randomBytes, randomInt } from "node:crypto";
 import type { KnowledgeRegistry } from "@coach/knowledge";
-import { and, desc, eq, gt, isNull } from "drizzle-orm";
+import { championPool } from "@coach/coach";
+import { challengeTitle, evaluateChallenge, type ChallengeKind, type GoalMetric } from "@coach/insights";
+import { and, asc, desc, eq, gt, inArray, isNull } from "drizzle-orm";
 import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { hashToken, type AuthVars } from "./auth.js";
@@ -8,6 +10,7 @@ import { schema, type Db } from "./db/index.js";
 import { userAccounts } from "./queries.js";
 import { personalBuild } from "./build.js";
 import { prepareGame } from "./game.js";
+import { RANKED_QUEUES, rankHistory } from "./rank.js";
 import { scoutForUser } from "./scout.js";
 import type { Services } from "./services.js";
 import type { MatchSource } from "./sources.js";
@@ -17,9 +20,9 @@ import type { MatchSource } from "./sources.js";
  *
  * 1. Signed in on the web, the player asks for a code (valid 10 minutes, single use).
  * 2. The desktop app exchanges it at /desktop/claim for a device token.
- * 3. With `Authorization: Bearer <token>` the app can only read /desktop/scout, /desktop/build and /desktop/plan.
+ * 3. With `Authorization: Bearer <token>` the app can only read /desktop/scout, /desktop/build, /desktop/plan and /desktop/home.
  * Only SHA-256 hashes are stored; the player can revoke a device from the web at any time.
- * /desktop/claim, /desktop/scout, /desktop/build and /desktop/plan are the only API routes the site's password gate lets through,
+ * /desktop/claim, /desktop/scout, /desktop/build, /desktop/plan and /desktop/home are the only API routes the site's password gate lets through,
  * because they carry their own authentication.
  */
 export const PAIRING_CODE_TTL_MS = 10 * 60_000;
@@ -173,6 +176,47 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
     const { analyses } = await deps.services.profileAnalyses(device.userId);
     const { draft, plan } = prepareGame({ myChampion: me, allies: known(q.data.allies), enemies: known(q.data.enemies), laneOpponent: opponent }, analyses, bundle);
     return c.json({ champion: me, plan, keyPoints: draft.keyPoints, limits: draft.limits });
+  });
+
+  /**
+   * The player's home, shown by the desktop app between games: the same profile as the website
+   * (accounts, rank, recent results, most played champions, focus and running challenges).
+   */
+  r.get("/desktop/home", async (c) => {
+    const device = await deviceFor(c);
+    if (!device) return disconnected(c);
+    const accounts = (await userAccounts(db, device.userId)).filter((a) => a.includeInProfile);
+    const { analyses } = await deps.services.profileAnalyses(device.userId);
+    const played = analyses.filter((a) => a.analyzable).sort((a, b) => b.startedAt - a.startedAt);
+    const last20 = played.slice(0, 20);
+
+    const snapshots = accounts.length
+      ? await db.select().from(schema.rankSnapshots).where(inArray(schema.rankSnapshots.accountId, accounts.map((a) => a.id))).orderBy(asc(schema.rankSnapshots.takenAt))
+      : [];
+    const ranks = accounts.flatMap((a) => RANKED_QUEUES.flatMap((q) => {
+      const current = rankHistory(snapshots.filter((s) => s.accountId === a.id && s.queueType === q)).at(-1);
+      return current ? [{ riotId: `${a.gameName}#${a.tagLine}`, queueType: q, tier: current.tier, rank: current.rank, lp: current.lp, wins: current.wins, losses: current.losses }] : [];
+    }));
+
+    const [focus] = await db.select().from(schema.coachMemory)
+      .where(and(eq(schema.coachMemory.userId, device.userId), eq(schema.coachMemory.category, "focus")));
+    const running = await db.select().from(schema.challenges)
+      .where(and(eq(schema.challenges.userId, device.userId), eq(schema.challenges.status, "active")));
+    const now = Date.now();
+
+    return c.json({
+      accounts: accounts.map((a) => `${a.gameName}#${a.tagLine}`),
+      ranks,
+      record: { games: last20.length, wins: last20.filter((a) => a.win).length },
+      recent: played.slice(0, 5).map((a) => ({ matchId: a.matchId, championName: a.championName, win: a.win, kills: a.kills, deaths: a.deaths, assists: a.assists, startedAt: a.startedAt, mode: a.mode })),
+      champions: championPool(analyses).slice(0, 3).map((e) => ({ name: e.name, games: e.games, wins: e.wins })),
+      focus: focus?.content ?? null,
+      challenges: running.map((x) => {
+        const spec = { metric: x.metric as GoalMetric, target: x.target, kind: x.kind as ChallengeKind };
+        const p = evaluateChallenge(spec, analyses, x.createdAt.getTime(), now);
+        return { title: challengeTitle(spec), met: p.met, played: p.played, summary: p.summary };
+      }),
+    });
   });
 
   return r;

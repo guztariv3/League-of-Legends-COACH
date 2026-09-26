@@ -75,20 +75,20 @@ test("in game: both teams with items, and your build from your history", async (
   await expect(page.getByText("● In game")).toBeVisible();
   const board = page.getByRole("region", { name: "Game" });
 
-  // Items (first tab): the next item follows the enemy team, with reasons and how to buy it.
-  await expect(board.getByRole("tab", { name: "Items" })).toHaveAttribute("aria-selected", "true");
+  // Items (opened when the game starts, from the top navigation): the next item follows the enemy team, with reasons and how to buy it.
+  await expect(page.getByRole("tablist", { name: "Sections" }).getByRole("tab", { name: "Items" })).toHaveAttribute("aria-selected", "true");
   const next = board.getByRole("region", { name: "Next suggested item" });
   await expect(next).toContainText("Morellonomicon");
   await expect(next).toContainText("Zed and Aatrox heal with lifesteal: applies Grievous Wounds");
   await expect(next.getByLabel("Components").getByRole("img")).toHaveCount(2);
   await expect(next).toContainText("You need 2950 more gold in total. Your 1000 gold buys: Blasting Wand (850).");
   await expect(board).toContainText("Your history on Ahri (12 games)");
-  // The Coach's Now card sits above the tabs, in its own voice.
+  // The Coach's Now card sits above the section, in its own voice.
   await expect(board.getByRole("region", { name: "Now" })).toBeVisible();
   await page.screenshot({ path: "test-results/board-items.png" });
 
   // Plan: the Coach's game plan for these champions, from the website.
-  await board.getByRole("tab", { name: "Plan" }).click();
+  await page.getByRole("tablist", { name: "Sections" }).getByRole("tab", { name: "Plan" }).click();
   const planTab = board.getByRole("region", { name: "Coach game plan" });
   await expect(planTab).toContainText("Biggest threat");
   await expect(planTab).toContainText("Zed");
@@ -96,13 +96,13 @@ test("in game: both teams with items, and your build from your history", async (
   await page.screenshot({ path: "test-results/board-plan.png" });
 
   // Skills: ranks, and the next ability from the player's own order.
-  await board.getByRole("tab", { name: "Skills" }).click();
+  await page.getByRole("tablist", { name: "Sections" }).getByRole("tab", { name: "Skills" }).click();
   await expect(board.getByRole("region", { name: "Next ability" })).toContainText("In 4 of your last 4 games with Ahri you took W at this point.");
   await expect(board).toContainText("You usually max Q → W → E on Ahri (4 games).");
   await page.screenshot({ path: "test-results/board-skills.png" });
 
   // Gold: matchups by item value (no lanes here, so list order), team totals and objectives.
-  await board.getByRole("tab", { name: "Gold" }).click();
+  await page.getByRole("tablist", { name: "Sections" }).getByRole("tab", { name: "Gold" }).click();
   const gold = board.getByRole("region", { name: "Gold difference" });
   await expect(gold.getByRole("listitem")).toHaveCount(5);
   await expect(gold.getByRole("listitem").first()).toContainText("+0.5k");
@@ -112,18 +112,12 @@ test("in game: both teams with items, and your build from your history", async (
   await expect(board.getByRole("region", { name: "Objectives" })).toBeVisible();
   await page.screenshot({ path: "test-results/board-gold.png" });
 
-  await board.getByRole("tab", { name: "Enemies" }).click();
-  await expect(board).toContainText("Jugador5");
-  await expect(board).toContainText("Miss Fortune");
-  await expect(board.getByRole("img", { name: "Doran's Blade" }).first()).toHaveAttribute("src", "https://ddragon.leagueoflegends.com/cdn/15.19.1/img/item/1055.png");
-  await expect(board.getByRole("img", { name: "Wukong" })).toHaveAttribute("src", "https://ddragon.leagueoflegends.com/cdn/15.19.1/img/champion/MonkeyKing.png");
-  await expect(board.getByRole("listitem")).toHaveCount(5);
-  await page.screenshot({ path: "test-results/board-rivals.png" });
-
-  await board.getByRole("tab", { name: "Team" }).click();
-  await expect(board.getByRole("listitem").first()).toContainText("You");
-  await expect(board.getByRole("img", { name: "Luden's Companion" })).toBeVisible();
-
+  // The Enemies and Team sections are gone from the navigation (the Coach still reads both teams).
+  const tabs = page.getByRole("tablist", { name: "Sections" }).getByRole("tab");
+  await expect(tabs).toHaveCount(6);
+  for (const name of ["Home", "Plan", "Items", "Skills", "Gold", "Settings"]) await expect(page.getByRole("tab", { name, exact: true })).toBeVisible();
+  for (const name of ["Enemies", "Team"]) await expect(page.getByRole("tab", { name })).toHaveCount(0);
+  await expect(board.getByRole("img", { name: "Wukong" }).first()).toHaveAttribute("src", "https://ddragon.leagueoflegends.com/cdn/15.19.1/img/champion/MonkeyKing.png");
 });
 
 test("waiting, not connected: a visible Connect button opens the code form", async ({ page }) => {
@@ -133,12 +127,19 @@ test("waiting, not connected: a visible Connect button opens the code form", asy
   await expect(page.getByLabel("Code")).toBeVisible();
 });
 
-test("demo: the board shows both teams", async ({ page }) => {
+test("demo: the in-game sections appear in the top navigation", async ({ page }) => {
   await page.goto("/?demoSpeed=150");
-  await page.getByText("Settings", { exact: true }).click();
+  await page.getByRole("tablist", { name: "Sections" }).getByRole("tab", { name: "Settings" }).click();
   await page.getByRole("button", { name: "Try the demo" }).click();
   const board = page.getByRole("region", { name: "Game" });
   await expect(board).toContainText("In the demo the items are made up", { timeout: 15_000 });
-  await board.getByRole("tab", { name: "Enemies" }).click();
-  await expect(board.getByRole("listitem")).toHaveCount(5);
+  await expect(page.getByRole("tablist", { name: "Sections" }).getByRole("tab", { name: "Enemies" })).toHaveCount(0);
+  await expect(page.getByRole("tablist", { name: "Sections" }).getByRole("tab", { name: "Team" })).toHaveCount(0);
+
+  // Leaving the demo clears the match and goes back Home.
+  await page.getByRole("tablist", { name: "Sections" }).getByRole("tab", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Exit demo" }).click();
+  await expect(page.getByRole("tablist", { name: "Sections" }).getByRole("tab", { name: "Home" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("region", { name: "Game" })).toHaveCount(0);
+  await expect(page.getByRole("tablist", { name: "Sections" }).getByRole("tab", { name: "Items" })).toHaveCount(0);
 });

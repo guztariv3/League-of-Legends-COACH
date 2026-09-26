@@ -242,24 +242,38 @@ fn find_lockfile() -> Option<(u16, String)> {
 
 /// Keeps only what the Coach may use from a champion-select session: champion ids and the
 /// player's own assigned position. Other players' names, PUUIDs and summoner ids are dropped here.
+///
+/// Your champion comes from your own pick action: while it is your turn, the champion you hover
+/// sits in that action with `completed: false` (the client doesn't copy it to `myTeam` until you
+/// lock in). Before your turn, `championPickIntent` holds the champion you declared.
 fn reduce_session(session: &serde_json::Value) -> serde_json::Value {
     let me_cell = session.get("localPlayerCellId").and_then(|v| v.as_i64());
     let team = |key: &str| session.get(key).and_then(|v| v.as_array()).cloned().unwrap_or_default();
-    let champ = |p: &serde_json::Value, intent: bool| -> u64 {
-        let picked = p.get("championId").and_then(|v| v.as_u64()).unwrap_or(0);
-        if picked > 0 || !intent { picked } else { p.get("championPickIntent").and_then(|v| v.as_u64()).unwrap_or(0) }
-    };
+    let id = |v: Option<&serde_json::Value>| v.and_then(|x| x.as_u64()).unwrap_or(0);
+    // Actions come grouped by phase (an array of arrays); the latest of mine wins.
+    let my_pick = session.get("actions").and_then(|v| v.as_array()).into_iter().flatten()
+        .filter_map(|group| group.as_array()).flatten()
+        .filter(|a| a.get("actorCellId").and_then(|v| v.as_i64()) == me_cell && a.get("type").and_then(|v| v.as_str()) == Some("pick"))
+        .filter(|a| id(a.get("championId")) > 0)
+        .last()
+        .cloned();
     let my_team = team("myTeam");
     let me = my_team.iter().find(|p| p.get("cellId").and_then(|v| v.as_i64()) == me_cell);
+    let (champion, locked) = match (&my_pick, me) {
+        (Some(a), _) => (id(a.get("championId")), a.get("completed").and_then(|v| v.as_bool()).unwrap_or(false)),
+        (None, Some(p)) if id(p.get("championId")) > 0 => (id(p.get("championId")), true),
+        (None, Some(p)) => (id(p.get("championPickIntent")), false),
+        (None, None) => (0, false),
+    };
     let allies: Vec<u64> = my_team.iter()
         .filter(|p| p.get("cellId").and_then(|v| v.as_i64()) != me_cell)
-        .map(|p| champ(p, false)).filter(|c| *c > 0).collect();
-    let enemies: Vec<u64> = team("theirTeam").iter().map(|p| champ(p, false)).filter(|c| *c > 0).collect();
+        .map(|p| id(p.get("championId"))).filter(|c| *c > 0).collect();
+    let enemies: Vec<u64> = team("theirTeam").iter().map(|p| id(p.get("championId"))).filter(|c| *c > 0).collect();
     serde_json::json!({
         "phase": "ChampSelect",
         "me": me.map(|p| serde_json::json!({
-            "championId": champ(p, true),
-            "locked": p.get("championId").and_then(|v| v.as_u64()).unwrap_or(0) > 0,
+            "championId": champion,
+            "locked": locked,
             "position": p.get("assignedPosition").and_then(|v| v.as_str()).unwrap_or(""),
         })),
         "allies": allies,
@@ -301,6 +315,16 @@ fn lcu_client() -> reqwest::Client {
         .expect("lcu client")
 }
 
+/// The player's home (profile summary) for the screen between games, with the device token.
+#[tauri::command]
+async fn desktop_home(state: tauri::State<'_, AppState>, base_url: String, token: String) -> Result<serde_json::Value, String> {
+    let origin = site_origin(&base_url)?;
+    let res = state.site.get(format!("{origin}/api/desktop/home"))
+        .bearer_auth(token)
+        .send().await.map_err(|_| "offline".to_string())?;
+    site_json(res).await
+}
+
 fn site_client() -> reqwest::Client {
     reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(10))
@@ -336,7 +360,7 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     builder
         .manage(AppState { http: live_client(), lcu: lcu_client(), site: site_client(), sys: Mutex::new(sys) })
-        .invoke_handler(tauri::generate_handler![live_snapshot, system_load, check_update, install_update, desktop_claim, desktop_scout, desktop_build, desktop_plan, set_overlay, lcu_champ_select])
+        .invoke_handler(tauri::generate_handler![live_snapshot, system_load, check_update, install_update, desktop_claim, desktop_scout, desktop_build, desktop_plan, set_overlay, lcu_champ_select, desktop_home])
         .run(tauri::generate_context!())
         .expect("error while running KOI Master desktop");
 }
@@ -388,6 +412,7 @@ mod tests {
             "theirTeam": [{ "cellId": 5, "championId": 238, "puuid": "enemy-puuid" }, { "cellId": 6, "championId": 0 }]
         });
         let r = reduce_session(&session);
+        // No actions: the declared intent is used, not locked.
         assert_eq!(r["me"]["championId"], 157);
         assert_eq!(r["me"]["locked"], false);
         assert_eq!(r["me"]["position"], "middle");
@@ -395,6 +420,25 @@ mod tests {
         assert_eq!(r["enemies"], serde_json::json!([238]));
         let text = r.to_string();
         assert!(!text.contains("puuid") && !text.contains("Ally"));
+    }
+
+    #[test]
+    fn hovering_during_your_turn_shows_that_champion_before_lock_in() {
+        let base = |completed: bool| serde_json::json!({
+            "localPlayerCellId": 2,
+            "myTeam": [{ "cellId": 2, "championId": if completed { 103 } else { 0 }, "championPickIntent": 157, "assignedPosition": "middle" }],
+            "theirTeam": [],
+            "actions": [
+                [{ "actorCellId": 7, "championId": 55, "completed": true, "type": "ban" }],
+                [{ "actorCellId": 2, "championId": 103, "completed": completed, "isInProgress": !completed, "type": "pick" }]
+            ]
+        });
+        let hover = reduce_session(&base(false));
+        assert_eq!(hover["me"]["championId"], 103); // the hover, not the older intent
+        assert_eq!(hover["me"]["locked"], false);
+        let lock = reduce_session(&base(true));
+        assert_eq!(lock["me"]["championId"], 103);
+        assert_eq!(lock["me"]["locked"], true);
     }
 
     /// With no game running, a read must fail fast (never block the Coach).
