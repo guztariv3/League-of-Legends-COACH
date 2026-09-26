@@ -105,6 +105,18 @@ export const goals = pgTable("goals", {
   closedAt: timestamp("closed_at", { withTimezone: true }),
 });
 
+/** Challenges (F6): "3 of your next 5 games" or "3 this week" on one goal metric. */
+export const challenges = pgTable("challenges", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  metric: text("metric").notNull(),
+  target: doublePrecision("target").notNull(),
+  kind: text("kind").$type<"next5" | "week">().notNull(),
+  status: text("status").$type<"active" | "completed" | "failed" | "abandoned">().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
+});
+
 /** Coach memory (brief §48): small, categorised, fully user-controlled. */
 export const coachMemory = pgTable("coach_memory", {
   id: uuid("id").primaryKey().defaultRandom(),

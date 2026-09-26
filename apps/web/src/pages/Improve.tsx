@@ -3,12 +3,13 @@ import { Link, useSearchParams } from "react-router";
 import { api, type PoolEntry, type PoolVerdict } from "../api";
 import { ChampionIcon } from "../assets";
 import { ActivityCalendar } from "../components/ActivityCalendar";
+import { Challenges } from "../components/Challenges";
 import { LpChart, rankLabel } from "../components/LpChart";
 import { ErrorNotice, Loading, num, pct } from "../components/ui";
 import { useLoad } from "../session";
 
-type Tab = "champions" | "matchups" | "lp" | "activity";
-const TABS: [Tab, string][] = [["champions", "Champion pool"], ["matchups", "Matchups"], ["lp", "LP"], ["activity", "Activity"]];
+type Tab = "challenges" | "champions" | "matchups" | "lp" | "activity";
+const TABS: [Tab, string][] = [["challenges", "Challenges"], ["champions", "Champion pool"], ["matchups", "Matchups"], ["lp", "LP"], ["activity", "Activity"]];
 
 const VERDICT: Record<PoolVerdict, { label: string; cls: string }> = {
   strong: { label: "▲ Clearly winning", cls: "trend-improving" },
@@ -29,7 +30,7 @@ const ago = (t: number) => {
  */
 export function Improve() {
   const [params, setParams] = useSearchParams();
-  const tab = (TABS.find(([k]) => k === params.get("tab"))?.[0] ?? "champions") as Tab;
+  const tab = (TABS.find(([k]) => k === params.get("tab"))?.[0] ?? "challenges") as Tab;
   const vs = params.get("champion") ?? "";
   const set = (k: string, v: string) => {
     const next = new URLSearchParams(window.location.search);
@@ -42,15 +43,15 @@ export function Improve() {
     <div className="stack" style={{ gap: 20 }}>
       <header>
         <h1 className="page-title">Improve</h1>
-        <p className="page-sub" style={{ margin: 0 }}>Your champions, matchups, rank and activity, from your own games.</p>
+        <p className="page-sub" style={{ margin: 0 }}>Challenges, champions, matchups, rank and activity, all from your own games.</p>
       </header>
       <div className="tabs-row" role="tablist" aria-label="Improve sections">
         {TABS.map(([key, label]) => (
-          <button key={key} role="tab" aria-selected={tab === key} className={`tab-btn${tab === key ? " tab-btn-on" : ""}`} onClick={() => set("tab", key === "champions" ? "" : key)}>{label}</button>
+          <button key={key} role="tab" aria-selected={tab === key} className={`tab-btn${tab === key ? " tab-btn-on" : ""}`} onClick={() => set("tab", key === "challenges" ? "" : key)}>{label}</button>
         ))}
       </div>
 
-      {tab === "lp" ? <LpSection /> : data.loading && !data.data ? <Loading /> : data.error ? <ErrorNotice error={data.error} /> : data.data && (
+      {tab === "challenges" ? <Challenges /> : tab === "lp" ? <LpSection /> : data.loading && !data.data ? <Loading /> : data.error ? <ErrorNotice error={data.error} /> : data.data && (
         <>
           {tab === "champions" && (
             <PoolTable title="Champion pool" entries={data.data.champions} what="champion" empty="No analyzable Summoner's Rift games yet."

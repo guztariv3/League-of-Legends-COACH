@@ -164,3 +164,32 @@ describe("improve", () => {
     for (const g of body.activity) expect(typeof g.t).toBe("number");
   }, 60_000);
 });
+
+describe("challenges", () => {
+  it("accepts a suggested challenge with the server's target, one per metric, at most 3, and lets you drop it", async () => {
+    const cookie = await player("Challenger");
+    const first = await call("/challenges", { cookie });
+    expect(first.body.active).toHaveLength(0);
+    expect(first.body.suggestions.length).toBeGreaterThan(0);
+    const s = first.body.suggestions[0];
+
+    const created = await call("/challenges", { method: "POST", cookie, body: JSON.stringify({ metric: s.metric, kind: "next5", target: 999 }) });
+    expect(created.res.status).toBe(201);
+    expect(created.body.challenge.target).toBe(s.target); // the client can't pick the target
+    expect(created.body.challenge.progress).toMatchObject({ status: "in_progress", played: 0 });
+    expect(created.body.challenge.title).toMatch(/in 3 of your next 5 games/);
+
+    const dup = await call("/challenges", { method: "POST", cookie, body: JSON.stringify({ metric: s.metric, kind: "week" }) });
+    expect(dup.res.status).toBe(409);
+
+    const list = await call("/challenges", { cookie });
+    expect(list.body.active).toHaveLength(1);
+    expect(list.body.suggestions.map((x: any) => x.metric)).not.toContain(s.metric);
+
+    const other = await player("ChallengeThief");
+    expect((await call(`/challenges/${created.body.challenge.id}`, { method: "DELETE", cookie: other })).res.status).toBe(404);
+    expect((await call(`/challenges/${created.body.challenge.id}`, { method: "DELETE", cookie })).res.status).toBe(200);
+    expect((await call("/challenges", { cookie })).body.active).toHaveLength(0);
+    expect((await call("/challenges", { method: "POST", cookie, body: JSON.stringify({ metric: "nope", kind: "next5" }) })).res.status).toBe(400);
+  }, 60_000);
+});

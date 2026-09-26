@@ -12,7 +12,20 @@ test("improve: champion pool, matchups, LP and activity", async ({ page }, info)
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Improve" }).click();
   await expect(page.getByRole("heading", { name: "Improve", exact: true })).toBeVisible();
 
+  // Challenges (default tab): accept one, see its 5 slots, then drop it.
+  const mine = page.getByRole("region", { name: "Your challenges" });
+  await expect(mine.getByText(/No challenge running/)).toBeVisible();
+  const suggest = page.getByRole("region", { name: "Try one" });
+  await expect(suggest.getByText(/You reached it in \d+ of your last \d+ games/).first()).toBeVisible();
+  await suggest.getByRole("button", { name: "3 of my next 5 games" }).first().click();
+  await expect(mine.getByText(/in 3 of your next 5 games/)).toBeVisible();
+  await expect(mine.getByText("No games yet since you accepted it.")).toBeVisible();
+  await page.screenshot({ path: `test-results/challenges-${info.project.name}.png`, fullPage: true });
+  await mine.getByRole("button", { name: /Drop challenge/ }).click();
+  await expect(mine.getByText(/No challenge running/)).toBeVisible();
+
   // Champion pool: most played first, with an honest verdict.
+  await page.getByRole("tab", { name: "Champion pool" }).click();
   const pool = page.getByRole("region", { name: "Champion pool" });
   await expect(pool.getByRole("row")).not.toHaveCount(0);
   await expect(pool.getByText(/Clearly winning|Clearly losing|Not clearly above or below 50%|Fewer than 5 games/).first()).toBeVisible();

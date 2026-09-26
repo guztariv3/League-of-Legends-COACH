@@ -2,6 +2,7 @@ import { compareMeans, detectAnomalies, findInflections, gameStateOf, LONG_METRI
 import type { GoalMetric } from "./goals.js";
 
 export * from "./goals.js";
+export * from "./challenges.js";
 
 /**
  * Insight pipeline (the single "decision engine"):

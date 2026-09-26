@@ -506,3 +506,12 @@ td .loadout { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
 .calendar-day.lvl-4 { background: var(--gold-bright); }
 .calendar-day.is-active { outline: 2px solid var(--text-primary); outline-offset: 1px; }
 .calendar-legend { display: inline-flex; align-items: center; gap: 3px; }
+
+/* Challenges */
+.challenge { display: flex; flex-direction: column; gap: 6px; padding-top: var(--space-3); border-top: 1px solid var(--border); }
+.challenge:first-of-type { border-top: 0; padding-top: 0; }
+.challenge-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; justify-content: space-between; }
+.challenge-slots { display: inline-flex; gap: 4px; }
+.slot { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border-strong); display: inline-grid; place-items: center; font-size: 0.75rem; color: var(--text-muted); }
+.slot-met { border-color: var(--good); color: var(--good); background: rgb(80 200 120 / 0.12); }
+.slot-miss { border-color: var(--text-muted); }
