@@ -8,14 +8,15 @@
   },
   "dependencies": {
     "@coach/analysis": "workspace:*",
+    "@coach/domain": "workspace:*",
     "@coach/draft": "workspace:*",
     "@coach/insights": "workspace:*",
     "@coach/itemization": "workspace:*",
     "@coach/knowledge": "workspace:*",
-    "@coach/live": "workspace:*"
+    "@coach/live": "workspace:*",
+    "@coach/review": "workspace:*"
   },
   "devDependencies": {
-    "@coach/domain": "workspace:*",
     "@coach/synthetic": "workspace:*"
   }
 }

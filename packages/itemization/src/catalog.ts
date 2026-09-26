@@ -108,3 +108,26 @@ export function parseCatalog(itemJson: unknown, championJson: unknown): Catalog 
   }
   return { version: items.version, items: out, champions };
 }
+
+const catalogs = new Map<string, Promise<Catalog | null>>();
+
+/**
+ * Fetches Data Dragon's item and champion files for a version (en_US) and parses them,
+ * once per version; null when unavailable (a failure is retried on the next call).
+ * Only the two most recent versions are kept in memory.
+ */
+export function fetchCatalog(version: string, fetchImpl: typeof fetch = fetch): Promise<Catalog | null> {
+  if (!/^[0-9.]{1,20}$/.test(version)) return Promise.resolve(null);
+  let hit = catalogs.get(version);
+  if (!hit) {
+    const get = (file: string) => fetchImpl(`https://ddragon.leagueoflegends.com/cdn/${version}/data/en_US/${file}`, { signal: AbortSignal.timeout(8000) })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))));
+    hit = Promise.all([get("item.json"), get("champion.json")])
+      .then(([items, champs]) => parseCatalog(items, champs))
+      .catch(() => null);
+    void hit.then((v) => { if (!v) catalogs.delete(version); });
+    catalogs.set(version, hit);
+    while (catalogs.size > 2) catalogs.delete(catalogs.keys().next().value!);
+  }
+  return hit;
+}

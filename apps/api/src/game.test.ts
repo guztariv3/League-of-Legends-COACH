@@ -40,6 +40,10 @@ describe("match review", () => {
     expect(r.body.available).toBe(true);
     expect(r.body.review.frames.length).toBeGreaterThan(10);
     expect(r.body.review.limits.length).toBeGreaterThan(0);
+    // Coach Review: the eight sections; no item replay without Riot's item data (synthetic catalog).
+    expect(r.body.coach.sections).toHaveLength(8);
+    expect(r.body.coach.sections.find((s: any) => s.id === "build").empty).toMatch(/Item data/);
+    expect(r.body.coach.baseline.games).toBeGreaterThanOrEqual(5);
 
     const aram = (await call("/matches?mode=aram&limit=1", { cookie })).body.matches[0];
     if (aram) expect((await call(`/matches/${aram.matchId}/review`, { cookie })).body.available).toBe(false);

@@ -1,6 +1,7 @@
 import { normalizeMatch, type RawMatch, type RawTimeline } from "@coach/domain";
-import { gamePlan } from "@coach/coach";
+import { coachReview, gamePlan } from "@coach/coach";
 import { analyzeDraft, type DraftInput } from "@coach/draft";
+import { fetchCatalog } from "@coach/itemization";
 import type { KnowledgeRegistry } from "@coach/knowledge";
 import { buildReview } from "@coach/review";
 import { eq } from "drizzle-orm";
@@ -39,8 +40,15 @@ export function gameRoutes({ db, source, knowledge, services }: { db: Db; source
     if (match.mode !== "summoners_rift" || match.remake) {
       return c.json({ available: false, message: "The map review is only available for complete Summoner's Rift games." });
     }
-    const review = buildReview(match, tl.payload as RawTimeline, mine.puuid);
-    return review ? c.json({ available: true, dataSource: raw.source, review }) : c.json({ error: "not_found" }, 404);
+    const timeline = tl.payload as RawTimeline;
+    const review = buildReview(match, timeline, mine.puuid);
+    if (!review) return c.json({ error: "not_found" }, 404);
+    // Coach Review: this game against the player's own games; item data only with the real catalog.
+    const { analyses } = await services.profileAnalyses(c.get("userId"));
+    const bundle = knowledge.active();
+    const catalog = bundle?.source === "ddragon" ? await fetchCatalog(bundle.version) : null;
+    const coach = coachReview({ game: mine, history: analyses, review, match, timeline, catalog });
+    return c.json({ available: true, dataSource: raw.source, review, coach });
   });
 
   r.post("/draft", async (c) => {
