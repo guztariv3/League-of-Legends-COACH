@@ -434,6 +434,24 @@ export interface Improve {
   activity: { t: number; win: boolean; mode: "summoners_rift" | "aram" | "unsupported"; analyzable: boolean }[];
   activityDays: number;
 }
+export interface Challenge {
+  id: string;
+  metric: string;
+  kind: "next5" | "week";
+  target: number;
+  title: string;
+  createdAt: string;
+  closedAt: string | null;
+  status: "active" | "completed" | "failed" | "abandoned";
+  progress: { status: "in_progress" | "completed" | "failed"; met: number; played: number; results: boolean[]; endsAt: number | null; summary: string };
+}
+export interface ChallengesResponse {
+  active: Challenge[];
+  recent: Challenge[];
+  completedCount: number;
+  suggestions: { metric: string; target: number; title: string; recent: { met: number; n: number } }[];
+  max: number;
+}
 export interface RankPoint { at: string; tier: string; rank: string; lp: number; wins: number; losses: number; lpChange: number | null; points: number | null }
 export interface RankResponse {
   accounts: { accountId: string; riotId: string; queues: { queueType: "RANKED_SOLO_5x5" | "RANKED_FLEX_SR"; current: RankPoint; history: RankPoint[] }[] }[];
@@ -486,4 +504,8 @@ export const api = {
   clearHistory: () => request<{ ok: true }>("/history", { method: "DELETE" }),
   improve: (champion?: string) => request<Improve>(`/improve${champion ? `?champion=${encodeURIComponent(champion)}` : ""}`),
   rank: () => request<RankResponse>("/rank"),
+  challenges: () => request<ChallengesResponse>("/challenges"),
+  acceptChallenge: (metric: string, kind: "next5" | "week") =>
+    request<{ challenge: Challenge }>("/challenges", { method: "POST", body: JSON.stringify({ metric, kind }) }),
+  dropChallenge: (id: string) => request<{ ok: true }>(`/challenges/${id}`, { method: "DELETE" }),
 };

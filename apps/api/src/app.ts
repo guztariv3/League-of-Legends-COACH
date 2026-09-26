@@ -404,7 +404,7 @@ export function createApp(deps: AppDeps) {
   authed.route("/", gameRoutes({ db, source, knowledge, services }));
   authed.route("/", evolutionRoutes({ db, knowledge, services }));
   authed.route("/", rankRoutes({ db }));
-  authed.route("/", improveRoutes({ services }));
+  authed.route("/", improveRoutes({ db, services }));
   authed.route("/", desktopSessionRoutes({ db }));
   // Device routes authenticate with a pairing code or a device token, not the session cookie.
   app.route("/", desktopDeviceRoutes({ db, source, knowledge, services }));
