@@ -21,6 +21,7 @@ beforeAll(async () => {
   writeFileSync(join(dist, "app.js"), "console.log('ok')");
   mkdirSync(join(dist, "info"));
   writeFileSync(join(dist, "info", "index.html"), "<!doctype html><title>KOI Master info</title><div id=root></div>");
+  writeFileSync(join(dist, "info", "riot.txt"), "riot-verification-code");
   mkdirSync(join(dist, "assets"));
   writeFileSync(join(dist, "assets", "info-abc.js"), "console.log('public')");
   const cfg = loadConfig({ NODE_ENV: "production", PROTOTYPE_PASSWORD: PASSWORD, DEV_LOGIN: "1", WEB_DIST: dist, RENDER_EXTERNAL_URL: "https://kairos.example" });
@@ -44,6 +45,12 @@ describe("production site", () => {
       expect(await res.text()).toContain("KOI Master info");
     }
     expect((await site.request("/info")).status).toBe(200);
+    // Riot's production-key verification file, at the URL the portal checks (it doubles the slash).
+    for (const path of ["/info/riot.txt", "/info//riot.txt"]) {
+      const res = await site.request(path);
+      expect(res.status, path).toBe(200);
+      expect(await res.text(), path).toBe("riot-verification-code");
+    }
     expect(await (await site.request("/assets/info-abc.js")).text()).toContain("public");
     // The app itself, its API and anything else stay behind the gate.
     for (const path of ["/", "/settings", "/app.js", "/api/me", "/api/assets", "/informacion", "/api/info/"]) {

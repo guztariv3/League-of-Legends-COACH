@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
@@ -43,6 +43,13 @@ export function createSite(deps: AppDeps) {
 
   const dist = deps.cfg.webDist;
   if (dist) {
+    // Riot's production-key verification file (a public code, not a secret). The portal checks
+    // https://…/info//riot.txt, with a doubled slash that the static server doesn't resolve.
+    const riotFile = join(dist, "info", "riot.txt");
+    if (existsSync(riotFile)) {
+      const code = readFileSync(riotFile, "utf8");
+      site.get("*", async (c, next) => (/^\/info\/+riot\.txt$/.test(c.req.path) ? c.text(code) : next()));
+    }
     site.use("/*", serveStatic({ root: dist }));
     // SPA fallback: any non-API route serves the app shell.
     const shell = readFileSync(join(dist, "index.html"), "utf8");
