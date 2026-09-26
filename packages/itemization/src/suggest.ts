@@ -88,7 +88,7 @@ export function purchasePath(item: CatalogItem, inventory: number[], gold: numbe
   const take = (id: number) => { const at = pool.indexOf(id); if (at < 0) return false; pool.splice(at, 1); return true; };
   const steps: PathStep[] = item.from.map((id) => {
     const c = catalog.items.get(id);
-    return { id, name: c?.name ?? `Objeto ${id}`, gold: c?.gold ?? 0, owned: take(id) };
+    return { id, name: c?.name ?? `Item ${id}`, gold: c?.gold ?? 0, owned: take(id) };
   });
   const remaining = Math.max(0, item.gold - steps.filter((s) => s.owned).reduce((s, x) => s + x.gold, 0));
   let affordableNow: PurchasePath["affordableNow"] = null;
