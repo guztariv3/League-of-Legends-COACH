@@ -1,6 +1,7 @@
 import { explainInsight, type AiProvider, type ExplanationLevel } from "@coach/ai";
 import { mean, summarize } from "@coach/analysis";
 import { isPlatformId, normalizeMatch, PLATFORMS, queueLabel, type RawMatch, type RawTimeline } from "@coach/domain";
+import { gameAchievements, gameRanking, RANKING_EXPLANATION } from "@coach/coach";
 import { matchHeadline } from "@coach/insights";
 import type { KnowledgeRegistry } from "@coach/knowledge";
 import { and, eq } from "drizzle-orm";
@@ -331,9 +332,13 @@ export function createApp(deps: AppDeps) {
         });
     }
 
+    const ranking = match.mode === "unsupported" ? null : gameRanking(match);
+    const rankOf = new Map((ranking ?? []).map((r) => [r.participantId, r]));
     return c.json({
       dataSource: raw!.source,
       analysis: mine,
+      achievements: gameAchievements({ match, timeline, puuid: mine.puuid, game: mine, history: all }),
+      ranking: ranking ? { explanation: RANKING_EXPLANATION } : null,
       headline: matchHeadline(mine, averages(all)),
       teams: [100, 200].map((teamId) => ({
         teamId,
@@ -353,6 +358,8 @@ export function createApp(deps: AppDeps) {
           spells: p.spells,
           runes: p.runes,
           isMe: p.puuid === mine.puuid,
+          rank: rankOf.get(p.participantId)?.rank ?? null,
+          score: rankOf.get(p.participantId)?.score ?? null,
         })),
       })),
       goldCurve,
