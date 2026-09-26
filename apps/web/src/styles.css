@@ -481,3 +481,14 @@ td .loadout { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
 .review-line { display: flex; flex-direction: column; gap: 6px; }
 .review-line + .review-line { border-top: 1px solid var(--border); padding-top: var(--space-3); }
 .review-headline { font-weight: 600; line-height: 1.35; }
+
+/* Post-game achievements and ranking */
+.achievements { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.achievement { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-s); background: var(--surface-2); min-width: 0; }
+.achievement-title { font-weight: 600; color: var(--gold-bright); }
+.achievement-personal { border-color: #1f5c55; }
+.achievement-personal .achievement-title { color: var(--accent); }
+.rank-badge { font-family: var(--font-display); font-weight: 700; font-size: 1.4rem; color: var(--gold-bright); white-space: nowrap; }
+.rank-badge small { font-family: inherit; font-size: 0.8rem; color: var(--text-secondary); font-weight: 400; letter-spacing: 0.02em; }
+.rank-pill { font-size: 0.7rem; font-weight: 700; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--text-secondary); flex: none; font-variant-numeric: tabular-nums; }
+.rank-pill.rank-first { color: var(--gold-bright); border-color: var(--gold); }

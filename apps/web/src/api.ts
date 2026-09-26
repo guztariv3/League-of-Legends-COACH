@@ -126,10 +126,14 @@ export interface MatchDetail {
     hasTimeline: boolean;
   };
   headline: string | null;
+  /** Facts from the scoreboard and timeline, each with the number behind it. */
+  achievements: { id: string; title: string; detail: string; scope: "game" | "personal" | "moment" }[];
+  /** How the 1–10 ranking is computed; null when the game isn't ranked (remakes, other modes). */
+  ranking: { explanation: string } | null;
   teams: {
     teamId: number;
     win: boolean;
-    players: { championName: string; riotId: string | null; role: string; kills: number; deaths: number; assists: number; cs: number; gold: number; damage: number; championId: number; items: { id: number; name: string }[]; spells: number[]; runes: { keystone: number | null; primary: number | null; secondary: number | null }; isMe: boolean }[];
+    players: { championName: string; riotId: string | null; role: string; kills: number; deaths: number; assists: number; cs: number; gold: number; damage: number; championId: number; items: { id: number; name: string }[]; spells: number[]; runes: { keystone: number | null; primary: number | null; secondary: number | null }; isMe: boolean; rank: number | null; score: number | null }[];
   }[];
   goldCurve: { minute: number; me: number; opponent: number | null }[] | null;
   myEvents: { minute: number; type: "kill" | "death" | "assist" }[] | null;

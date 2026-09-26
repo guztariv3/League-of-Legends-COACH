@@ -31,6 +31,10 @@ test("onboarding → dashboard → matches → match detail → settings", async
   await page.locator(".match").first().click();
   await expect(page.getByRole("link", { name: "← Matches" })).toBeVisible();
   await expect(page.getByText("▲ Victory")).toBeVisible(); // the result badge (the scoreboard also says "Victory")
+  // Your place in the game (1–10) and how it's computed.
+  await expect(page.getByLabel(/Ranked \d+ of 10 in this game/)).toBeVisible();
+  await page.getByText("How the ranking works").click();
+  await expect(page.getByText(/it doesn't measure decisions/)).toBeVisible();
   await page.screenshot({ path: `test-results/match-${info.project.name}.png`, fullPage: true });
 
   await page.getByRole("link", { name: "Settings" }).click();

@@ -99,6 +99,11 @@ describe("API (synthetic mode)", () => {
     expect(detail.res.status).toBe(200);
     expect(detail.body.teams).toHaveLength(2);
     expect(detail.body.teams.flatMap((t: any) => t.players).filter((p: any) => p.isMe)).toHaveLength(1);
+    // In-game ranking: every player placed once, 1–10, with the formula published alongside.
+    const ranks = detail.body.teams.flatMap((t: any) => t.players).map((p: any) => p.rank).sort((x: number, y: number) => x - y);
+    expect(ranks).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    expect(detail.body.ranking.explanation).toMatch(/out of 10/);
+    for (const a of detail.body.achievements) expect(a.detail).toMatch(/\d/);
   }, 60_000);
 
   it("isolates users: no access to another user's matches or accounts", async () => {

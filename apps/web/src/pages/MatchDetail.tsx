@@ -23,6 +23,8 @@ export function MatchDetail() {
   if (!data) return null;
   const a = data.analysis;
   const sr = a.mode === "summoners_rift";
+  const players = data.teams.flatMap((t) => t.players);
+  const me = players.find((p) => p.isMe);
 
   return (
     <div className="stack" style={{ gap: 20 }}>
@@ -53,6 +55,34 @@ export function MatchDetail() {
         <div>
           <Link className="btn btn-primary" to={`/matches/${encodeURIComponent(a.matchId)}/review`}>Coach Review and map</Link>
         </div>
+      )}
+
+      {(me?.rank || data.achievements.length > 0) && (
+        <section className="card stack" aria-labelledby="h-achievements" style={{ gap: 12 }}>
+          <div className="row" style={{ gap: 12 }}>
+            <h2 id="h-achievements" style={{ margin: 0 }}>Your game</h2>
+            <span className="spacer" />
+            {me?.rank && <span className="rank-badge" aria-label={`Ranked ${me.rank} of ${players.length} in this game, score ${me.score} out of 10`}>#{me.rank}<small> of {players.length} · {me.score?.toFixed(1)}/10</small></span>}
+          </div>
+          {data.achievements.length > 0 ? (
+            <ul className="achievements">
+              {data.achievements.map((x) => (
+                <li key={x.id} className={`achievement achievement-${x.scope}`}>
+                  <span className="achievement-title">{x.title}</span>
+                  <span className="tile-note">{x.detail}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="tile-note" style={{ margin: 0 }}>No achievements this game.</p>
+          )}
+          {data.ranking && (
+            <details className="layer">
+              <summary>How the ranking works</summary>
+              <p className="tile-note" style={{ margin: "6px 0 0" }}>{data.ranking.explanation}</p>
+            </details>
+          )}
+        </section>
       )}
 
       <section className="tiles" aria-label="Key numbers">
@@ -101,6 +131,7 @@ export function MatchDetail() {
                         <td>
                           <div className="champ-cell">
                             <ChampionIcon champion={p.championId} size={38} />
+                            {p.rank && <span className={`rank-pill${p.rank === 1 ? " rank-first" : ""}`} title={`Score ${p.score}/10`}>#{p.rank}</span>}
                             <span>
                               <span className="sb-player">{p.riotId?.split("#")[0] ?? p.championName}{p.isMe && <span className="visually-hidden"> (you)</span>}</span>
                               <small>{p.championName}</small>
