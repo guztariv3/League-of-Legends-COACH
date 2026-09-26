@@ -41,6 +41,19 @@ test("in game: both teams with items, and your build from your history", async (
               skillOrders: Array(4).fill([1, 2, 3, 1, 1, 4, 1, 2, 1, 2, 4, 2, 2, 3, 3, 4, 3, 3]),
               items: [{ id: 6655, name: "Luden's Companion", games: 10, wins: 6 }, { id: 3089, name: "Rabadon's Deathcap", games: 8, wins: 5 }],
             };
+          case "desktop_plan":
+            if (args.me !== "Ahri" || !String(args.enemies).includes("Zed")) throw "server_error";
+            return {
+              plan: {
+                primaryObjective: { text: "Your key number: deaths before minute 14", basis: "observation", why: "0.8 in wins versus 2.1 in losses." },
+                secondaryObjective: null,
+                biggestThreat: { text: "Zed", basis: "hypothesis", why: "Assassin with the highest damage rating on their team (9/10 in Riot's general ratings)." },
+                yourPowerSpike: { text: "Luden's Companion (around minute 14)", basis: "observation", why: "Your first major item in 9 of your 12 games with Ahri." },
+                enemyPowerSpike: { text: "Zed: level 6 and their first completed item", basis: "hypothesis", why: "A general tendency of the Assassin class." },
+                avoid: null, lookFor: null,
+                loadout: { games: 12, keystone: { name: "Electrocute" }, spells: { names: ["Flash", "Ignite"] }, maxOrder: ["Q", "W", "E"], firstItem: { name: "Luden's Companion" } },
+              },
+            };
           default: throw `unknown ${cmd}`;
         }
       },
@@ -73,6 +86,14 @@ test("in game: both teams with items, and your build from your history", async (
   // The Coach's Now card sits above the tabs, in its own voice.
   await expect(board.getByRole("region", { name: "Now" })).toBeVisible();
   await page.screenshot({ path: "test-results/board-items.png" });
+
+  // Plan: the Coach's game plan for these champions, from the website.
+  await board.getByRole("tab", { name: "Plan" }).click();
+  const planTab = board.getByRole("region", { name: "Coach game plan" });
+  await expect(planTab).toContainText("Biggest threat");
+  await expect(planTab).toContainText("Zed");
+  await expect(planTab).toContainText("Your usual setup (12 games): Electrocute · Flash + Ignite · max Q → W → E · first item Luden's Companion");
+  await page.screenshot({ path: "test-results/board-plan.png" });
 
   // Skills: ranks, and the next ability from the player's own order.
   await board.getByRole("tab", { name: "Skills" }).click();

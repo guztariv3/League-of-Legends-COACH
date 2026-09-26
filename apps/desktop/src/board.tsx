@@ -97,6 +97,13 @@ function PlayerRow({ p, names, art, me }: { p: PlayerState; names: Map<number, s
 }
 
 export interface BuildItem { id: number; name: string; games: number; wins: number }
+export interface PlanLine { text: string; basis: "fact" | "observation" | "hypothesis"; why: string }
+export interface PlanResponse {
+  plan: Record<"primaryObjective" | "secondaryObjective" | "biggestThreat" | "yourPowerSpike" | "enemyPowerSpike" | "avoid" | "lookFor", PlanLine | null> & {
+    loadout: { games: number; keystone: { name: string } | null; spells: { names: string[] } | null; maxOrder: string[] | null; firstItem: { name: string } | null };
+  };
+}
+
 export interface PersonalBuild { champion: string; games: number; wins: number; items: BuildItem[]; note: string | null; skillOrders?: number[][] }
 
 // Reasons go from the generic ("gives ability power") to the specific (the enemy team); a
@@ -275,7 +282,31 @@ function GoldTab({ coach, art }: { coach: LiveCoach; art: Art }) {
   );
 }
 
-type Tab = "items" | "skills" | "gold" | "rivals" | "team";
+type Tab = "plan" | "items" | "skills" | "gold" | "rivals" | "team";
+
+const PLAN_ROWS: [keyof Omit<PlanResponse["plan"], "loadout">, string][] = [
+  ["primaryObjective", "Primary objective"], ["secondaryObjective", "Secondary objective"], ["biggestThreat", "Biggest threat"],
+  ["yourPowerSpike", "Your power spike"], ["enemyPowerSpike", "Enemy power spike"], ["avoid", "What to avoid"], ["lookFor", "What to look for"],
+];
+
+function PlanTab({ plan, connected }: { plan: PlanResponse | null; connected: boolean }) {
+  if (!connected) return <p className="quiet">Connect the website (Settings) to get the Coach's game plan: it uses your own games with this champion.</p>;
+  if (!plan) return <p className="quiet">Preparing your game plan…</p>;
+  const l = plan.plan.loadout;
+  return (
+    <section className="suggest" aria-label="Coach game plan">
+      <dl className="plan-rows">
+        {PLAN_ROWS.flatMap(([key, label]) => {
+          const line = plan.plan[key];
+          return line ? [<div key={key} className="plan-row"><dt className="label">{label}</dt><dd><strong>{line.text}</strong><span className="quiet small"> {line.why}</span></dd></div>] : [];
+        })}
+      </dl>
+      {l.games > 0 && (
+        <p className="quiet small">Your usual setup ({l.games} games): {[l.keystone?.name, l.spells?.names.join(" + "), l.maxOrder && `max ${l.maxOrder.join(" → ")}`, l.firstItem && `first item ${l.firstItem.name}`].filter(Boolean).join(" · ")}</p>
+      )}
+    </section>
+  );
+}
 
 function NowArt({ d, art, coach }: { d: CoachDecision; art: Art; coach: LiveCoach }) {
   if ((d.kind === "item" || d.kind === "boots") && d.ref) {
@@ -288,10 +319,12 @@ function NowArt({ d, art, coach }: { d: CoachDecision; art: Art; coach: LiveCoac
 }
 
 /** The scoreboard the game already shows (Tab), in the side window, plus the Coach's read of it. */
-export function Board({ state, names, art, catalog, build, connected, demo = false, overlay = false }: {
+export function Board({ state, names, art, catalog, build, connected, demo = false, overlay = false, plan = null }: {
   state: GameState; names: Map<number, string>; art: Art; catalog: Catalog | null; build: PersonalBuild | null | "loading"; connected: boolean; demo?: boolean;
   /** Also feed the optional overlay window (D-11). */
   overlay?: boolean;
+  /** The Coach's game plan for this game, from the website. */
+  plan?: PlanResponse | null;
 }) {
   const [tab, setTab] = useState<Tab>("items");
   const [shownId, setShownId] = useState<string | null>(null);
@@ -340,7 +373,7 @@ export function Board({ state, names, art, catalog, build, connected, demo = fal
 
   if (!state.me || !coach) return null;
   const adjusted = now !== null && now.id === adjustedId;
-  const tabs: [Tab, string][] = [["items", "Items"], ["skills", "Skills"], ["gold", "Gold"], ["rivals", "Enemies"], ["team", "Team"]];
+  const tabs: [Tab, string][] = [["plan", "Plan"], ["items", "Items"], ["skills", "Skills"], ["gold", "Gold"], ["rivals", "Enemies"], ["team", "Team"]];
   return (
     <section className="board" aria-label="Game">
       {now && <CoachCard label="Now" headline={now.headline} reasons={now.reasons} basis={now.basis} adjustment={adjusted} art={<NowArt d={now} art={art} coach={coach} />} />}
@@ -360,6 +393,7 @@ export function Board({ state, names, art, catalog, build, connected, demo = fal
         {tab === "items" && <ItemsTab state={state} coach={coach} build={build} art={art} connected={connected} demo={demo} hasCatalog={catalog !== null} />}
         {tab === "skills" && <SkillsTab state={state} coach={coach} history={history} connected={connected} />}
         {tab === "gold" && <GoldTab coach={coach} art={art} />}
+        {tab === "plan" && <PlanTab plan={plan} connected={connected} />}
       </div>
     </section>
   );

@@ -1,5 +1,6 @@
 import { normalizeMatch, type RawMatch, type RawTimeline } from "@coach/domain";
-import { analyzeDraft } from "@coach/draft";
+import { gamePlan } from "@coach/coach";
+import { analyzeDraft, type DraftInput } from "@coach/draft";
 import type { KnowledgeRegistry } from "@coach/knowledge";
 import { buildReview } from "@coach/review";
 import { eq } from "drizzle-orm";
@@ -13,6 +14,13 @@ import type { Services } from "./services.js";
 import type { MatchSource } from "./sources.js";
 
 /** Phase 3 routes: match review, pre-game draft analysis and loading-screen scouting. */
+/** The draft read and the Coach's game plan for the same champions (web pre-game and desktop). */
+export function prepareGame(input: DraftInput, analyses: Parameters<typeof analyzeDraft>[2], bundle: ReturnType<KnowledgeRegistry["active"]>) {
+  const draft = analyzeDraft(input, bundle?.champions ?? [], analyses);
+  const plan = gamePlan({ myChampion: input.myChampion, laneOpponent: input.laneOpponent, enemies: input.enemies, draft, history: analyses, bundle });
+  return { draft, plan };
+}
+
 export function gameRoutes({ db, source, knowledge, services }: { db: Db; source: MatchSource; knowledge: KnowledgeRegistry; services: Services }) {
   const r = new Hono<AuthVars>();
 
@@ -45,12 +53,12 @@ export function gameRoutes({ db, source, knowledge, services }: { db: Db; source
     }).safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "invalid_body" }, 400);
     const { analyses } = await services.profileAnalyses(c.get("userId"));
-    const draft = analyzeDraft(parsed.data, knowledge.active()?.champions ?? [], analyses);
+    const { draft, plan } = prepareGame(parsed.data, analyses, knowledge.active());
     await services.logDecision({
       userId: c.get("userId"), kind: "draft", title: `Prep with ${parsed.data.myChampion}`,
       context: { input: parsed.data, keyPoints: draft.keyPoints.map((p) => p.title) }, decision: "none",
     });
-    return c.json(draft);
+    return c.json({ ...draft, plan });
   });
 
   r.get("/game/scout", async (c) => {

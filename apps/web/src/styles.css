@@ -404,3 +404,14 @@ td .loadout { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
   .info-hero-avatar { width: 64px; height: 64px; }
 }
 .info-features { grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); }
+
+/* COACH GAME PLAN: the Coach's own voice (hextech blue), distinct from the gold statistics cards. */
+.coach-plan { border: 1px solid rgb(10 200 185 / 0.5); background: linear-gradient(180deg, rgb(10 200 185 / 0.10), rgb(10 200 185 / 0.02)); padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); }
+.coach-plan-title { margin: 0; font-family: var(--font-display); font-size: 0.8rem; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+.coach-plan-rows { margin: 0; display: grid; gap: var(--space-2); }
+.coach-plan-row { display: grid; grid-template-columns: 160px 1fr; gap: var(--space-3); align-items: baseline; }
+.coach-plan-row dt { font-size: 0.78rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; }
+.coach-plan-row dd { margin: 0; display: flex; flex-direction: column; gap: 2px; }
+.coach-plan-why { font-size: 0.82rem; color: var(--text-secondary); }
+.coach-plan-basis { color: var(--text-muted); }
+@media (max-width: 560px) { .coach-plan-row { grid-template-columns: 1fr; gap: 2px; } }

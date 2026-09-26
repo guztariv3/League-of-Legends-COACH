@@ -114,6 +114,16 @@ describe("desktop pairing", () => {
 
     expect((await call("/desktop/build?champion=../x&mode=summoners_rift", { headers: auth })).res.status).toBe(400);
     expect((await call(`/desktop/build?champion=${main}&mode=summoners_rift`)).res.status).toBe(401);
+
+    // The Coach's game plan for the game that starts: champions only.
+    const plan = await call(`/desktop/plan?me=${main}&allies=Brannoc,Sylvaine&enemies=Korvane,Dravok,Ilsa&opponent=Korvane`, { headers: auth });
+    expect(plan.res.status).toBe(200);
+    expect(plan.body.plan.enemyPowerSpike.text).toBe("Korvane: level 6 and their first completed item");
+    expect(plan.body.plan.loadout.games).toBe(played);
+    expect(plan.body.keyPoints.length).toBeGreaterThan(0);
+    expect((await call("/desktop/plan?me=../x", { headers: auth })).res.status).toBe(400);
+    expect((await call(`/desktop/plan?me=${main}&enemies=a,b,c,d,e,f`, { headers: auth })).res.status).toBe(400);
+    expect((await call(`/desktop/plan?me=${main}`)).res.status).toBe(401);
   }, 60_000);
 
   it("rejects wrong, expired and malformed codes and tokens", async () => {

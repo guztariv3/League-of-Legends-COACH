@@ -180,6 +180,17 @@ async fn desktop_build(state: tauri::State<'_, AppState>, base_url: String, toke
     site_json(res).await
 }
 
+/// The Coach's game plan for the champions of the game that is starting (champions only), with the device token.
+#[tauri::command]
+async fn desktop_plan(state: tauri::State<'_, AppState>, base_url: String, token: String, me: String, allies: String, enemies: String, opponent: String) -> Result<serde_json::Value, String> {
+    let origin = site_origin(&base_url)?;
+    let res = state.site.get(format!("{origin}/api/desktop/plan"))
+        .query(&[("me", me.as_str()), ("allies", allies.as_str()), ("enemies", enemies.as_str()), ("opponent", opponent.as_str())])
+        .bearer_auth(token)
+        .send().await.map_err(|_| "offline".to_string())?;
+    site_json(res).await
+}
+
 fn site_client() -> reqwest::Client {
     reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(10))
@@ -215,7 +226,7 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     builder
         .manage(AppState { http: live_client(), site: site_client(), sys: Mutex::new(sys) })
-        .invoke_handler(tauri::generate_handler![live_snapshot, system_load, check_update, install_update, desktop_claim, desktop_scout, desktop_build, set_overlay])
+        .invoke_handler(tauri::generate_handler![live_snapshot, system_load, check_update, install_update, desktop_claim, desktop_scout, desktop_build, desktop_plan, set_overlay])
         .run(tauri::generate_context!())
         .expect("error while running KOI Master desktop");
 }

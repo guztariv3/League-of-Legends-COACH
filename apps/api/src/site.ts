@@ -32,7 +32,7 @@ export function createSite(deps: AppDeps) {
   if (password) {
     const gate = basicAuth({ username: "kairos", password, realm: "KOI Master (private prototype)" });
     // The desktop pairing routes carry their own credentials (one-time code or device token).
-    const open = new Set(["/api/health", "/api/desktop/claim", "/api/desktop/scout", "/api/desktop/build", "/favicon.svg"]);
+    const open = new Set(["/api/health", "/api/desktop/claim", "/api/desktop/scout", "/api/desktop/build", "/api/desktop/plan", "/favicon.svg"]);
     // Public pages (what KOI Master is, download, privacy, terms) and the built static files
     // they load. The bundles hold no data and the source is public anyway.
     const isPublic = (path: string) => open.has(path) || path === "/info" || path.startsWith("/info/") || path.startsWith("/assets/");

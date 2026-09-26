@@ -155,3 +155,5 @@ body.overlay-body { background: transparent; }
 .ov-total { display: flex; justify-content: space-between; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .ov-next { display: flex; gap: 3px; align-items: center; padding-top: 4px; border-top: 1px solid #3c3222; }
 .ov-gold { margin-left: auto; color: var(--gold-bright, #f0d49c); font-weight: 700; font-variant-numeric: tabular-nums; }
+.plan-rows { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.plan-row dd { margin: 0; font-size: 0.82rem; }
