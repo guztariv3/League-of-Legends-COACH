@@ -4,6 +4,7 @@ import { DEFAULT_CONTROLS, laneOpponent, LiveEngine, modeInfo, type Delivery, ty
 import { CoachAvatar } from "@coach/ui";
 import { checkUpdate, fetchBuild, fetchPlan, inTauri, installUpdate, readChampSelect, readLoad, readSnapshot, setOverlay, windowControl, type ChampSelect, type UpdateInfo } from "./bridge";
 import { Board, ChampArt, PlanTab, useArt, useCatalog, type BoardTab, type PersonalBuild, type PlanResponse } from "./board";
+import { PreGameBuildView } from "./prebuild";
 import { Home } from "./home";
 import { ConnectForm, RivalsPanel, useRivals } from "./rivals";
 import "./live.css";
@@ -201,7 +202,8 @@ function LiveWindow() {
     else setView((v) => (v === "draft" ? "home" : v));
   }, [inSelect]);
   const csMe = inSelect ? champSelect?.me?.championId ?? 0 : 0;
-  const csKey = csMe ? [csMe, "|", ...(champSelect?.allies ?? []), "|", ...(champSelect?.enemies ?? [])].join(",") : null;
+  const csPosition = champSelect?.me?.position ?? "";
+  const csKey = csMe ? [csMe, csPosition, "|", ...(champSelect?.allies ?? []), "|", ...(champSelect?.enemies ?? [])].join(",") : null;
   useEffect(() => {
     const link = rivals.link;
     if (!link || !csKey || !champSelect) { if (!csKey) setCsPlan(null); return; }
@@ -210,6 +212,7 @@ function LiveWindow() {
     const t = setTimeout(() => {
       void fetchPlan<PlanResponse>(link.origin, link.token, {
         me: String(csMe), allies: (champSelect.allies ?? []).map(String), enemies: (champSelect.enemies ?? []).map(String), opponent: null,
+        position: csPosition || null,
       }).then((r) => { if (!stopped) setCsPlan(r.ok ? r.data : null); });
     }, 700);
     return () => { stopped = true; clearTimeout(t); };
@@ -322,6 +325,7 @@ function LiveWindow() {
                   <span className="quiet small">{champSelect?.me?.locked ? "locked in" : "hovering"}{champSelect?.me?.position ? ` · ${champSelect.me.position}` : ""}</span>
                 </div>
               )}
+              {csPlan?.build && <PreGameBuildView build={csPlan.build} art={art} />}
               <PlanTab plan={csPlan} connected={Boolean(rivals.link)} />
             </>
           )}

@@ -101,6 +101,17 @@ describe("champion kits (real data)", () => {
     }
   });
 
+  it("knows what each ability scales with and what its values are", () => {
+    const smolderQ = kit("Smolder").abilities.find((a) => a.slot === "Q")!;
+    expect(smolderQ.scalings).toContain("bonusAD");
+    expect(smolderQ.scalings).toContain("critChance");
+    expect(kit("Ahri").abilities.some((a) => a.scalings.includes("AP"))).toBe(true);
+    expect(kit("Ahri").abilities.some((a) => a.values.includes("Magic Damage"))).toBe(true);
+    expect(kit("Ahri").abilities.some((a) => /charm/i.test(a.text))).toBe(true);
+    const withScalings = kits.filter((k) => k.detail === "full" && k.abilities.some((a) => a.scalings.length));
+    expect(withScalings.length).toBeGreaterThan(kits.length * 0.9);
+  });
+
   it("keeps the Wiki's ratings and damage types where it has them", () => {
     const withWiki = kits.filter((k) => k.detail === "full");
     expect(withWiki.length).toBeGreaterThan(kits.length * 0.9);

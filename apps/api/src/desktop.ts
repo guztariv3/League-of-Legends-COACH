@@ -1,5 +1,6 @@
 import { randomBytes, randomInt } from "node:crypto";
-import type { KnowledgeRegistry } from "@coach/knowledge";
+import { GAME_DATA_ATTRIBUTION, type GameFactsSource, type KnowledgeRegistry } from "@coach/knowledge";
+import { recommendBuild } from "@coach/build";
 import { championPool } from "@coach/coach";
 import { challengeTitle, evaluateChallenge, type ChallengeKind, type GoalMetric } from "@coach/insights";
 import { and, asc, desc, eq, gt, inArray, isNull } from "drizzle-orm";
@@ -88,7 +89,7 @@ export function desktopSessionRoutes({ db }: { db: Db }) {
 }
 
 /** Routes the desktop app calls with its own credentials (code or device token). */
-export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowledge: KnowledgeRegistry; services: Services }) {
+export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowledge: KnowledgeRegistry; services: Services; gameFacts?: GameFactsSource }) {
   const { db } = deps;
   const r = new Hono();
   const perIp = new AttemptLimiter(10, 60_000);
@@ -162,8 +163,10 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
     if (!device) return disconnected(c);
     const id = z.string().regex(/^[A-Za-z0-9]{1,40}$/);
     const list = z.string().max(250).optional().transform((v) => (v ? v.split(",").filter(Boolean) : [])).pipe(z.array(id).max(5));
-    const q = z.object({ me: id, allies: list, enemies: list, opponent: id.optional() }).safeParse({
+    const position = z.enum(["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"]).optional();
+    const q = z.object({ me: id, allies: list, enemies: list, opponent: id.optional(), position }).safeParse({
       me: c.req.query("me"), allies: c.req.query("allies"), enemies: c.req.query("enemies"), opponent: c.req.query("opponent") || undefined,
+      position: c.req.query("position")?.toUpperCase() || undefined,
     });
     if (!q.success) return c.json({ error: "invalid_query" }, 400);
     const bundle = deps.knowledge.active();
@@ -174,8 +177,27 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
     const known = (xs: string[]) => xs.map(resolve).filter((x): x is string => x !== null);
     const opponent = q.data.opponent ? resolve(q.data.opponent) ?? undefined : undefined;
     const { analyses } = await deps.services.profileAnalyses(device.userId);
-    const { draft, plan } = prepareGame({ myChampion: me, allies: known(q.data.allies), enemies: known(q.data.enemies), laneOpponent: opponent }, analyses, bundle);
-    return c.json({ champion: me, plan, keyPoints: draft.keyPoints, limits: draft.limits });
+    const enemies = known(q.data.enemies);
+    const { draft, plan } = prepareGame({ myChampion: me, allies: known(q.data.allies), enemies, laneOpponent: opponent }, analyses, bundle);
+
+    // The pre-game build (runs on the server with the full game data; null until it is loaded).
+    const facts = await deps.gameFacts?.get(2500) ?? null;
+    const kits = new Map((facts?.kits ?? []).map((k) => [k.id, k]));
+    const myKit = kits.get(me);
+    const build = facts && myKit
+      ? {
+          ...recommendBuild({
+            me: myKit,
+            enemies: enemies.map((e) => kits.get(e)).filter((k) => k !== undefined).map((k) => ({ kit: k, laneOpponent: k.id === opponent })),
+            items: facts.items,
+            position: q.data.position ?? null,
+          }),
+          version: facts.version,
+          enemiesKnown: enemies.length,
+          attribution: GAME_DATA_ATTRIBUTION,
+        }
+      : null;
+    return c.json({ champion: me, plan, keyPoints: draft.keyPoints, limits: draft.limits, build });
   });
 
   /**

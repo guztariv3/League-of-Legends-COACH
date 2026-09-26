@@ -188,10 +188,10 @@ async fn desktop_build(state: tauri::State<'_, AppState>, base_url: String, toke
 
 /// The Coach's game plan for the champions of the game that is starting (champions only), with the device token.
 #[tauri::command]
-async fn desktop_plan(state: tauri::State<'_, AppState>, base_url: String, token: String, me: String, allies: String, enemies: String, opponent: String) -> Result<serde_json::Value, String> {
+async fn desktop_plan(state: tauri::State<'_, AppState>, base_url: String, token: String, me: String, allies: String, enemies: String, opponent: String, position: String) -> Result<serde_json::Value, String> {
     let origin = site_origin(&base_url)?;
     let res = state.site.get(format!("{origin}/api/desktop/plan"))
-        .query(&[("me", me.as_str()), ("allies", allies.as_str()), ("enemies", enemies.as_str()), ("opponent", opponent.as_str())])
+        .query(&[("me", me.as_str()), ("allies", allies.as_str()), ("enemies", enemies.as_str()), ("opponent", opponent.as_str()), ("position", position.as_str())])
         .bearer_auth(token)
         .send().await.map_err(|_| "offline".to_string())?;
     site_json(res).await

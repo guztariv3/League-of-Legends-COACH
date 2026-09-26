@@ -4,7 +4,7 @@ import { isPlatformId, normalizeMatch, PLATFORMS, queueLabel, type RawMatch, typ
 import { gameAchievements, gameRanking, RANKING_EXPLANATION } from "@coach/coach";
 import { MERAKI_ATTRIBUTION } from "@coach/knowledge";
 import { matchHeadline } from "@coach/insights";
-import type { KnowledgeRegistry, WikiSource } from "@coach/knowledge";
+import type { GameFactsSource, KnowledgeRegistry, WikiSource } from "@coach/knowledge";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -32,12 +32,13 @@ export interface AppDeps {
   aiProviders: AiProvider[];
   /** League of Legends Wiki data via Meraki (D-15); absent in tests and offline. */
   wiki?: WikiSource;
+  gameFacts?: GameFactsSource;
 }
 
 
 
 export function createApp(deps: AppDeps) {
-  const { cfg, db, source, knowledge, wiki } = deps;
+  const { cfg, db, source, knowledge, wiki, gameFacts } = deps;
   const sync = new SyncService(db, source);
   const services = makeServices(db, source);
   const { prefsFor, profileAnalyses, insightsFor } = services;
@@ -414,7 +415,7 @@ export function createApp(deps: AppDeps) {
   authed.route("/", improveRoutes({ db, services }));
   authed.route("/", desktopSessionRoutes({ db }));
   // Device routes authenticate with a pairing code or a device token, not the session cookie.
-  app.route("/", desktopDeviceRoutes({ db, source, knowledge, services }));
+  app.route("/", desktopDeviceRoutes({ db, source, knowledge, services, gameFacts }));
   app.route("/", authed);
   return { app, sync };
 }

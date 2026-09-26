@@ -1,0 +1,215 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+import { parseChampionKits, parseItems } from "@coach/knowledge";
+import { gameData } from "@coach/knowledge/test-data";
+import { championProfile, COUNTERS, enemyPicture, itemProfile, recommendBuild, statGoldValues, type BuildRecommendation } from "./index.js";
+
+// Validation cases A–L of the build engine, on the real data of the current patch
+// (packages/knowledge/fixtures/game-data). J (game end), K (hover) and L (champion select in the
+// app) are covered by the desktop tests; the engine side of L is the pre-game build below.
+const data = gameData();
+const items = parseItems(data.ddragonItems, data.merakiItems);
+const kits = parseChampionKits(data.ddragonChampions, data.merakiChampions);
+const catalog = new Map(items.map((i) => [i.id, i]));
+const gold = statGoldValues(items);
+const kit = (id: string) => {
+  const k = kits.find((x) => x.id === id);
+  if (!k) throw new Error(`no champion ${id} in the snapshot`);
+  return k;
+};
+const build = (me: string, enemies: string[], opts: { opponent?: string; position?: string; owned?: number[] } = {}) =>
+  recommendBuild({ me: kit(me), enemies: enemies.map((id) => ({ kit: kit(id), laneOpponent: id === opts.opponent })), items, position: opts.position ?? null, owned: opts.owned ?? [] });
+const recommended = (b: BuildRecommendation) => [b.first, ...b.next, b.boots, ...b.situational].filter((x) => x !== null);
+const core = (b: BuildRecommendation) => [b.first, ...b.next].filter((x) => x !== null);
+const profileOf = (id: number) => itemProfile(catalog.get(id)!, gold, catalog);
+const stat = (id: number, k: keyof (typeof items)[number]["stats"]) => (catalog.get(id)!.stats[k]?.flat ?? 0) + (catalog.get(id)!.stats[k]?.percent ?? 0);
+
+const AP_TEAM = ["Syndra", "Brand", "Lux", "Veigar", "Annie"];
+const AD_TEAM = ["Darius", "Graves", "Zed", "Jinx", "Pantheon"];
+const CRIT_TEAM = ["Tryndamere", "MasterYi", "Yasuo", "Jinx", "Soraka"];
+const TANKS = ["Malphite", "Ornn", "Sejuani", "Braum", "Orianna"];
+const CC_TEAM = ["Leona", "Nautilus", "Sejuani", "Morgana", "Ashe"];
+const HEALERS = ["Soraka", "Aatrox", "Vladimir", "Yuumi", "DrMundo"];
+
+describe("A — a champion that needs mana gets it covered", () => {
+  const b = build("Smolder", AD_TEAM, { opponent: "Jinx", position: "BOTTOM" });
+  it("reads the mana need from the kit's costs and pool", () => {
+    const p = championProfile(kit("Smolder"));
+    expect(p.mana?.rotation).toBeGreaterThan(0);
+    expect(p.manaNeed).toBeGreaterThan(0.3);
+    expect(b.kit.some((f) => /mana/.test(f))).toBe(true);
+  });
+  it("includes an item that gives or restores mana, and says so", () => {
+    const mana = core(b).find((x) => profileOf(x!.id).mana > 0 || profileOf(x!.id).manaSustain);
+    expect(mana, JSON.stringify(core(b).map((x) => x!.name))).toBeDefined();
+    expect(mana!.why.some((w) => /mana/.test(w))).toBe(true);
+  });
+  it("a champion without mana never gets mana reasons", () => {
+    const garen = build("Garen", AD_TEAM);
+    expect(championProfile(kit("Garen")).manaNeed).toBe(0);
+    expect(recommended(garen).flatMap((x) => x!.why).some((w) => /mana use/.test(w))).toBe(false);
+  });
+});
+
+describe("B — several tanks call for penetration or health-based damage", () => {
+  for (const me of ["Ahri", "Zed", "Caitlyn"]) {
+    it(`${me} against a tank line`, () => {
+      const b = build(me, TANKS);
+      expect(b.threats.find((t) => t.kind === "tanks")!.sources.length).toBeGreaterThanOrEqual(3);
+      const answers = core(b).filter((x) => stat(x!.id, "magicPenetration") + stat(x!.id, "armorPenetration") > 0 || profileOf(x!.id).counters.includes("maxHealthDamage"));
+      expect(answers.length, JSON.stringify(core(b).map((x) => x!.name))).toBeGreaterThan(0);
+    });
+  }
+});
+
+describe("C — no crit-reduction item without enemy crit (Randuin's Omen case)", () => {
+  it("a tank against an all-magic team is not offered crit reduction, and is told why", () => {
+    const b = build("Malphite", AP_TEAM, { opponent: "Syndra", position: "TOP" });
+    expect(recommended(b).some((x) => profileOf(x!.id).counters.includes("critReduction"))).toBe(false);
+    expect(b.threats.some((t) => t.kind === "crit")).toBe(false);
+  });
+  it("the same tank against crit carriers is offered it, naming them", () => {
+    const b = build("Malphite", CRIT_TEAM, { opponent: "Tryndamere", position: "TOP" });
+    const crit = recommended(b).find((x) => profileOf(x!.id).counters.includes("critReduction"));
+    expect(crit).toBeDefined();
+    expect(crit!.why.join(" ")).toMatch(/critical strikes: .*(Tryndamere|Jinx|Master Yi|Yasuo)/);
+  });
+  it("every recommended counter item answers a threat this enemy team really has", () => {
+    const comps = [AP_TEAM, AD_TEAM, CRIT_TEAM, TANKS, CC_TEAM, HEALERS];
+    for (const me of ["Malphite", "Ahri", "Jinx", "Garen", "Thresh", "Zed"]) {
+      for (const comp of comps) {
+        const b = build(me, comp);
+        const picture = enemyPicture(comp.map((id) => ({ kit: kit(id) })));
+        for (const x of recommended(b)) {
+          const counters = profileOf(x!.id).counters;
+          if (!counters.length || counters.includes("maxHealthDamage")) continue;
+          const answered = counters.some((c) => COUNTERS[c].answers.some((k) => picture.threats[k].weight >= 0.2));
+          expect(answered, `${me} vs ${comp.join("/")}: ${x!.name}`).toBe(true);
+        }
+        // Every "ruled out" reason is true for this team.
+        for (const r of b.ruledOut) {
+          const c = profileOf(r.id).counters;
+          expect(c.every((k) => COUNTERS[k].answers.every((t) => picture.threats[t].weight < 0.2 || (k === "magicShield" && picture.damage.magic < 0.2))), `${me}: ${r.name}`).toBe(true);
+        }
+      }
+    }
+  });
+});
+
+describe("D/E — the enemy damage type picks the resist", () => {
+  it("D: heavy magic damage → magic resist first and on the boots", () => {
+    const b = build("Garen", AP_TEAM, { opponent: "Syndra", position: "TOP" });
+    expect(b.enemyDamage.magic).toBeGreaterThan(0.8);
+    expect(stat(b.first!.id, "magicResistance")).toBeGreaterThan(0);
+    expect(stat(b.boots!.id, "magicResistance")).toBeGreaterThan(0);
+    expect(b.first!.why.join(" ")).toMatch(/magic/);
+  });
+  it("E: heavy physical damage → armor first and on the boots", () => {
+    const b = build("Malphite", AD_TEAM, { position: "TOP" });
+    expect(b.enemyDamage.physical).toBeGreaterThan(0.7);
+    expect(stat(b.first!.id, "armor")).toBeGreaterThan(0);
+    expect(stat(b.boots!.id, "armor")).toBeGreaterThan(0);
+  });
+});
+
+describe("F — heavy crowd control is answered", () => {
+  for (const me of ["Jinx", "Zed", "Garen"]) {
+    it(me, () => {
+      const b = build(me, CC_TEAM);
+      const cc = b.threats.find((t) => t.kind === "cc")!;
+      expect(cc.weight).toBeGreaterThan(0.8);
+      const answer = recommended(b).find((x) => stat(x!.id, "tenacity") > 0 || profileOf(x!.id).counters.some((c) => COUNTERS[c].answers.includes("cc")));
+      expect(answer, JSON.stringify(recommended(b).map((x) => x!.name))).toBeDefined();
+    });
+  }
+});
+
+describe("G — heavy healing brings Grievous Wounds", () => {
+  for (const me of ["Jinx", "Ahri", "Garen"]) {
+    it(me, () => {
+      const b = build(me, HEALERS);
+      expect(b.threats.find((t) => t.kind === "healing")!.weight).toBeGreaterThan(0.6);
+      const gw = recommended(b).find((x) => profileOf(x!.id).counters.includes("grievousWounds"));
+      expect(gw, JSON.stringify(recommended(b).map((x) => x!.name))).toBeDefined();
+      expect([...gw!.why, "when" in gw! ? (gw as { when: string }).when : ""].join(" ")).toMatch(/Soraka|Aatrox|Vladimir|Yuumi|Mundo/);
+    });
+  }
+});
+
+describe("H — two champions in the same role get their own builds", () => {
+  it("Ezreal and Jinx (both bottom) against the same team", () => {
+    const e = build("Ezreal", AD_TEAM, { position: "BOTTOM" });
+    const j = build("Jinx", AD_TEAM, { position: "BOTTOM" });
+    expect(e.kit).not.toEqual(j.kit);
+    expect(core(e).map((x) => x!.id)).not.toEqual(core(j).map((x) => x!.id));
+    expect(e.first!.why.join(" ")).toMatch(/Ezreal/);
+    expect(j.first!.why.join(" ")).toMatch(/Jinx/);
+  });
+  it("similar kits may share items, but each explanation cites its own kit", () => {
+    const a = build("Smolder", AD_TEAM, { position: "BOTTOM" });
+    const c = build("Caitlyn", AD_TEAM, { position: "BOTTOM" });
+    expect(a.first!.why.join(" ")).toMatch(/Smolder/);
+    expect(c.first!.why.join(" ")).toMatch(/Caitlyn/);
+    expect(a.kit).not.toEqual(c.kit);
+  });
+  it("Ahri and Zed in mid against the same team", () => {
+    const a = build("Ahri", CC_TEAM, { position: "MIDDLE" });
+    const z = build("Zed", CC_TEAM, { position: "MIDDLE" });
+    expect(a.first!.id).not.toBe(z.first!.id);
+  });
+});
+
+describe("I — the same champion against different teams", () => {
+  it("Malphite's first item changes with the enemy team", () => {
+    const vsAp = build("Malphite", AP_TEAM);
+    const vsCrit = build("Malphite", CRIT_TEAM);
+    const vsHeal = build("Malphite", HEALERS);
+    expect(new Set([vsAp.first!.id, vsCrit.first!.id]).size).toBe(2);
+    expect(JSON.stringify(core(vsHeal).map((x) => x!.id))).not.toBe(JSON.stringify(core(vsAp).map((x) => x!.id)));
+  });
+  it("items already owned change what comes next", () => {
+    const before = build("Jinx", HEALERS);
+    const after = build("Jinx", HEALERS, { owned: [before.first!.id] });
+    expect(recommended(after).some((x) => x!.id === before.first!.id)).toBe(false);
+    expect(after.starter).toBeNull();
+  });
+});
+
+describe("explanations", () => {
+  it("the first item always says why, with facts from the kit or the enemy team", () => {
+    for (const [me, comp] of [["Smolder", AD_TEAM], ["Malphite", CRIT_TEAM], ["Ahri", TANKS], ["Thresh", CC_TEAM]] as const) {
+      const b = build(me, comp);
+      expect(b.first, me).not.toBeNull();
+      expect(b.first!.why.length, me).toBeGreaterThanOrEqual(2);
+      expect(b.first!.why.join(" "), me).toMatch(new RegExp(`${kit(me).name}|enemy|${comp.map((c) => kit(c).name).join("|")}`));
+    }
+  });
+});
+
+describe("L — pre-game build: starting items by position", () => {
+  it("jungle starts with a jungle companion, support with the support item, lanes within 500 gold", () => {
+    const jungle = build("LeeSin", CC_TEAM, { position: "JUNGLE" }).starter!;
+    expect(catalog.get(jungle.items[0]!.id)!.tags).toContain("Jungle");
+    const support = build("Thresh", CC_TEAM, { position: "UTILITY" }).starter!;
+    expect(catalog.get(support.items[0]!.id)!.effects.some((e) => /quest/i.test(e.name ?? ""))).toBe(true);
+    for (const [me, pos] of [["Ahri", "MIDDLE"], ["Garen", "TOP"], ["Jinx", "BOTTOM"]] as const) {
+      const s = build(me, AD_TEAM, { position: pos }).starter!;
+      expect(s.items.reduce((sum, i) => sum + i.gold, 0), me).toBeLessThanOrEqual(500);
+      expect(s.why.length, me).toBeGreaterThan(0);
+    }
+  });
+  it("a melee laner against a ranged opponent is told about sustain when its starter has it", () => {
+    const s = build("Garen", ["Teemo", "Graves", "Ahri", "Jinx", "Thresh"], { opponent: "Teemo", position: "TOP" }).starter!;
+    expect(s.why.join(" ")).toMatch(/melee against Teemo|health/);
+  });
+});
+
+describe("no champion or item is named in the engine", () => {
+  it("the engine's source names no champion and no item (decisions come from data)", () => {
+    const dir = fileURLToPath(new URL(".", import.meta.url));
+    const source = readdirSync(dir).filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts")).map((f) => readFileSync(dir + f, "utf8")).join("\n");
+    const names = [...kits.map((k) => k.name), ...items.filter((i) => i.purchasable).map((i) => i.name)].filter((n) => n.length >= 6);
+    expect(names.filter((n) => new RegExp(`\\b${n.replace(/[.*+?^${}()|[\]\\']/g, "\\$&")}\\b`).test(source))).toEqual([]);
+  });
+});

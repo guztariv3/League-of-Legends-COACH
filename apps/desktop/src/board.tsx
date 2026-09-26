@@ -74,6 +74,8 @@ export interface PlanLine { text: string; basis: "fact" | "observation" | "hypot
 export interface PlanResponse {
   /** Data Dragon id of your champion (the server maps champion-select keys to it). */
   champion?: string;
+  /** The pre-game build (null until the server has the game data, or for unknown champions). */
+  build?: import("./prebuild").PreGameBuild | null;
   plan: Record<"primaryObjective" | "secondaryObjective" | "biggestThreat" | "yourPowerSpike" | "enemyPowerSpike" | "avoid" | "lookFor", PlanLine | null> & {
     loadout: { games: number; keystone: { name: string } | null; spells: { names: string[] } | null; maxOrder: string[] | null; firstItem: { name: string } | null };
   };

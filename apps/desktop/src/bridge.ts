@@ -88,8 +88,8 @@ export const fetchBuild = <T>(baseUrl: string, token: string, champion: string, 
 export const fetchHome = <T>(baseUrl: string, token: string) => site<T>("desktop_home", { baseUrl, token });
 
 /** The Coach's game plan for the champions of this game (champions only). */
-export const fetchPlan = <T>(baseUrl: string, token: string, c: { me: string; allies: string[]; enemies: string[]; opponent: string | null }) =>
-  site<T>("desktop_plan", { baseUrl, token, me: c.me, allies: c.allies.join(","), enemies: c.enemies.join(","), opponent: c.opponent ?? "" });
+export const fetchPlan = <T>(baseUrl: string, token: string, c: { me: string; allies: string[]; enemies: string[]; opponent: string | null; position?: string | null }) =>
+  site<T>("desktop_plan", { baseUrl, token, me: c.me, allies: c.allies.join(","), enemies: c.enemies.join(","), opponent: c.opponent ?? "", position: c.position ?? "" });
 
 /** What the optional overlay shows (D-11): the gold difference and the next items. */
 export interface OverlayState {
