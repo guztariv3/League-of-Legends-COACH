@@ -1,0 +1,9 @@
+{
+  "ddragonVersion": "16.19.1",
+  "fetchedAt": "2026-09-26T20:02:12.552Z",
+  "sources": {
+    "ddragon": "https://ddragon.leagueoflegends.com (Riot Games)",
+    "meraki": "https://github.com/meraki-analytics/lolstaticdata — League of Legends Wiki data, CC BY-SA 3.0",
+    "cdragon": "https://raw.communitydragon.org (CommunityDragon)"
+  }
+}
