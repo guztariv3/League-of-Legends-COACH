@@ -193,3 +193,28 @@ describe("challenges", () => {
     expect((await call("/challenges", { method: "POST", cookie, body: JSON.stringify({ metric: "nope", kind: "next5" }) })).res.status).toBe(400);
   }, 60_000);
 });
+
+describe("wiki knowledge (Meraki)", () => {
+  it("adds the Wiki data with its attribution when available, and positions to the champion list", async () => {
+    const knowledge = await bootKnowledge(database.db, syntheticKnowledge());
+    const wiki = {
+      get: async () => new Map([["Aurelith", {
+        key: "Aurelith", name: "Aurelith", positions: ["MIDDLE"], roles: ["BURST"], attackType: "Ranged", adaptiveType: "Magic damage",
+        ratings: { damage: 3, toughness: 1, control: 2, mobility: 1, utility: 2, abilityReliance: 100, difficulty: 2 },
+        abilities: [{ key: "Q" as const, name: "Glass Wave", blurb: null, damageType: "Magic damage", targeting: "Direction", cooldown: "7", cost: "50", effects: [] }],
+        patchLastChanged: null,
+      }]]),
+    };
+    const app = createApp({ cfg: loadConfig({ NODE_ENV: "test" }), db: database.db, source: syntheticSource(() => Date.UTC(2026, 5, 1)), knowledge, aiProviders: [], wiki });
+    const req = async (path: string, cookie: string) => (await app.app.request(`/api${path}`, { headers: { Cookie: cookie } })).json() as Promise<any>;
+    const cookie = await player("Wikier");
+    const detail = await req("/champions/Aurelith", cookie);
+    expect(detail.wiki.roles).toEqual(["BURST"]);
+    expect(detail.wiki.attribution.text).toMatch(/CC BY-SA 3\.0/);
+    const list = await req("/champions", cookie);
+    expect(list.champions.find((c: any) => c.id === "Aurelith").positions).toEqual(["MIDDLE"]);
+    expect(list.positionsSource.text).toMatch(/League of Legends Wiki/);
+    // Without the source, nothing is made up.
+    expect((await call("/champions/Aurelith", { cookie })).body.wiki).toBeNull();
+  }, 60_000);
+});

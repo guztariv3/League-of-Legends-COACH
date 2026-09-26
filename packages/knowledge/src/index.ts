@@ -237,3 +237,4 @@ export class KnowledgeRegistry {
   }
 }
 export * from "./abilities.js";
+export * from "./meraki.js";

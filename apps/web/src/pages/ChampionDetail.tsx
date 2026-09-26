@@ -130,11 +130,47 @@ function Rating({ label, value }: { label: string; value: number }) {
   );
 }
 
+const LANE: Record<string, string> = { TOP: "Top", JUNGLE: "Jungle", MIDDLE: "Mid", BOTTOM: "Bot", SUPPORT: "Support" };
+const RATING_LABEL = { damage: "Damage", toughness: "Toughness", control: "Crowd control", mobility: "Mobility", utility: "Utility" } as const;
+const LEVEL = ["", "Low", "Medium", "High"];
+const titleCase = (s: string) => s.charAt(0) + s.slice(1).toLowerCase();
+
 function Overview({ data }: { data: Detail }) {
   const info = data.champion?.info;
   const ab = data.abilities;
+  const wiki = data.wiki;
+  const keys = ["P", "Q", "W", "E", "R"] as const;
+  const r = wiki?.ratings;
+  const rated = r ? (Object.keys(RATING_LABEL) as (keyof typeof RATING_LABEL)[]).map((k) => ({ k, label: RATING_LABEL[k], v: r[k] })) : [];
   return (
     <div className="stack">
+      {wiki && (
+        <section className="card stack" aria-labelledby="h-playstyle">
+          <h2 id="h-playstyle">Playstyle</h2>
+          <dl className="setup">
+            {wiki.positions.length > 0 && <div><dt>Positions</dt><dd>{wiki.positions.map((p) => LANE[p] ?? titleCase(p)).join(", ")}</dd></div>}
+            {wiki.roles.length > 0 && <div><dt>Class</dt><dd>{wiki.roles.map(titleCase).join(", ")}</dd></div>}
+            {(wiki.attackType || wiki.adaptiveType) && <div><dt>Attacks</dt><dd>{[wiki.attackType, wiki.adaptiveType && `adaptive ${wiki.adaptiveType.toLowerCase()}`].filter(Boolean).join(" · ")}</dd></div>}
+          </dl>
+          {rated.length > 0 && (
+            <>
+              <div className="ratings">
+                {rated.map((x) => (
+                  <div key={x.k} className="rating">
+                    <span className="tile-note">{x.label}: {LEVEL[x.v] ?? x.v}</span>
+                    <span className="rating-bar" aria-label={`${x.label}: ${LEVEL[x.v] ?? x.v}`}><span style={{ width: `${(x.v / 3) * 100}%` }} /></span>
+                  </div>
+                ))}
+              </div>
+              <p style={{ margin: 0 }}>
+                {rated.some((x) => x.v >= 3) && <><strong>Strengths:</strong> {rated.filter((x) => x.v >= 3).map((x) => x.label.toLowerCase()).join(", ")}. </>}
+                {rated.some((x) => x.v <= 1) && <><strong>Weaknesses:</strong> {rated.filter((x) => x.v <= 1).map((x) => x.label.toLowerCase()).join(", ")}.</>}
+              </p>
+            </>
+          )}
+          <WikiCredit data={data} />
+        </section>
+      )}
       {info && (
         <section className="card stack" aria-labelledby="h-ratings">
           <h2 id="h-ratings">Riot's ratings</h2>
@@ -149,24 +185,30 @@ function Overview({ data }: { data: Detail }) {
       )}
       <section className="card stack" aria-labelledby="h-abilities">
         <h2 id="h-abilities">Abilities</h2>
-        {ab ? (
+        {ab || wiki ? (
           <ul className="abilities">
-            {ab.abilities.map((x) => (
-              <li key={x.key} className="ability">
-                <AbilityIcon image={x.image} passive={x.key === "P"} label={x.name} />
-                <div>
-                  <div className="match-title"><span className="ability-key">{x.key === "P" ? "Passive" : x.key}</span> {x.name}</div>
-                  <p className="insight-detail" style={{ margin: "2px 0" }}>{x.description}</p>
-                  {(x.cooldown || x.cost || x.range) && (
-                    <div className="tile-note">{[x.cooldown && `Cooldown ${x.cooldown}s`, x.cost && `Cost ${x.cost}`, x.range && `Range ${x.range}`].filter(Boolean).join(" · ")}</div>
-                  )}
-                </div>
-              </li>
-            ))}
+            {keys.map((k) => {
+              const riot = ab?.abilities.find((x) => x.key === k);
+              const w = wiki?.abilities.filter((x) => x.key === k) ?? [];
+              if (!riot && !w.length) return null;
+              return (
+                <li key={k} className="ability">
+                  {riot ? <AbilityIcon image={riot.image} passive={k === "P"} label={riot.name} /> : <span className="ability-key" aria-hidden="true">{k}</span>}
+                  <div className="stack" style={{ gap: 4 }}>
+                    <div className="match-title"><span className="ability-key">{k === "P" ? "Passive" : k}</span> {riot?.name ?? w.map((x) => x.name).join(" / ")}</div>
+                    {riot ? <p className="insight-detail" style={{ margin: 0 }}>{riot.description}</p> : w[0]?.blurb && <p className="insight-detail" style={{ margin: 0 }}>{w[0].blurb}</p>}
+                    {w.length > 0 ? w.map((x) => <WikiValues key={x.name} a={x} named={w.length > 1} />) : riot && (riot.cooldown || riot.cost || riot.range) && (
+                      <div className="tile-note">{[riot.cooldown && `Cooldown ${riot.cooldown}s`, riot.cost && `Cost ${riot.cost}`, riot.range && `Range ${riot.range}`].filter(Boolean).join(" · ")}</div>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         ) : (
-          <p className="page-sub" style={{ margin: 0 }}>Ability data isn't available right now (it comes from Riot's Data Dragon).</p>
+          <p className="page-sub" style={{ margin: 0 }}>Ability data isn't available right now (it comes from Riot's Data Dragon and the League of Legends Wiki).</p>
         )}
+        {wiki && <WikiCredit data={data} />}
       </section>
       {ab && (ab.allyTips.length > 0 || ab.enemyTips.length > 0) && (
         <section className="card stack" aria-labelledby="h-tips">
@@ -175,7 +217,39 @@ function Overview({ data }: { data: Detail }) {
           {ab.enemyTips.length > 0 && <><h3 className="tile-label" style={{ margin: 0 }}>Playing against</h3><ul className="tile-note">{ab.enemyTips.map((t) => <li key={t}>{t}</li>)}</ul></>}
         </section>
       )}
+      <section className="card stack" aria-labelledby="h-guides">
+        <h2 id="h-guides">Combos and guides</h2>
+        <p className="tile-note" style={{ margin: 0 }}>Not available yet. We only show guides and combos that come from a source we can credit, and we don't write them ourselves.</p>
+      </section>
     </div>
+  );
+}
+
+function WikiValues({ a, named }: { a: NonNullable<Detail["wiki"]>["abilities"][number]; named: boolean }) {
+  const facts = [a.damageType, a.targeting && `Targeting: ${a.targeting.toLowerCase()}`, a.cooldown && `Cooldown ${a.cooldown}${/[a-z]/i.test(a.cooldown) ? "" : "s"}`, a.cost && `Cost ${a.cost}`].filter(Boolean);
+  const values = a.effects.flatMap((e) => e.values);
+  if (!facts.length && !values.length) return null;
+  return (
+    <div className="wiki-values">
+      {named && <div className="tile-label">{a.name}</div>}
+      {facts.length > 0 && <div className="tile-note">{facts.join(" · ")}</div>}
+      {values.length > 0 && (
+        <details className="layer">
+          <summary>Values per rank</summary>
+          <dl>{values.map((v, i) => <div key={i} style={{ display: "contents" }}><dt>{v.label}</dt><dd>{v.value}</dd></div>)}</dl>
+        </details>
+      )}
+    </div>
+  );
+}
+
+function WikiCredit({ data }: { data: Detail }) {
+  const a = data.wiki?.attribution;
+  if (!a) return null;
+  return (
+    <p className="tile-note" style={{ margin: 0 }}>
+      Ability details, positions and ratings: <a href={a.wiki} target="_blank" rel="noreferrer">League of Legends Wiki</a> (<a href={a.license} target="_blank" rel="noreferrer">CC BY-SA 3.0</a>), via <a href={a.meraki} target="_blank" rel="noreferrer">Meraki Analytics</a>.
+    </p>
   );
 }
 
