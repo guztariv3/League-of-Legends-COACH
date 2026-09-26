@@ -65,6 +65,8 @@ export interface RankPoint {
   losses: number;
   /** LP won or lost since the previous point; only when exactly one game was played in between. */
   lpChange: number | null;
+  /** Position on one continuous ladder (100 per division), for charts; null for unknown tiers. */
+  points: number | null;
 }
 
 /** Oldest-first history for one queue, with the LP change of single-game steps. */
@@ -78,7 +80,7 @@ export function rankHistory(rows: Snapshot[]): RankPoint[] {
       const b = ladderPoints(r.tier, r.rank, r.lp);
       if (a !== null && b !== null) lpChange = b - a;
     }
-    return { at: r.takenAt.toISOString(), tier: r.tier, rank: r.rank, lp: r.lp, wins: r.wins, losses: r.losses, lpChange };
+    return { at: r.takenAt.toISOString(), tier: r.tier, rank: r.rank, lp: r.lp, wins: r.wins, losses: r.losses, lpChange, points: ladderPoints(r.tier, r.rank, r.lp) };
   });
 }
 

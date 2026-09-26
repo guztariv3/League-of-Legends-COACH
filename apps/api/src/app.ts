@@ -21,6 +21,7 @@ import { forgetPlayers } from "./retention.js";
 import { desktopDeviceRoutes, desktopSessionRoutes } from "./desktop.js";
 import { evolutionRoutes } from "./evolution.js";
 import { rankRoutes } from "./rank.js";
+import { improveRoutes } from "./improve.js";
 
 export interface AppDeps {
   cfg: Config;
@@ -403,6 +404,7 @@ export function createApp(deps: AppDeps) {
   authed.route("/", gameRoutes({ db, source, knowledge, services }));
   authed.route("/", evolutionRoutes({ db, knowledge, services }));
   authed.route("/", rankRoutes({ db }));
+  authed.route("/", improveRoutes({ services }));
   authed.route("/", desktopSessionRoutes({ db }));
   // Device routes authenticate with a pairing code or a device token, not the session cookie.
   app.route("/", desktopDeviceRoutes({ db, source, knowledge, services }));

@@ -456,7 +456,7 @@ td .loadout { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
   }
   .nav-app a {
     flex: 1 1 0; min-width: 0; flex-direction: column; gap: 2px; padding: 6px 2px;
-    font-size: 0.6rem; letter-spacing: 0.06em; border-radius: var(--radius-s);
+    font-size: 0.56rem; letter-spacing: 0.02em; border-radius: var(--radius-s);
   }
   .nav-app a span { overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
   .nav-app a[aria-current="page"] { box-shadow: inset 0 2px 0 var(--gold); background: rgb(200 170 110 / 0.1); }
@@ -492,3 +492,17 @@ td .loadout { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
 .rank-badge small { font-family: inherit; font-size: 0.8rem; color: var(--text-secondary); font-weight: 400; letter-spacing: 0.02em; }
 .rank-pill { font-size: 0.7rem; font-weight: 700; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--text-secondary); flex: none; font-variant-numeric: tabular-nums; }
 .rank-pill.rank-first { color: var(--gold-bright); border-color: var(--gold); }
+
+/* Improve: pools, activity calendar */
+.pool-table td, .pool-table th { white-space: nowrap; }
+.calendar-wrap { overflow-x: auto; padding-bottom: 4px; }
+.calendar { display: flex; gap: 3px; width: max-content; }
+.calendar-dows, .calendar-week { display: grid; grid-template-rows: repeat(7, 13px); gap: 3px; }
+.calendar-dows span { font-size: 0.65rem; line-height: 13px; color: var(--text-muted); padding-right: 4px; }
+.calendar-day { width: 13px; height: 13px; border-radius: 3px; background: var(--surface-3); display: inline-block; }
+.calendar-day.lvl-1 { background: rgb(200 170 110 / 0.3); }
+.calendar-day.lvl-2 { background: rgb(200 170 110 / 0.52); }
+.calendar-day.lvl-3 { background: rgb(200 170 110 / 0.76); }
+.calendar-day.lvl-4 { background: var(--gold-bright); }
+.calendar-day.is-active { outline: 2px solid var(--text-primary); outline-offset: 1px; }
+.calendar-legend { display: inline-flex; align-items: center; gap: 3px; }
