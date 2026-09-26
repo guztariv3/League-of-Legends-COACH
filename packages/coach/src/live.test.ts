@@ -36,6 +36,31 @@ describe("live coach", () => {
     expect(c.skill?.headline).toBe("Level up: R");
   });
 
+  it("uses the site's build engine answer when there is one, with the purchase path from the catalog", () => {
+    const engine = {
+      first: { id: 3165, name: "Morellonomicon", score: 1.4, why: ["It applies Grievous Wounds: Soraka: Q, W and R heal."] },
+      next: [{ id: 3089, name: "Rabadon's Deathcap", score: 1.1, why: ["Gives 130 ability power."] }],
+      boots: { id: 3111, name: "Mercury's Treads", score: 0.9, why: ["Gives 25 magic resist."] },
+      situational: [{ id: 6655, name: "Luden's Companion", score: 0.8, why: [], when: "Against the shields from Lux." }],
+      starter: null,
+    };
+    const c = liveCoach({ state: state(600, [{ itemID: 1026, price: 850 }], undefined, 7), catalog, engine });
+    expect(c.items?.next?.item.name).toBe("Morellonomicon");
+    expect(c.items?.next?.reasons[0]).toMatch(/Grievous Wounds/);
+    expect(c.items?.next?.path.steps.find((st) => st.id === 1026)?.owned).toBe(true); // the Blasting Wand you have counts
+    expect(c.items?.alternatives.map((a) => a.item.name)).toEqual(["Rabadon's Deathcap", "Luden's Companion"]);
+    expect(c.items?.alternatives[1]?.reasons).toContain("Against the shields from Lux.");
+    expect(c.items?.boots?.item.name).toBe("Mercury's Treads");
+    expect(c.decisions.find((d) => d.kind === "item")?.headline).toBe("Next: Morellonomicon");
+  });
+
+  it("opens with the engine's starting items when it gives them", () => {
+    const engine = { first: null, next: [], boots: null, situational: [], starter: { items: [{ id: 1054, name: "Doran's Shield", gold: 450 }], why: ["You are melee against Syndra, who is ranged."] } };
+    const c = liveCoach({ state: state(20, []), catalog, engine });
+    expect(c.starter?.items.map((i) => i.name)).toEqual(["Doran's Shield"]);
+    expect(c.starter?.reasons[0]).toMatch(/melee against Syndra/);
+  });
+
   it("works without a catalog: no item advice, but the rest still runs", () => {
     const c = liveCoach({ state: state(700, [], { Q: 1, W: 1, E: 1, R: 0 }, 4), catalog: null, skillHistory: [QMAX, QMAX, QMAX] });
     expect(c.items).toBeNull();

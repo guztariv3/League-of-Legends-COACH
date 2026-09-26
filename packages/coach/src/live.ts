@@ -1,4 +1,4 @@
-import { suggestItems, suggestStarter, type Catalog, type StarterSuggestion, type Suggestions } from "@coach/itemization";
+import { purchasePath, suggestItems, suggestStarter, type Catalog, type CatalogItem, type StarterSuggestion, type Suggestion, type Suggestions } from "@coach/itemization";
 import { goldDifference, laneOpponent, objectives, type GameState, type GoldDifference, type Objectives } from "@coach/live";
 import { fromItemSuggestions } from "./adapters.js";
 import { decide, type CoachDecision } from "./decision.js";
@@ -20,6 +20,41 @@ export interface LiveCoachInput {
   previousItem?: number | null;
   /** The player's past levelling orders with this champion. */
   skillHistory?: Slot[][];
+  /**
+   * The site's build engine answer for this moment of the game (packages/build). When present it
+   * replaces the local suggestions; without a connected site the local rules still run.
+   */
+  engine?: EngineItems | null;
+}
+
+interface EnginePick { id: number; name: string; score: number; why: string[] }
+/** The part of the build engine's answer (BuildRecommendation) the live window uses. */
+export interface EngineItems {
+  first: EnginePick | null;
+  next: EnginePick[];
+  boots: EnginePick | null;
+  situational: (EnginePick & { when: string })[];
+  starter: { items: { id: number; name: string; gold: number }[]; why: string[] } | null;
+}
+
+/** The engine's answer in the live window's shape, with the purchase path from the catalog. */
+export function fromEngine(engine: EngineItems, local: Suggestions | null, catalog: Catalog, inventory: number[], gold: number | null): Suggestions {
+  const one = (p: EnginePick | null, extra: string[] = []): Suggestion | null => {
+    const item = p ? catalog.items.get(p.id) : undefined;
+    return p && item ? { item, score: p.score, reasons: [...p.why, ...extra], path: purchasePath(item, inventory, gold, catalog) } : null;
+  };
+  const alternatives = [
+    ...engine.next.map((p) => one(p)),
+    ...engine.situational.map((p) => one(p, [p.when])),
+  ].filter((x): x is Suggestion => x !== null).slice(0, 3);
+  const next = one(engine.first);
+  return {
+    next,
+    alternatives,
+    boots: one(engine.boots),
+    enemy: local?.enemy ?? { magicShare: 0.5, healers: [], armor: 0, magicResist: 0 },
+    note: next ? null : "Nothing left to suggest for this game.",
+  };
 }
 
 export interface LiveCoach {
@@ -57,12 +92,19 @@ export function liveCoach(input: LiveCoachInput): LiveCoach {
   if (!me) return { decisions: [], items: null, starter: null, skill: null, strategy: [], gold, objectives: obj };
 
   const opening = catalog && state.time < STARTER_WINDOW_SEC && me.itemGold < 300;
-  const starter = opening
-    ? suggestStarter({ catalog, map: state.map, position: me.position, championId: me.championId, laneOpponentId: laneOpponent(state)?.championId ?? null })
+  const engine = input.engine ?? null;
+  const engineStarter = engine?.starter
+    ? { items: engine.starter.items.map((i) => catalog?.items.get(i.id)).filter((i): i is CatalogItem => i !== undefined), reasons: engine.starter.why, alternatives: [] }
     : null;
-  const items = catalog
+  const starter = opening
+    ? engineStarter?.items.length
+      ? engineStarter
+      : suggestStarter({ catalog, map: state.map, position: me.position, championId: me.championId, laneOpponentId: laneOpponent(state)?.championId ?? null })
+    : null;
+  const local = catalog
     ? suggestItems({ catalog, map: state.map, gold: state.gold, me, enemies: state.enemies, usual: input.usualItems ?? [], previous: input.previousItem ?? null })
     : null;
+  const items = catalog && engine ? fromEngine(engine, local, catalog, me.items, state.gold) : local;
   const skill = state.abilities && state.skillPoints !== null
     ? adviseSkill({ champion: me.champion, level: me.level, ranks: state.abilities, skillPoints: state.skillPoints, history: input.skillHistory ?? [] })
     : null;
