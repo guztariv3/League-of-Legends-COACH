@@ -24,6 +24,15 @@ import { World } from "./components/World";
 import { LegalFooter } from "./components/LegalFooter";
 import "./styles.css";
 
+/** Main sections. The icons only show in the phone bottom bar (simple original glyphs, 24×24). */
+const NAV: [string, string, string][] = [
+  ["/", "Home", "M4 11 12 4l8 7v9h-5v-6H9v6H4z"],
+  ["/matches", "Matches", "M5 5h14v3H5zm0 5.5h14v3H5zM5 16h14v3H5z"],
+  ["/champions", "Champions", "M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6z"],
+  ["/game", "Pre-game", "M12 2 4 12l8 10 8-10zm0 5 4 5-4 5-4-5z"],
+  ["/profile", "Profile", "M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9m-8 9c0-4.4 3.6-7 8-7s8 2.6 8 7z"],
+];
+
 function Layout() {
   const { me, refresh } = useSession();
   const syncing = me?.accounts.some((a) => a.sync.status === "syncing");
@@ -49,12 +58,13 @@ function Layout() {
             <span style={{ width: 28, height: 28, display: "inline-flex" }}><CoachAvatar quiet /></span>
             KOI MASTER
           </Link>
-          <nav className="nav" aria-label="Main">
-            <NavLink to="/" end>Home</NavLink>
-            <NavLink to="/matches">Matches</NavLink>
-            <NavLink to="/champions">Champions</NavLink>
-            <NavLink to="/game">Pre-game</NavLink>
-            <NavLink to="/profile">Profile</NavLink>
+          <nav className="nav nav-app" aria-label="Main">
+            {NAV.map(([to, label, icon]) => (
+              <NavLink key={to} to={to} end={to === "/"}>
+                <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={icon} /></svg>
+                <span>{label}</span>
+              </NavLink>
+            ))}
           </nav>
           <SearchBox />
           <NavLink to="/settings" className="profile" aria-label="Settings and account">

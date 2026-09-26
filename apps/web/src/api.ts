@@ -138,7 +138,7 @@ export interface MatchDetail {
 export interface ChampionList {
   version: string | null;
   source: "ddragon" | "synthetic" | null;
-  champions: { id: string; key: number; name: string; title: string; tags: string[]; personal: { games: number; wins: number } }[];
+  champions: { id: string; key: number; name: string; title: string; tags: string[]; info?: { attack: number; defense: number; magic: number; difficulty: number }; personal: { games: number; wins: number } }[];
 }
 
 export interface Dimension {

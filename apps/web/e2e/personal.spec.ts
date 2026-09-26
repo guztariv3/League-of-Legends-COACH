@@ -50,6 +50,19 @@ test("profile, goals, memory, search and champion page", async ({ page }, info) 
 
   // Champion page personal layer
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Champions" }).click();
+  // Filters: class, difficulty, played by you — kept in the URL.
+  const filters = page.getByRole("search", { name: "Champion filters" });
+  await filters.getByLabel("Class").selectOption("Assassin");
+  await expect(page.getByRole("link", { name: /Korvane/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Aurelith/ })).toHaveCount(0);
+  await filters.getByLabel("Difficulty").selectOption("high");
+  await expect(page).toHaveURL(/class=Assassin.*difficulty=high|difficulty=high.*class=Assassin/);
+  await expect(page.getByRole("link", { name: /Oshra/ })).toHaveCount(0); // difficulty 6
+  await page.getByRole("button", { name: "Clear filters" }).click();
+  await filters.getByLabel("Played by you").click(); // state follows the URL, so wait for it
+  await expect(filters.getByLabel("Played by you")).toBeChecked();
+  await expect(page).toHaveURL(/played=1/);
+  await expect(page.getByRole("link", { name: /No games/ })).toHaveCount(0);
   await page.getByRole("link", { name: /Aurelith/ }).first().click();
   await expect(page.getByRole("heading", { name: "Aurelith", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Abilities" })).toBeVisible();
