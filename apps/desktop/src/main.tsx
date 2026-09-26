@@ -2,12 +2,13 @@ import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { DEFAULT_CONTROLS, LiveEngine, modeInfo, type Delivery, type EngineTick, type Intensity, type LiveControls } from "@coach/live";
 import { CoachAvatar } from "@coach/ui";
-import { checkUpdate, fetchBuild, inTauri, installUpdate, minimizeWindow, readLoad, readSnapshot, type UpdateInfo } from "./bridge";
+import { checkUpdate, fetchBuild, inTauri, installUpdate, minimizeWindow, readLoad, readSnapshot, setOverlay, type UpdateInfo } from "./bridge";
 import { Board, useArt, useCatalog, type PersonalBuild } from "./board";
 import { ConnectForm, RivalsPanel, useRivals } from "./rivals";
 import "./live.css";
 
 const CONTROLS_KEY = "live.controls";
+const OVERLAY_KEY = "live.overlay";
 const categoryLabel: Record<string, string> = {
   own_level_spike: "Your key levels (6/11/16)",
   own_item_spike: "Your completed items",
@@ -31,6 +32,8 @@ type Mode = "waiting" | "live" | "demo";
 function LiveWindow() {
   const [controls, setControls] = useState<LiveControls>(loadControls);
   const [focusCs, setFocusCs] = useState(false);
+  // The overlay is off unless the player turns it on (D-11).
+  const [overlay, setOverlayOn] = useState(() => { try { return localStorage.getItem(OVERLAY_KEY) === "on"; } catch { return false; } });
   const [mode, setMode] = useState<Mode>("waiting");
   const [tick, setTick] = useState<EngineTick | null>(null);
   const [message, setMessage] = useState<(Delivery & { shownAt: number }) | null>(null);
@@ -113,6 +116,11 @@ function LiveWindow() {
     return () => { stopped = true; };
   }, [rivals.link, myChampion, buildMode]);
 
+  // The overlay shows only while a real game is running, and only if the player turned it on.
+  const overlayVisible = overlay && mode === "live" && !controls.paused;
+  useEffect(() => { void setOverlay(overlayVisible); }, [overlayVisible]);
+  useEffect(() => { try { localStorage.setItem(OVERLAY_KEY, overlay ? "on" : "off"); } catch { /* per-viewer convenience only */ } }, [overlay]);
+
   // Updates are checked at start-up and offered only outside a game (the game always comes first).
   useEffect(() => { void checkUpdate().then(setUpdate); }, []);
 
@@ -158,7 +166,7 @@ function LiveWindow() {
       <RivalsPanel scout={rivals.scout} collapsed={mode === "live"} />
 
       {tick?.state.me && (
-        <Board state={tick.state} names={itemNames.current} art={art} catalog={catalog} demo={mode === "demo"} build={mode === "demo" ? null : build} connected={Boolean(rivals.link) && mode !== "demo"} />
+        <Board state={tick.state} names={itemNames.current} art={art} catalog={catalog} demo={mode === "demo"} build={mode === "demo" ? null : build} connected={Boolean(rivals.link) && mode !== "demo"} overlay={overlayVisible} />
       )}
 
       {!rivals.link && mode === "waiting" && (
@@ -220,6 +228,10 @@ function LiveWindow() {
           </select>
         </label>
         <label><input type="checkbox" checked={focusCs} onChange={(e) => setFocusCs(e.target.checked)} /> I want to focus on CS</label>
+        <label>
+          <input type="checkbox" checked={overlay} onChange={(e) => setOverlayOn(e.target.checked)} /> Show the overlay over the game (gold difference and next items)
+        </label>
+        <p className="quiet small">Off by default. It is a separate transparent window that lets your clicks through; it doesn't touch the game. It needs the game in borderless or windowed mode.</p>
         <fieldset style={{ border: 0, padding: 0, margin: "6px 0" }}>
           <legend>What it can tell you about</legend>
           {Object.entries(categoryLabel).map(([k, label]) => (

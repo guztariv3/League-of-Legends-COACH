@@ -79,3 +79,28 @@ export const fetchScout = <T>(baseUrl: string, token: string) => site<T>("deskto
 /** The player's own build with the champion they are playing (from their history on the site). */
 export const fetchBuild = <T>(baseUrl: string, token: string, champion: string, mode: "summoners_rift" | "aram") =>
   site<T>("desktop_build", { baseUrl, token, champion, mode });
+
+/** What the optional overlay shows (D-11): the gold difference and the next items. */
+export interface OverlayState {
+  art: { cdn: string | null; version: string | null };
+  rows: { ally: { id: string; name: string }; enemy: { id: string; name: string }; diff: number }[];
+  allyTotal: number;
+  enemyTotal: number;
+  next: { id: number; name: string }[];
+  gold: number | null;
+}
+
+export const OVERLAY_EVENT = "overlay-state";
+
+/** Shows or hides the overlay window (an ordinary click-through window; nothing touches the game). */
+export async function setOverlay(visible: boolean): Promise<void> {
+  if (!inTauri) return;
+  try { await invoke("set_overlay", { visible }); } catch { /* the side window keeps working */ }
+}
+
+/** Sends the overlay what to draw. */
+export async function sendOverlay(state: OverlayState): Promise<void> {
+  if (!inTauri) return;
+  const { emitTo } = await import("@tauri-apps/api/event");
+  await emitTo("overlay", OVERLAY_EVENT, state).catch(() => { /* overlay closed */ });
+}

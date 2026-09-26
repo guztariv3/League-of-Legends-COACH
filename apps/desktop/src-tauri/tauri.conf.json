@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "live",
-        "title": "KOI Master · Live Coach",
+        "title": "KOI Master \u00b7 Live Coach",
         "width": 380,
         "height": 560,
         "minWidth": 300,
@@ -21,6 +21,21 @@
         "resizable": true,
         "alwaysOnTop": true,
         "focus": false
+      },
+      {
+        "label": "overlay",
+        "title": "KOI Master \u00b7 Overlay",
+        "url": "overlay.html",
+        "width": 230,
+        "height": 250,
+        "visible": false,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": false,
+        "shadow": false,
+        "resizable": false
       }
     ],
     "security": {

@@ -35,3 +35,12 @@ Tabla `rank_snapshots` (migración 0005): tras cada sincronización se guarda el
 - `goldDifference`: diferencia por enfrentamiento y total por equipo **por valor de ítems** (el juego no da el oro de los demás; es lo mismo que muestra la tabla TAB). Por posición en la Grieta; por orden donde no hay líneas.
 - `objectives`: dragones (con tipo), heraldos, barones, torres e inhibidores por equipo a partir del feed de eventos. Las estructuras se atribuyen por su dueño en el nombre (T1 = ORDER, T2 = CHAOS).
 - La tarjeta del Coach en la interfaz se hace en F2, donde se usa por primera vez. Todo aviso nuevo pasa por el `PolicyEngine` existente, que ya bloquea el lenguaje de órdenes (D-02, D-12).
+
+## F2a — Coach en vivo (hecho)
+- `suggestStarter` (itemization): ítem inicial por rol y matchup — Anillo de Doran para daño mágico, Espada de Doran para físico, Escudo de Doran para un melee contra un rival a distancia (con los alcances de Data Dragon `stats.attackrange`), mascota de jungla y objeto de support. Solo en la Grieta; un objeto que no exista en el parche no se sugiere.
+- `adviseSkill` (coach): la R en cuanto se abre un rango (regla del juego, "fact"); las básicas siguen **tu propio orden** con ese campeón (mínimo 3 partidas con timeline; "observation"). Sin historial no sugiere básicas: no hay orden universal. Campeones con reglas propias (Udyr…) quedan fuera. `/api/desktop/build` devuelve ahora `skillOrders`.
+- `strategyFacts` (coach, D-12): diferencia de oro por ítems del equipo (≥2000) y de tu matchup (≥1000) y resumen de dragones; hechos, nunca órdenes (probado contra el `PolicyEngine`).
+- `liveCoach`: une todo; la app solo lo pinta. Ventana: tarjeta **Now** (azul hextech, `CoachCard` de `packages/ui`) sobre las pestañas Items · Skills · Gold · Enemies · Team. "Coach adjustment" solo cuando la recomendación de ítem cambia sin que hayas comprado la anterior.
+
+## F2b — overlay opcional (hecho, D-11)
+Ventana `overlay` (tauri.conf): transparente, sin bordes, siempre encima, fuera de la barra de tareas y **oculta por defecto**. `set_overlay` (Rust) la muestra en el borde izquierdo y le activa `set_ignore_cursor_events(true)`, así que los clics pasan al juego. No se engancha al juego ni lee nada suyo: solo pinta lo que le envía la ventana del Coach por un evento (`overlay-state`: diferencia de oro por ítems, totales, próximos ítems y tu oro). Su capacidad solo permite escuchar eventos. Se activa en Settings; se oculta fuera de partida y al pausar el Coach. Requiere el juego en ventana o pantalla completa sin bordes.

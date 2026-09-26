@@ -15,18 +15,24 @@ export interface PersonalBuild {
   items: BuildItem[];
   /** Why there is no suggestion, when there is none. */
   note: string | null;
+  /** Levelling orders (1 = Q … 4 = R) of the latest games with this champion, newest first; for the skill advisor. */
+  skillOrders: number[][];
 }
 
 export const MIN_GAMES_FOR_BUILD = 3;
 const MIN_GAMES_PER_ITEM = 2;
 const MAX_ITEMS = 6;
+const MAX_SKILL_ORDERS = 10;
 // Tier-2 boots are cheaper than a big item but are part of every build.
 const BOOTS = new Set([3006, 3009, 3020, 3047, 3111, 3117, 3158]);
 
 export function personalBuild(analyses: MatchAnalysis[], champion: string, mode: PersonalBuild["mode"], bundle: KnowledgeBundle | undefined): PersonalBuild {
   const games = analyses.filter((a) => a.analyzable && a.mode === mode && a.championName === champion);
   const wins = games.filter((a) => a.win).length;
-  const base = { champion, mode, games: games.length, wins };
+  const skillOrders = [...games].sort((a, b) => b.startedAt - a.startedAt)
+    .flatMap((a) => (a.skillOrder && a.skillOrder.length ? [a.skillOrder] : []))
+    .slice(0, MAX_SKILL_ORDERS);
+  const base = { champion, mode, games: games.length, wins, skillOrders };
   if (games.length < MIN_GAMES_FOR_BUILD) {
     return { ...base, items: [], note: games.length ? `You only have ${games.length} ${games.length === 1 ? "game" : "games"} on this champion in this mode: not enough data yet.` : "You have no games on this champion in this mode yet." };
   }

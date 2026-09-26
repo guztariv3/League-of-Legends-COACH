@@ -75,6 +75,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@coach/coach':
+        specifier: workspace:*
+        version: link:../../packages/coach
       '@coach/itemization':
         specifier: workspace:*
         version: link:../../packages/itemization
@@ -174,6 +177,9 @@ importers:
       '@coach/itemization':
         specifier: workspace:*
         version: link:../itemization
+      '@coach/live':
+        specifier: workspace:*
+        version: link:../live
 
   packages/domain:
     dependencies:

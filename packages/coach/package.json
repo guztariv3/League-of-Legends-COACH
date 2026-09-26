@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@coach/insights": "workspace:*",
-    "@coach/itemization": "workspace:*"
+    "@coach/itemization": "workspace:*",
+    "@coach/live": "workspace:*"
   }
 }
