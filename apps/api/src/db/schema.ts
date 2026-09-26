@@ -148,3 +148,19 @@ export const deviceLinks = pgTable("device_links", {
   lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
 });
+
+/**
+ * Rank and LP per ranked queue, recorded after each sync when anything changed.
+ * Riot keeps no rank history, so this is the only source for LP graphs.
+ */
+export const rankSnapshots = pgTable("rank_snapshots", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  accountId: uuid("account_id").notNull().references(() => riotAccounts.id, { onDelete: "cascade" }),
+  queueType: text("queue_type").notNull(),
+  tier: text("tier").notNull(),
+  rank: text("rank").notNull(),
+  lp: integer("lp").notNull(),
+  wins: integer("wins").notNull(),
+  losses: integer("losses").notNull(),
+  takenAt: timestamp("taken_at", { withTimezone: true }).notNull().defaultNow(),
+});

@@ -34,6 +34,10 @@ export interface GameState {
   me: PlayerState | null;
   /** The player's unspent gold (the game reports it only for the active player). */
   gold: number | null;
+  /** The player's ability ranks; null when the game doesn't report them. */
+  abilities: AbilityRanks | null;
+  /** Levels not yet spent on an ability (level − ranks); null without ability data. */
+  skillPoints: number | null;
   allies: PlayerState[];
   enemies: PlayerState[];
   /** Events seen so far (deduplicated by EventID). */
@@ -42,6 +46,8 @@ export interface GameState {
   /** Data quality: false when the snapshot lacked the active player or teams. */
   complete: boolean;
 }
+
+export interface AbilityRanks { q: number; w: number; e: number; r: number }
 
 export interface StateContext {
   /** Item id → price, from the active knowledge bundle (fallback when the snapshot has none). */
@@ -81,7 +87,7 @@ function toPlayer(p: LivePlayer, ctx: StateContext): PlayerState {
 }
 
 export function emptyState(): GameState {
-  return { time: 0, mode: null, map: null, me: null, gold: null, allies: [], enemies: [], events: [], lastEventId: -1, complete: false };
+  return { time: 0, mode: null, map: null, me: null, gold: null, abilities: null, skillPoints: null, allies: [], enemies: [], events: [], lastEventId: -1, complete: false };
 }
 
 export function reduceState(prev: GameState, data: AllGameData, ctx: StateContext = {}): GameState {
@@ -90,12 +96,20 @@ export function reduceState(prev: GameState, data: AllGameData, ctx: StateContex
   const me = players.find((p) => p.name && p.name === myName) ?? null;
   const myTeam = me?.team ?? null;
   const newEvents = data.events.Events.filter((e) => e.EventID > prev.lastEventId);
+  const a = data.activePlayer.abilities;
+  const abilities: AbilityRanks | null = a && (a.Q || a.W || a.E || a.R)
+    ? { q: a.Q?.abilityLevel ?? 0, w: a.W?.abilityLevel ?? 0, e: a.E?.abilityLevel ?? 0, r: a.R?.abilityLevel ?? 0 }
+    : null;
+  const level = data.activePlayer.level ?? me?.level ?? null;
   return {
     time: data.gameData.gameTime,
     mode: data.gameData.gameMode ?? null,
     map: data.gameData.mapNumber ?? null,
     me,
     gold: data.activePlayer.currentGold ?? null,
+    abilities,
+    // Some champions get free ranks (Udyr, Aphelios…); never report a negative count.
+    skillPoints: abilities && level !== null ? Math.max(0, level - (abilities.q + abilities.w + abilities.e + abilities.r)) : null,
     allies: myTeam ? players.filter((p) => p.team === myTeam && p !== me) : [],
     enemies: myTeam ? players.filter((p) => p.team !== myTeam) : [],
     events: [...prev.events, ...newEvents],

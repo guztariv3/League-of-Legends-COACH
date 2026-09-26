@@ -25,3 +25,6 @@ Tauri, lector de Live Client Data, pipeline local, Safe Mode, Focus Mode, contro
 
 ## Fase 5 — Inteligencia avanzada ✅ sobre datos sintéticos (ver `09-fase5.md`)
 Análisis longitudinal con tests estadísticos, puntos de inflexión, adaptabilidad y predicciones como hipótesis (solo post-game y pre-game), y What-if post-game donde haya evidencia suficiente.
+
+## Ampliación (D-10) — en curso (ver `12-ampliacion.md`)
+F1 Fundamentos → F2 In-game → F3 Pre-game → F5 Post-game → F4 Navegación y campeones → F6 Mejora → F7 Estadísticas globales → F8 Conocimiento → F9 Apertura pública.

@@ -1,6 +1,6 @@
 # Decisiones, simplificaciones y riesgos
 
-Estado: **P** = propuesta pendiente de aprobación · **A** = aceptada (D-01 a D-08 aprobadas el 2026-09-24).
+Estado: **P** = propuesta pendiente de aprobación · **A** = aceptada (D-01 a D-08 aprobadas el 2026-09-24; D-10 a D-15 el 2026-09-26).
 
 ## Decisiones que requieren aprobación (sección 118)
 
@@ -15,6 +15,12 @@ Estado: **P** = propuesta pendiente de aprobación · **A** = aceptada (D-01 a D
 | D-07 | **Modelo LLM: `claude-opus-5`** para las explicaciones del Coach (esfuerzo bajo, fallbacks del servidor ante rechazos). Configurable con `AI_MODEL`. Sin clave de IA, el Coach usa texto determinista. Nunca se usa IA durante la partida. | Decidido por el usuario. | A |
 | D-08 | **Hosting: Render** (Frankfurt) con un contenedor Docker (API + web, mismo origen) y Postgres gestionado; **GitHub Releases** para las actualizaciones firmadas del escritorio. Ver `10-despliegue.md`. | Precio fijo y bajo (unos 13 $/mes al empezar), backups gestionados, infraestructura como código (`render.yaml`) y portable gracias a Docker. Fly.io (unos 38 $/mes solo el Postgres gestionado) y Railway (coste variable) quedan como alternativas. | A |
 | D-09 | **Idioma: solo inglés** en la app de escritorio y en la web (textos, mensajes del Coach, sugerencias, errores del servidor, instalador y catálogo de Data Dragon en `en_US`). Las direcciones antiguas `/info/privacidad` y `/info/terminos` siguen funcionando. La documentación interna sigue en español. | Decidido por el usuario. | A |
+| D-10 | **Ampliación tipo Mobalytics** (directiva del 2026-09-26): amplitud de funciones de Mobalytics, identidad Runeterra y el Coach como capa de decisión. Auditoría y roadmap en `12-ampliacion.md`. | Decidido por el usuario; auditoría aprobada con todas las recomendaciones. | A |
+| D-11 | **Overlay opcional, apagado por defecto:** ventana transparente "siempre encima" que deja pasar los clics, sin engancharse al juego (sin DirectX, sin inyección, sin leer memoria). La ventana aparte sigue siendo la base. | Riot dice que los overlays basados en sus APIs siguen funcionando con Vanguard, pero no ha confirmado explícitamente las ventanas transparentes. | A |
+| D-12 | **Asesor de estrategia in-game dentro de D-02:** solo hechos visibles (ítems completados, niveles, objetivos caídos, power spikes) presentados como información u opciones; nunca órdenes, predicciones de posición ni temporizadores enemigos. | Política de Riot sobre "ventaja medible" y D-02. | A |
+| D-13 | **Selección de campeones por la LCU**, previo registro del uso ante Riot; solo lectura. **Sin importar runas ni ítems al cliente** por ahora. | Recomendación aceptada; respeta "no modificar el juego". | A |
+| D-14 | **Estadísticas globales con un recolector propio** (clave de producción; NA, ranked Solo/Duo, Emerald+, parche actual) que guarda solo agregados. La popularidad es evidencia de apoyo, nunca el criterio de la recomendación. | Licencia limpia; Riot prohíbe hacer de "data broker". | A |
+| D-15 | **Datos de habilidades de Meraki** (`lolstaticdata`, datos CC BY-SA 3.0 de la LoL Wiki, con atribución visible); guías y combos solo con fuente, nunca inventados. Highlights a partir de la timeline (sin vídeo). Modos: añadir ARAM Mayhem antes que Arena. | Recomendaciones aceptadas. | A |
 
 ## Simplificaciones aplicadas (sección 3)
 

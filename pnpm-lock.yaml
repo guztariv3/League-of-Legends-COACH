@@ -166,6 +166,15 @@ importers:
         specifier: workspace:*
         version: link:../synthetic
 
+  packages/coach:
+    dependencies:
+      '@coach/insights':
+        specifier: workspace:*
+        version: link:../insights
+      '@coach/itemization':
+        specifier: workspace:*
+        version: link:../itemization
+
   packages/domain:
     dependencies:
       zod:
