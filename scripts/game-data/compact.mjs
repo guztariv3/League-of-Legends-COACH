@@ -41,7 +41,7 @@ export function compactDdragonItems(items) {
   return {
     type: items.type, version: items.version,
     data: Object.fromEntries(Object.entries(items.data).map(([id, i]) => [id, pick(i, [
-      "name", "plaintext", "from", "into", "gold", "tags", "maps", "stats", "inStore", "requiredChampion", "requiredAlly", "consumed", "depth",
+      "name", "description", "plaintext", "from", "into", "gold", "tags", "maps", "stats", "inStore", "requiredChampion", "requiredAlly", "consumed", "depth",
     ])])),
   };
 }
