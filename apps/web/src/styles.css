@@ -436,3 +436,34 @@ td .loadout { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
 .skill-grid th[scope="row"] { text-align: left; white-space: nowrap; }
 .skill-grid .skill-on { background: rgb(200 170 110 / 0.18); color: var(--gold-bright); font-weight: 700; }
 @media (max-width: 560px) { .setup > div { grid-template-columns: 1fr; gap: 2px; } }
+
+/* Champion list filters */
+.filters { align-items: flex-end; flex-wrap: wrap; }
+.filter-toggle { min-height: 40px; }
+.champ-tile { flex-wrap: nowrap; height: 100%; }
+.champ-tile-text { flex: 1; min-width: 0; }
+.link-btn { font: inherit; background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; }
+
+/* App navigation: icons only in the phone bottom bar */
+.nav-app a { display: inline-flex; align-items: center; gap: 6px; }
+.nav-icon { display: none; width: 20px; height: 20px; fill: currentColor; }
+@media (max-width: 640px) {
+  .nav-app {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 25; order: 0; gap: 0; overflow: visible;
+    background: rgb(1 10 19 / 0.94); backdrop-filter: blur(10px);
+    border-top: 1px solid var(--gold-dark);
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+  }
+  .nav-app a {
+    flex: 1 1 0; min-width: 0; flex-direction: column; gap: 2px; padding: 6px 2px;
+    font-size: 0.6rem; letter-spacing: 0.06em; border-radius: var(--radius-s);
+  }
+  .nav-app a span { overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .nav-app a[aria-current="page"] { box-shadow: inset 0 2px 0 var(--gold); background: rgb(200 170 110 / 0.1); }
+  .nav-icon { display: block; }
+  /* backdrop-filter and clip-path would make the header the bar's containing block. */
+  .topbar { backdrop-filter: none; clip-path: none; box-shadow: none; background: rgb(1 10 19 / 0.94); }
+  /* Room for the bar under the content and the Coach. */
+  .shell { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+  .coach { bottom: calc(72px + env(safe-area-inset-bottom)); }
+}
