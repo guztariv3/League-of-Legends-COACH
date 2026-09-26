@@ -23,6 +23,7 @@ const build = (me: string, enemies: string[], opts: { opponent?: string; positio
 const recommended = (b: BuildRecommendation) => [b.first, ...b.next, b.boots, ...b.situational].filter((x) => x !== null);
 const core = (b: BuildRecommendation) => [b.first, ...b.next].filter((x) => x !== null);
 const profileOf = (id: number) => itemProfile(catalog.get(id)!, gold, catalog);
+const championProfileOf = (id: string) => championProfile(kit(id));
 const stat = (id: number, k: keyof (typeof items)[number]["stats"]) => (catalog.get(id)!.stats[k]?.flat ?? 0) + (catalog.get(id)!.stats[k]?.percent ?? 0);
 
 const AP_TEAM = ["Syndra", "Brand", "Lux", "Veigar", "Annie"];
@@ -94,6 +95,22 @@ describe("C — no crit-reduction item without enemy crit (Randuin's Omen case)"
         }
       }
     }
+  });
+});
+
+describe("situational items fit the champion", () => {
+  it("a marksman against crit carriers is offered armor it can use, not a tank item", () => {
+    for (const me of ["Smolder", "Jinx", "Caitlyn"]) {
+      const b = build(me, AD_TEAM, { position: "BOTTOM" });
+      for (const x of b.situational) {
+        const counters = profileOf(x.id).counters;
+        expect(counters.includes("critReduction") && championProfileOf(me).frontline < 0.3, `${me}: ${x.name}`).toBe(false);
+      }
+    }
+  });
+  it("a tank against the same crit carriers still gets the direct counter", () => {
+    const b = build("Malphite", CRIT_TEAM, { position: "TOP" });
+    expect(recommended(b).some((x) => profileOf(x!.id).counters.includes("critReduction"))).toBe(true);
   });
 });
 

@@ -88,12 +88,13 @@ test("desktop: game plan during champion select", async ({ page }) => {
   await expect(first.getByText("Why", { exact: true })).toBeVisible();
   await expect(first.getByText(/stasis active .*Zed/)).toBeVisible();
   await expect(build.getByText("Void Staff")).toBeVisible();
+  // Details are folded: the situational item shows its "when" once opened.
+  await build.locator("summary").filter({ hasText: "Banshee's Veil" }).click();
   await expect(build.getByText("Against the burst damage from Zed.")).toBeVisible();
-  await expect(build.getByText(/Randuin's Omen/)).toBeVisible();
+  await expect(build.locator("summary").filter({ hasText: "Not needed this game" })).toContainText("Randuin's Omen");
   await expect(build.getByText(/1 of 5 enemy champions known/)).toBeVisible();
   const setup = build.getByLabel("Runes and summoner spells");
-  await expect(setup.getByText("Flash", { exact: true })).toBeVisible();
-  await expect(setup.getByText("Ignite", { exact: true })).toBeVisible();
+  await expect(setup.locator("summary").filter({ hasText: "Spells" })).toContainText("Flash + Ignite");
   const keystone = setup.locator("summary").filter({ hasText: "Electrocute" });
   await expect(keystone).toContainText("Domination + Sorcery");
   await keystone.click();

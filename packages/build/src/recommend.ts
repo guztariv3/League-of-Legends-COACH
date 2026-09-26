@@ -97,13 +97,19 @@ function statWeights(p: ChampionProfile, e: EnemyPicture, s: State): Record<Item
   };
 }
 
-interface Scored { ip: ItemProfile; score: number; why: string[]; counterValue: number; statValue: number }
+interface Scored {
+  ip: ItemProfile; score: number; why: string[]; counterValue: number; statValue: number;
+  /** 0–1: the share of the item's stats (in gold) this champion makes use of. */
+  fit: number;
+}
 
 function score(ip: ItemProfile, p: ChampionProfile, e: EnemyPicture, s: State): Scored {
   const w = statWeights(p, e, s);
   const cost = Math.max(ip.item.gold, 1);
   const lines = ip.stats.map((l) => ({ ...l, stat: l.key.split(":")[0] as ItemStat, value: l.gold * (w[l.key.split(":")[0] as ItemStat] ?? 0) }));
   const statValue = lines.reduce((sum, l) => sum + l.value, 0) / cost;
+  const rawGold = lines.reduce((sum, l) => sum + l.gold, 0);
+  const fit = rawGold > 0 ? lines.reduce((sum, l) => sum + l.gold * Math.min(1, w[l.stat] ?? 0), 0) / rawGold : 0;
   let counterValue = 0;
   const why: string[] = [];
 
@@ -115,7 +121,9 @@ function score(ip: ItemProfile, p: ChampionProfile, e: EnemyPicture, s: State): 
       const n = STAT_NAMES[l.stat] ?? "";
       return (n && f.includes(n)) || (l.stat === "attackSpeed" && f.includes("basic attacks")) || (l.stat === "criticalStrikeChance" && /critical strike|basic attacks/.test(f)) || (l.stat === "mana" && f.includes("mana"));
     }));
-    why.push(`Gives ${list(parts)}${facts.length ? `: ${facts.join("; ")}.` : "."}`);
+    // At most two kit facts, without the rating details (those are in the champion's own summary).
+    const brief = facts.slice(0, 2).map((f) => f.replace(/ \(ability reliance \d+\/100 on the Wiki\)/, ""));
+    why.push(`Gives ${list(parts)}${brief.length ? `: ${brief.join("; ")}.` : "."}`);
   }
   let bonus = 0;
   if ((ip.mana > 0 || ip.manaSustain) && s.manaNeed >= 0.2 && p.mana) {
@@ -141,7 +149,7 @@ function score(ip: ItemProfile, p: ChampionProfile, e: EnemyPicture, s: State): 
     const who = threat.sources.slice(0, 3).map((x) => `${x.name}${x.name === e.laneOpponent ? " (your lane opponent)" : ""}: ${x.why}`);
     why.push(`It ${COUNTERS[c].says}: ${who.join("; ")}.`);
   }
-  return { ip, score: statValue + counterValue + bonus, why, counterValue, statValue };
+  return { ip, score: statValue + counterValue + bonus, why, counterValue, statValue, fit };
 }
 
 /**
@@ -268,13 +276,30 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
   const chosen = new Set([...core, ...(boots ? [boots] : [])].map((x) => x.ip.item.id));
   for (const t of Object.values(e.threats).filter((x) => x.weight >= 0.3).sort((a, b) => b.weight - a.weight)) {
     if (state.threats[t.kind] < RELEVANT) continue; // already answered by the core
-    const answer = profiles
+    const who = list(t.sources.slice(0, 3).map((x) => x.name));
+    const counter = profiles
       .filter((ip) => !chosen.has(ip.item.id) && !owned.has(ip.item.id) && ip.counters.some((c) => COUNTERS[c].answers.includes(t.kind)))
       .map((ip) => score(ip, p, e, state))
       .sort((a, b) => b.score - a.score)[0];
-    if (!answer) continue;
+    if (!counter) continue;
+    // A counter whose stats this champion barely uses (a tank item for a damage dealer) is replaced by
+    // the item that fits the champion best among those giving the resist against that threat.
+    const resist = resistAgainst(t, e);
+    const fitting = counter.fit < FITS && resist
+      ? profiles
+          .filter((ip) => ip.finished && !chosen.has(ip.item.id) && !owned.has(ip.item.id) && (ip.item.stats[resist]?.flat ?? 0) > 0 && !counterWithoutThreat(ip, e))
+          .map((ip) => score(ip, p, e, state))
+          .filter((x) => x.fit >= FITS)
+          .sort((a, b) => b.score - a.score)[0]
+      : undefined;
+    const answer = fitting ?? counter;
     chosen.add(answer.ip.item.id);
-    situational.push({ ...pick(answer), when: `Against the ${threatPhrase(t.kind)} from ${list(t.sources.slice(0, 3).map((x) => x.name))}.` });
+    situational.push({
+      ...pick(answer),
+      when: fitting
+        ? `Against the ${threatPhrase(t.kind)} from ${who}: ${resist === "armor" ? "armor" : "magic resist"} with stats ${p.name} uses (${counter.ip.item.name} counters it directly but is built for tanky champions).`
+        : `Against the ${threatPhrase(t.kind)} from ${who}.`,
+    });
     if (situational.length >= 3) break;
   }
   for (const [kind, share] of [["physical", e.damage.physical], ["magic", e.damage.magic]] as const) {
@@ -304,6 +329,18 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
     situational,
     ruledOut: [...ruledOut.values()].sort((a, b) => b.score - a.score).slice(0, 3).map(({ id, name, why }) => ({ id, name, why })),
   };
+}
+
+/** Items count as fitting a champion when it uses at least this share of their stats. */
+const FITS = 0.4;
+
+/** The resist that protects against a threat: armor or magic resist, by the damage its sources deal. */
+function resistAgainst(t: Threat, e: EnemyPicture): "armor" | "magicResistance" | null {
+  if (t.kind === "crit" || t.kind === "attackSpeed") return "armor";
+  if (t.kind !== "burst") return null;
+  const sources = e.profiles.filter((p) => t.sources.some((x) => x.name === p.name));
+  const phys = sources.reduce((s, p) => s + p.damage.physical, 0), magic = sources.reduce((s, p) => s + p.damage.magic, 0);
+  return phys + magic === 0 ? null : phys >= magic ? "armor" : "magicResistance";
 }
 
 function threatPhrase(kind: ThreatKind): string {
