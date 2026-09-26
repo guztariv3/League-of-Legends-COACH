@@ -2,8 +2,9 @@ import { explainInsight, type AiProvider, type ExplanationLevel } from "@coach/a
 import { mean, summarize } from "@coach/analysis";
 import { isPlatformId, normalizeMatch, PLATFORMS, queueLabel, type RawMatch, type RawTimeline } from "@coach/domain";
 import { gameAchievements, gameRanking, RANKING_EXPLANATION } from "@coach/coach";
+import { MERAKI_ATTRIBUTION } from "@coach/knowledge";
 import { matchHeadline } from "@coach/insights";
-import type { KnowledgeRegistry } from "@coach/knowledge";
+import type { KnowledgeRegistry, WikiSource } from "@coach/knowledge";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -29,12 +30,14 @@ export interface AppDeps {
   source: MatchSource;
   knowledge: KnowledgeRegistry;
   aiProviders: AiProvider[];
+  /** League of Legends Wiki data via Meraki (D-15); absent in tests and offline. */
+  wiki?: WikiSource;
 }
 
 
 
 export function createApp(deps: AppDeps) {
-  const { cfg, db, source, knowledge } = deps;
+  const { cfg, db, source, knowledge, wiki } = deps;
   const sync = new SyncService(db, source);
   const services = makeServices(db, source);
   const { prefsFor, profileAnalyses, insightsFor } = services;
@@ -378,11 +381,15 @@ export function createApp(deps: AppDeps) {
       if (a.win) m.wins++;
       mine.set(a.championName, m);
     }
+    // Lanes from the Wiki, for the position filter (the server only provides it with real data; brief wait on a cold start).
+    const lanes = await wiki?.get(2000) ?? null;
     return c.json({
       version: bundle?.version ?? null,
       source: bundle?.source ?? null,
+      positionsSource: lanes ? MERAKI_ATTRIBUTION : null,
       champions: (bundle?.champions ?? []).map((ch) => ({
         ...ch,
+        positions: lanes?.get(ch.id)?.positions ?? [],
         personal: mine.get(ch.id) ?? { games: 0, wins: 0 },
       })).sort((a, b) => b.personal.games - a.personal.games || a.name.localeCompare(b.name)),
     });
@@ -400,7 +407,7 @@ export function createApp(deps: AppDeps) {
     return c.json(await explainInsight(deps.aiProviders, { insight, level: prefs.level as ExplanationLevel, language: "en" }));
   });
 
-  authed.route("/", personalRoutes({ db, source, knowledge, services }));
+  authed.route("/", personalRoutes({ db, source, knowledge, services, wiki }));
   authed.route("/", gameRoutes({ db, source, knowledge, services }));
   authed.route("/", evolutionRoutes({ db, knowledge, services }));
   authed.route("/", rankRoutes({ db }));

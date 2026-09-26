@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { serve } from "@hono/node-server";
 import { anthropicProvider, type AiProvider } from "@coach/ai";
-import { dataDragonSource, syntheticSource as syntheticKnowledge } from "@coach/knowledge";
+import { dataDragonSource, syntheticSource as syntheticKnowledge, wikiSource } from "@coach/knowledge";
 import { RiotClient } from "@coach/riot";
 import { createSite } from "./site.js";
 import { dataSource, loadConfig } from "./config.js";
@@ -21,7 +21,10 @@ const aiProviders: AiProvider[] = cfg.anthropicApiKey
   ? [anthropicProvider({ apiKey: cfg.anthropicApiKey, model: cfg.aiModel })]
   : [];
 
-const { site, sync } = createSite({ cfg, db, source, knowledge, aiProviders });
+// League of Legends Wiki data (Meraki, D-15): only with real game data; warmed in the background.
+const wiki = mode === "riot" ? wikiSource() : undefined;
+void wiki?.get();
+const { site, sync } = createSite({ cfg, db, source, knowledge, aiProviders, wiki });
 // After an ANALYSIS_VERSION bump, rebuild analyses from stored games in the background.
 void sync.reanalyzeAll().then((n) => n && console.log(`[sync] analyses up to date for ${n} account(s)`));
 scheduleRetention(db);

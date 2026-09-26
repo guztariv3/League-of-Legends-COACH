@@ -20,6 +20,8 @@ const SORTS: [string, string, (a: Champ, b: Champ) => number][] = [
   ["winrate", "Your win rate (3+ games)", (a, b) => rate(b) - rate(a) || b.personal.games - a.personal.games],
 ];
 
+const LANES: [string, string][] = [["TOP", "Top"], ["JUNGLE", "Jungle"], ["MIDDLE", "Mid"], ["BOTTOM", "Bot"], ["SUPPORT", "Support"]];
+
 const rate = (c: Champ) => (c.personal.games >= 3 ? c.personal.wins / c.personal.games : -1);
 
 /**
@@ -44,6 +46,7 @@ export function Champions() {
     setParams(next, { replace: true });
   };
   const cls = params.get("class") ?? "";
+  const lane = LANES.find(([k]) => k === params.get("position"))?.[0] ?? "";
   const diff = DIFFICULTY.find(([k]) => k === params.get("difficulty"));
   const played = params.get("played") === "1";
   const sort = SORTS.find(([k]) => k === params.get("sort")) ?? SORTS[0]!;
@@ -53,10 +56,11 @@ export function Champions() {
   const list = data.champions
     .filter((c) => c.name.toLowerCase().includes(q.toLowerCase()))
     .filter((c) => !cls || c.tags.includes(cls))
+    .filter((c) => !lane || c.positions.includes(lane))
     .filter((c) => !diff || (c.info ? diff[2](c.info.difficulty) : false))
     .filter((c) => !played || c.personal.games > 0)
     .sort(sort[2]);
-  const filtered = Boolean(q || cls || diff || played);
+  const filtered = Boolean(q || cls || lane || diff || played);
 
   return (
     <div className="stack" style={{ gap: 20 }}>
@@ -74,6 +78,15 @@ export function Champions() {
           <label htmlFor="champ-search">Search champion</label>
           <input id="champ-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
+        {data.positionsSource && (
+          <div className="field">
+            <label htmlFor="champ-position">Position</label>
+            <select id="champ-position" value={lane} onChange={(e) => set("position", e.target.value)}>
+              <option value="">All</option>
+              {LANES.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </select>
+          </div>
+        )}
         <div className="field">
           <label htmlFor="champ-class">Class</label>
           <select id="champ-class" value={cls} onChange={(e) => set("class", e.target.value)}>
@@ -133,6 +146,11 @@ export function Champions() {
             </li>
           ))}
         </ul>
+      )}
+      {data.positionsSource && (
+        <p className="tile-note" style={{ margin: 0 }}>
+          Positions: <a href={data.positionsSource.wiki} target="_blank" rel="noreferrer">League of Legends Wiki</a> (<a href={data.positionsSource.license} target="_blank" rel="noreferrer">CC BY-SA 3.0</a>), via <a href={data.positionsSource.meraki} target="_blank" rel="noreferrer">Meraki Analytics</a>.
+        </p>
       )}
     </div>
   );

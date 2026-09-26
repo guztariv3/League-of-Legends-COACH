@@ -10,7 +10,7 @@ import {
   type GoalMetric,
 } from "@coach/insights";
 import { usualLoadout, usualSkillOrder } from "@coach/coach";
-import { fetchChampionAbilities, type KnowledgeRegistry } from "@coach/knowledge";
+import { fetchChampionAbilities, MERAKI_ATTRIBUTION, type KnowledgeRegistry, type WikiSource } from "@coach/knowledge";
 import { personalBuild } from "./build.js";
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
@@ -22,7 +22,7 @@ import type { Services } from "./services.js";
 import type { MatchSource } from "./sources.js";
 
 /** Phase 2 personalisation routes: profile, goals, Coach memory, search and champion detail. */
-export function personalRoutes({ db, knowledge, services }: { db: Db; source: MatchSource; knowledge: KnowledgeRegistry; services: Services }) {
+export function personalRoutes({ db, knowledge, services, wiki }: { db: Db; source: MatchSource; knowledge: KnowledgeRegistry; services: Services; wiki?: WikiSource }) {
   const r = new Hono<AuthVars>();
   const metricKeys = Object.keys(GOAL_METRICS) as [GoalMetric, ...GoalMetric[]];
   const uuidOk = (id: string) => z.uuid().safeParse(id).success;
@@ -264,7 +264,12 @@ export function personalRoutes({ db, knowledge, services }: { db: Db; source: Ma
     }
     const avg = (xs: number[]) => (xs.length ? Math.round(mean(xs) * 10) / 10 : null);
     const bundle = knowledge.active();
-    const abilities = champ && bundle?.source === "ddragon" ? await fetchChampionAbilities(bundle.version, champ.id) : null;
+    const real = champ && bundle?.source === "ddragon";
+    const [abilities, wikiData] = await Promise.all([
+      real ? fetchChampionAbilities(bundle.version, champ.id) : null,
+      champ ? wiki?.get(3000) ?? null : null,
+    ]);
+    const wikiChampion = champ ? wikiData?.get(champ.id) ?? null : null;
     const wins = games.filter((a) => a.win).length;
 
     return c.json({
@@ -272,6 +277,8 @@ export function personalRoutes({ db, knowledge, services }: { db: Db; source: Ma
       knowledgeVersion: knowledge.active()?.version ?? null,
       /** Riot's ability data (Data Dragon); null offline and for the synthetic catalog. */
       abilities,
+      /** League of Legends Wiki data via Meraki (CC BY-SA); null when unavailable. */
+      wiki: wikiChampion ? { ...wikiChampion, attribution: MERAKI_ATTRIBUTION } : null,
       personal: {
         games: games.length,
         wins,

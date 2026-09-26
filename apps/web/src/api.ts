@@ -142,7 +142,9 @@ export interface MatchDetail {
 export interface ChampionList {
   version: string | null;
   source: "ddragon" | "synthetic" | null;
-  champions: { id: string; key: number; name: string; title: string; tags: string[]; info?: { attack: number; defense: number; magic: number; difficulty: number }; personal: { games: number; wins: number } }[];
+  /** Credit for the positions, when they're present (League of Legends Wiki via Meraki). */
+  positionsSource: WikiAttribution | null;
+  champions: { id: string; key: number; name: string; title: string; tags: string[]; positions: string[]; info?: { attack: number; defense: number; magic: number; difficulty: number }; personal: { games: number; wins: number } }[];
 }
 
 export interface Dimension {
@@ -211,10 +213,24 @@ export interface SearchResult {
 
 export interface Ability { key: "P" | "Q" | "W" | "E" | "R"; name: string; description: string; cooldown: string | null; cost: string | null; range: string | null; image: string }
 
+export interface WikiAttribution { text: string; license: string; wiki: string; meraki: string }
+export interface WikiChampion {
+  key: string;
+  name: string;
+  positions: string[];
+  roles: string[];
+  attackType: string | null;
+  adaptiveType: string | null;
+  ratings: { damage: number; toughness: number; control: number; mobility: number; utility: number; abilityReliance: number; difficulty: number } | null;
+  abilities: { key: "P" | "Q" | "W" | "E" | "R"; name: string; blurb: string | null; damageType: string | null; targeting: string | null; cooldown: string | null; cost: string | null; effects: { description: string; values: { label: string; value: string }[] }[] }[];
+  patchLastChanged: string | null;
+}
 export interface ChampionDetail {
   champion: { id: string; key: number; name: string; title: string; tags: string[]; info?: { attack: number; defense: number; magic: number; difficulty: number } } | null;
   knowledgeVersion: string | null;
   abilities: { abilities: Ability[]; allyTips: string[]; enemyTips: string[] } | null;
+  /** League of Legends Wiki data via Meraki (CC BY-SA 3.0); null when unavailable. */
+  wiki: (WikiChampion & { attribution: WikiAttribution }) | null;
   personal: {
     games: number;
     wins: number;

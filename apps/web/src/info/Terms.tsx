@@ -21,6 +21,13 @@ export function Terms() {
         it does not modify the game, read its memory, automate actions or interfere with Vanguard.
       </p>
 
+      <h2>Third-party content</h2>
+      <p>
+        Ability details, champion positions and ratings come from the <a href="https://wiki.leagueoflegends.com/" target="_blank" rel="noreferrer">League of Legends Wiki</a>,
+        licensed under <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noreferrer">CC BY-SA 3.0</a>, through{" "}
+        <a href="https://github.com/meraki-analytics/lolstaticdata" target="_blank" rel="noreferrer">Meraki Analytics</a>. They are shown as published, with that credit, and may be reused under the same license.
+      </p>
+
       <h2>Acceptable use</h2>
       <ul>
         <li>Use it to improve your own play.</li>
