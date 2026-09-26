@@ -414,6 +414,31 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return body as T;
 }
 
+export type PoolVerdict = "strong" | "weak" | "even" | "few";
+export interface PoolEntry {
+  name: string;
+  games: number;
+  wins: number;
+  interval: { low: number; high: number };
+  verdict: PoolVerdict;
+  kda: number;
+  csPerMin: number | null;
+  goldDiff15: number | null;
+  csDiff15: number | null;
+  lastPlayed: number;
+}
+export interface Improve {
+  champions: PoolEntry[];
+  matchups: PoolEntry[];
+  matchupChampion: string | null;
+  activity: { t: number; win: boolean; mode: "summoners_rift" | "aram" | "unsupported"; analyzable: boolean }[];
+  activityDays: number;
+}
+export interface RankPoint { at: string; tier: string; rank: string; lp: number; wins: number; losses: number; lpChange: number | null; points: number | null }
+export interface RankResponse {
+  accounts: { accountId: string; riotId: string; queues: { queueType: "RANKED_SOLO_5x5" | "RANKED_FLEX_SR"; current: RankPoint; history: RankPoint[] }[] }[];
+}
+
 export const api = {
   config: () => request<AppConfig>("/config"),
   assets: () => request<GameAssets>("/assets"),
@@ -459,4 +484,6 @@ export const api = {
   evolution: () => request<Evolution>("/evolution"),
   history: () => request<DecisionHistory>("/history"),
   clearHistory: () => request<{ ok: true }>("/history", { method: "DELETE" }),
+  improve: (champion?: string) => request<Improve>(`/improve${champion ? `?champion=${encodeURIComponent(champion)}` : ""}`),
+  rank: () => request<RankResponse>("/rank"),
 };

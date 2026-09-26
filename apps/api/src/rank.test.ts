@@ -26,6 +26,7 @@ describe("ladder points", () => {
       row("SILVER", "I", 60, 12, 13, 3), // two games in between: unknown
     ]);
     expect(h.map((p) => p.lpChange)).toEqual([null, 20, -22, null]);
+    expect(h.map((p) => p.points)).toEqual([2 * 400 + 3 * 100 + 80, 3 * 400, 2 * 400 + 3 * 100 + 78, 2 * 400 + 3 * 100 + 60]);
   });
 });
 

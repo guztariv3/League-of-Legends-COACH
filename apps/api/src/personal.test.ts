@@ -146,3 +146,21 @@ describe("champion detail", () => {
     expect((await call("/champions/NoSuchChamp", { cookie })).res.status).toBe(404);
   }, 60_000);
 });
+
+describe("improve", () => {
+  it("returns the champion pool, matchups (optionally for one champion) and recent activity", async () => {
+    const cookie = await player("Improver");
+    const { body } = await call("/improve", { cookie });
+    expect(body.champions.length).toBeGreaterThan(0);
+    for (const e of body.champions) {
+      expect(["strong", "weak", "even", "few"]).toContain(e.verdict);
+      if (e.games < 5) expect(e.verdict).toBe("few");
+    }
+    const champ = body.champions[0].name;
+    const one = (await call(`/improve?champion=${encodeURIComponent(champ)}`, { cookie })).body;
+    expect(one.matchupChampion).toBe(champ);
+    expect(one.matchups.reduce((s: number, e: any) => s + e.games, 0)).toBeLessThanOrEqual(body.champions[0].games);
+    expect(body.activityDays).toBe(182);
+    for (const g of body.activity) expect(typeof g.t).toBe("number");
+  }, 60_000);
+});

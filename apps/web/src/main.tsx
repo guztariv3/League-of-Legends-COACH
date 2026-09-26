@@ -8,6 +8,7 @@ import { Loading } from "./components/ui";
 import { Champions } from "./pages/Champions";
 import { ChampionDetail } from "./pages/ChampionDetail";
 import { Profile } from "./pages/Profile";
+import { Improve } from "./pages/Improve";
 import { Game } from "./pages/Game";
 import { MatchReview } from "./pages/MatchReview";
 import { SearchBox } from "./components/SearchBox";
@@ -30,6 +31,7 @@ const NAV: [string, string, string][] = [
   ["/matches", "Matches", "M5 5h14v3H5zm0 5.5h14v3H5zM5 16h14v3H5z"],
   ["/champions", "Champions", "M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6z"],
   ["/game", "Pre-game", "M12 2 4 12l8 10 8-10zm0 5 4 5-4 5-4-5z"],
+  ["/improve", "Improve", "M3 20h18v2H3zM5 17l5-6 4 3 5-8 2 1.3-6.4 10.2L10.3 14 6.6 18.4z"],
   ["/profile", "Profile", "M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9m-8 9c0-4.4 3.6-7 8-7s8 2.6 8 7z"],
 ];
 
@@ -106,6 +108,7 @@ function App() {
         <Route path="game" element={<Game />} />
         <Route path="champions" element={<Champions />} />
         <Route path="champions/:name" element={<ChampionDetail />} />
+        <Route path="improve" element={<Improve />} />
         <Route path="profile" element={<Profile />} />
         <Route path="settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />
