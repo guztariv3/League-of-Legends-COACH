@@ -93,27 +93,7 @@ export function gamePlan(input: GamePlanInput): GamePlan {
   const mine = history.filter((a) => a.analyzable && a.mode === (input.mode ?? "summoners_rift") && a.championName === input.myChampion);
   const point = (id: string) => [...draft.keyPoints, ...draft.morePoints].find((p) => p.id === id);
 
-  // ---- Loadout, from the player's own games with this champion
-  const keystone = mode(mine.map((a) => a.runes.keystone).filter((k): k is number => k !== null));
-  const spells = mode(mine.filter((a) => a.spells.length === 2).map((a) => [...a.spells].sort((x, y) => x - y)), (s) => s.join(","));
-  const max = usualMaxOrder(mine.flatMap((a) => (a.skillOrder ? [a.skillOrder as Slot[]] : [])));
-  const firstBig = mine.flatMap((a) => {
-    const p = (a.purchases ?? []).find((x) => (items.get(x.itemId)?.goldTotal ?? 0) >= bigItemGold(bundle));
-    return p ? [p] : [];
-  });
-  const firstItem = mode(firstBig, (p) => String(p.itemId));
-  const firstItemMinute = firstItem ? median(firstBig.filter((p) => p.itemId === firstItem.value.itemId).map((p) => p.atSec / 60)) : null;
-  const runeName = (id: number) => bundle?.runes?.find((r) => r.id === id)?.name ?? `Rune ${id}`;
-  const spellName = (id: number) => bundle?.spells?.find((s) => s.key === id)?.name ?? `Spell ${id}`;
-  const loadout: GamePlan["loadout"] = {
-    games: mine.length,
-    keystone: keystone && mine.length >= MIN_GAMES ? { id: keystone.value, name: runeName(keystone.value), games: keystone.count } : null,
-    spells: spells && mine.length >= MIN_GAMES ? { ids: spells.value, names: spells.value.map(spellName), games: spells.count } : null,
-    maxOrder: max ? max.map((s) => (s === 1 ? "Q" : s === 2 ? "W" : "E")) : null,
-    firstItem: firstItem && firstItem.count >= 2
-      ? { id: firstItem.value.itemId, name: items.get(firstItem.value.itemId)?.name ?? `Item ${firstItem.value.itemId}`, games: firstItem.count, medianMinute: firstItemMinute }
-      : null,
-  };
+  const loadout = usualLoadout(mine, bundle);
 
   // ---- Biggest threat: the enemy with the highest damage rating among damage classes
   const enemies = input.enemies.map((id) => champs.get(id)).filter((c): c is Champion => c !== undefined);
@@ -174,4 +154,49 @@ export function gamePlan(input: GamePlanInput): GamePlan {
     : null;
 
   return { primaryObjective, secondaryObjective, biggestThreat, yourPowerSpike, enemyPowerSpike, avoid, lookFor, loadout };
+}
+
+export type Loadout = GamePlan["loadout"];
+
+/**
+ * What the player usually runs with a champion, from their own games (already filtered to that
+ * champion and mode): keystone, summoner spells, max order and first major item with its median minute.
+ */
+export function usualLoadout(mine: MatchAnalysis[], bundle: KnowledgeBundle | undefined): Loadout {
+  const items = new Map((bundle?.items ?? []).map((i) => [i.id, i]));
+  const keystone = mode(mine.map((a) => a.runes.keystone).filter((k): k is number => k !== null));
+  const spells = mode(mine.filter((a) => a.spells.length === 2).map((a) => [...a.spells].sort((x, y) => x - y)), (s) => s.join(","));
+  const max = usualMaxOrder(mine.flatMap((a) => (a.skillOrder ? [a.skillOrder as Slot[]] : [])));
+  const firstBig = mine.flatMap((a) => {
+    const p = (a.purchases ?? []).find((x) => (items.get(x.itemId)?.goldTotal ?? 0) >= bigItemGold(bundle));
+    return p ? [p] : [];
+  });
+  const firstItem = mode(firstBig, (p) => String(p.itemId));
+  const firstItemMinute = firstItem ? median(firstBig.filter((p) => p.itemId === firstItem.value.itemId).map((p) => p.atSec / 60)) : null;
+  const runeName = (id: number) => bundle?.runes?.find((r) => r.id === id)?.name ?? `Rune ${id}`;
+  const spellName = (id: number) => bundle?.spells?.find((s) => s.key === id)?.name ?? `Spell ${id}`;
+  return {
+    games: mine.length,
+    keystone: keystone && mine.length >= MIN_GAMES ? { id: keystone.value, name: runeName(keystone.value), games: keystone.count } : null,
+    spells: spells && mine.length >= MIN_GAMES ? { ids: spells.value, names: spells.value.map(spellName), games: spells.count } : null,
+    maxOrder: max ? max.map((s) => (s === 1 ? "Q" : s === 2 ? "W" : "E")) : null,
+    firstItem: firstItem && firstItem.count >= 2
+      ? { id: firstItem.value.itemId, name: items.get(firstItem.value.itemId)?.name ?? `Item ${firstItem.value.itemId}`, games: firstItem.count, medianMinute: firstItemMinute }
+      : null,
+  };
+
+}
+
+/** The player's most common full levelling order with the champion (1 = Q … 4 = R), or null. */
+export function usualSkillOrder(mine: MatchAnalysis[]): Slot[] | null {
+  const orders = mine.flatMap((a) => (a.skillOrder && a.skillOrder.length >= 9 ? [a.skillOrder as Slot[]] : []));
+  if (orders.length < MIN_GAMES) return null;
+  // Most common order level by level: robust to games that ended before level 18.
+  const out: Slot[] = [];
+  for (let i = 0; i < 18; i++) {
+    const at = mode(orders.map((o) => o[i]).filter((x): x is Slot => x !== undefined));
+    if (!at || at.count < Math.ceil(orders.length / 3)) break;
+    out.push(at.value);
+  }
+  return out.length ? out : null;
 }

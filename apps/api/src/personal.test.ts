@@ -134,6 +134,15 @@ describe("champion detail", () => {
     expect(body.champion.name).toBe("Aurelith");
     expect(body.personal.games).toBeGreaterThan(0);
     for (const cmp of body.personal.comparisons) expect(["better", "worse", "similar"]).toContain(cmp.verdict);
+    // The synthetic catalog has no Riot ability data: it says so instead of making it up.
+    expect(body.abilities).toBeNull();
+    expect(body.personal.skillOrder.slice(0, 6)).toEqual([1, 2, 3, 1, 1, 4]);
+    expect(body.personal.loadout.maxOrder).toEqual(["Q", "W", "E"]);
+    expect(body.personal.build.champion).toBe("Aurelith");
+    for (const o of body.personal.opponents) {
+      expect(o.wins).toBeLessThanOrEqual(o.games);
+      expect(typeof o.kda).toBe("number");
+    }
     expect((await call("/champions/NoSuchChamp", { cookie })).res.status).toBe(404);
   }, 60_000);
 });

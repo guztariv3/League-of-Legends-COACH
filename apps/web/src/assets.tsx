@@ -104,6 +104,13 @@ export function RuneIcon({ id, size = 22 }: { id: number; size?: number }) {
   return <GameImage src={src} label={r.name} size={size} shape="round" className="gi-rune" />;
 }
 
+/** A champion ability or passive (Data Dragon image file), with a lettered fallback. */
+export function AbilityIcon({ image, passive, label, size = 40 }: { image: string; passive: boolean; label: string; size?: number }) {
+  const a = useAssets();
+  const src = a.cdn && a.version ? `${a.cdn}/cdn/${a.version}/img/${passive ? "passive" : "spell"}/${image}` : null;
+  return <GameImage src={src} label={label} size={size} shape="square" />;
+}
+
 /** Tall loading-screen art (versionless Data Dragon path), with a lettered fallback. */
 export function LoadingArt({ champion, className = "" }: { champion: string | number; className?: string }) {
   const a = useAssets();

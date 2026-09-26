@@ -50,3 +50,6 @@ Ventana `overlay` (tauri.conf): transparente, sin bordes, siempre encima, fuera 
 
 ## F3b — selección de campeones por la LCU (pendiente del registro ante Riot)
 Ver `13-registro-lcu.md`. El código se hará cuando el registro esté enviado.
+
+## F4a — página de campeón con pestañas (hecho)
+`/champions/:name` con pestañas **Overview** (valoraciones de Riot, habilidades P/Q/W/E/R con enfriamiento, coste y alcance, y consejos de Riot; datos de `champion/<id>.json` de Data Dragon, solo con catálogo real, en caché por versión), **Build** (tu setup habitual y los ítems con los que terminas; aviso de que las estadísticas globales llegan con F7), **Skills** (tu orden de habilidades habitual 1–18: moda por nivel, con al menos 3 partidas, y orden de maxeo), **Matchups** (tus partidas por rival de línea: victorias, KDA, diferencia de CS y oro a los 15) y **Your stats** (comparaciones y partidas recientes). Todo sale de tus partidas o de datos del juego; no se inventan tasas globales.
