@@ -21,12 +21,12 @@ interface LongMetric {
 }
 
 export const LONG_METRICS: Record<LongMetricId, LongMetric> = {
-  csPerMin: { label: "CS por minuto", higherIsBetter: true, modes: ["summoners_rift"], digits: 1, pick: (a) => (a.role === "UTILITY" ? null : a.csPerMin) },
-  deathsPerMin: { label: "muertes por minuto", higherIsBetter: false, modes: ["summoners_rift"], digits: 2, pick: (a) => a.deathsPerMin },
-  earlyDeaths: { label: "muertes antes del minuto 14", higherIsBetter: false, modes: ["summoners_rift"], digits: 1, pick: (a) => a.earlyDeaths },
-  goldDiff10: { label: "oro frente a tu rival al 10", higherIsBetter: true, modes: ["summoners_rift"], digits: 0, pick: (a) => a.goldDiff10 },
-  killParticipation: { label: "participación en kills", higherIsBetter: true, modes: ["summoners_rift"], digits: 2, pick: (a) => a.killParticipation },
-  visionPerMin: { label: "visión por minuto", higherIsBetter: true, modes: ["summoners_rift"], digits: 2, pick: (a) => a.visionPerMin },
+  csPerMin: { label: "CS per minute", higherIsBetter: true, modes: ["summoners_rift"], digits: 1, pick: (a) => (a.role === "UTILITY" ? null : a.csPerMin) },
+  deathsPerMin: { label: "deaths per minute", higherIsBetter: false, modes: ["summoners_rift"], digits: 2, pick: (a) => a.deathsPerMin },
+  earlyDeaths: { label: "deaths before minute 14", higherIsBetter: false, modes: ["summoners_rift"], digits: 1, pick: (a) => a.earlyDeaths },
+  goldDiff10: { label: "gold vs your opponent at 10:00", higherIsBetter: true, modes: ["summoners_rift"], digits: 0, pick: (a) => a.goldDiff10 },
+  killParticipation: { label: "kill participation", higherIsBetter: true, modes: ["summoners_rift"], digits: 2, pick: (a) => a.killParticipation },
+  visionPerMin: { label: "vision per minute", higherIsBetter: true, modes: ["summoners_rift"], digits: 2, pick: (a) => a.visionPerMin },
 };
 
 /** Minimum games on each side of a change point. */
@@ -156,8 +156,8 @@ export function findInflection(analyses: MatchAnalysis[], id: LongMetricId): Inf
   const context: string[] = [];
   const patchChanged = patchOverlap < 0.4;
   const champsChanged = champOverlap < 0.5;
-  if (patchChanged) context.push("El cambio coincide con un cambio de parche.");
-  if (champsChanged) context.push("También cambiaron bastante los campeones que jugabas.");
+  if (patchChanged) context.push("The change coincides with a patch change.");
+  if (champsChanged) context.push("The champions you played also changed a lot.");
 
   // Same-champion check: does the change also appear on one champion played on both sides?
   // Prefer a champion where the change is consolidated; otherwise the most-played one on both sides.
@@ -177,16 +177,16 @@ export function findInflection(analyses: MatchAnalysis[], id: LongMetricId): Inf
   let attribution: Attribution;
   if (sameChampion?.consolidated && !patchChanged) {
     attribution = "player";
-    context.push(`El cambio también aparece jugando solo con ${sameChampion.champion}, lo que apunta a un cambio tuyo.`);
+    context.push(`The change also shows up on ${sameChampion.champion} alone, which points to a change in you.`);
   } else if (patchChanged || champsChanged) {
     attribution = "environment_possible";
-    context.push("No podemos separar tu evolución del cambio de entorno con estos datos.");
+    context.push("With this data we cannot separate your progress from the change in environment.");
   } else if (sameChampion && !sameChampion.consolidated) {
     attribution = "unclear";
-    context.push(`Con ${sameChampion.champion} por separado la diferencia no está clara.`);
+    context.push(`On ${sameChampion.champion} alone the difference is not clear.`);
   } else {
     attribution = "player";
-    context.push("No vemos cambios de parche ni de campeones que lo expliquen.");
+    context.push("We see no patch or champion changes that would explain it.");
   }
 
   return {
@@ -260,8 +260,8 @@ export function detectAnomalies(analyses: MatchAnalysis[]): Anomaly[] {
         verdict,
         explanation:
           verdict === "possible_change"
-            ? `En ${hits.length} de tus últimas ${RECENT} partidas tu ${m.label} (${hits.map((p) => f(p.v)).join(", ")}) se sale mucho de lo habitual en ti (${f(med)}). Puede ser el inicio de un cambio; aún no está consolidado.`
-            : `Tu ${m.label} en ${hits.length === 1 ? "una partida reciente" : `${hits.length} partidas recientes`} (${hits.map((p) => f(p.v)).join(", ")}) se sale de lo habitual (${f(med)}), pero con tan pocas partidas parece variación normal.`,
+            ? `In ${hits.length} of your last ${RECENT} games your ${m.label} (${hits.map((p) => f(p.v)).join(", ")}) is far outside your usual range (${f(med)}). It may be the start of a change; it is not consolidated yet.`
+            : `Your ${m.label} in ${hits.length === 1 ? "one recent game" : `${hits.length} recent games`} (${hits.map((p) => f(p.v)).join(", ")}) is outside your usual range (${f(med)}), but with so few games it looks like normal variation.`,
       });
     }
   }
@@ -284,7 +284,7 @@ export function buildTimeline(analyses: MatchAnalysis[], inflections: Inflection
   let lastPatch: string | null = null;
   for (const a of usable) {
     if (a.patch !== lastPatch) {
-      if (lastPatch !== null) out.push({ at: a.startedAt, type: "patch", title: `Parche ${a.patch}`, detail: "Primera partida analizada en este parche." });
+      if (lastPatch !== null) out.push({ at: a.startedAt, type: "patch", title: `Patch ${a.patch}`, detail: "First analyzed game on this patch." });
       lastPatch = a.patch;
     }
   }
@@ -298,7 +298,7 @@ export function buildTimeline(analyses: MatchAnalysis[], inflections: Inflection
     for (const a of block) counts.set(a.championName, (counts.get(a.championName) ?? 0) + 1);
     const [top, n] = [...counts.entries()].sort((x, y) => y[1] - x[1])[0]!;
     if (n >= 5 && top !== lastTop) {
-      if (lastTop !== null) out.push({ at: block[0]!.startedAt, type: "champion_shift", title: `Empiezas a jugar sobre todo ${top}`, detail: `${n} de ${BLOCK} partidas en ese periodo (antes: ${lastTop}).` });
+      if (lastTop !== null) out.push({ at: block[0]!.startedAt, type: "champion_shift", title: `You start playing mostly ${top}`, detail: `${n} of ${BLOCK} games in that period (before: ${lastTop}).` });
       lastTop = top;
     }
   }
@@ -309,8 +309,8 @@ export function buildTimeline(analyses: MatchAnalysis[], inflections: Inflection
     out.push({
       at: inf.at,
       type: "inflection",
-      title: `${inf.direction === "improved" ? "Mejora" : "Bajada"} consolidada: ${inf.label}`,
-      detail: `${f(inf.before.mean)} → ${f(inf.after.mean)} (${inf.before.n} y ${inf.after.n} partidas). ${inf.context.join(" ")}`,
+      title: `Consolidated ${inf.direction === "improved" ? "improvement" : "decline"}: ${inf.label}`,
+      detail: `${f(inf.before.mean)} → ${f(inf.after.mean)} (${inf.before.n} and ${inf.after.n} games). ${inf.context.join(" ")}`,
     });
   }
   return out.sort((a, b) => a.at - b.at);

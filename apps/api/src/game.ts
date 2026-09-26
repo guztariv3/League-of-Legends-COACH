@@ -25,11 +25,11 @@ export function gameRoutes({ db, source, knowledge, services }: { db: Db; source
     const [raw] = await db.select().from(schema.rawMatches).where(eq(schema.rawMatches.matchId, matchId));
     const [tl] = await db.select().from(schema.rawTimelines).where(eq(schema.rawTimelines.matchId, matchId));
     if (!raw || !tl) {
-      return c.json({ available: false, message: "No tenemos la línea temporal de esta partida, así que no podemos reconstruirla." });
+      return c.json({ available: false, message: "We do not have this game's timeline, so we cannot reconstruct it." });
     }
     const match = normalizeMatch(raw.payload as RawMatch);
     if (match.mode !== "summoners_rift" || match.remake) {
-      return c.json({ available: false, message: "La revisión por mapa solo está disponible para partidas completas de la Grieta." });
+      return c.json({ available: false, message: "The map review is only available for complete Summoner's Rift games." });
     }
     const review = buildReview(match, tl.payload as RawTimeline, mine.puuid);
     return review ? c.json({ available: true, dataSource: raw.source, review }) : c.json({ error: "not_found" }, 404);
@@ -47,7 +47,7 @@ export function gameRoutes({ db, source, knowledge, services }: { db: Db; source
     const { analyses } = await services.profileAnalyses(c.get("userId"));
     const draft = analyzeDraft(parsed.data, knowledge.active()?.champions ?? [], analyses);
     await services.logDecision({
-      userId: c.get("userId"), kind: "draft", title: `Preparación con ${parsed.data.myChampion}`,
+      userId: c.get("userId"), kind: "draft", title: `Prep with ${parsed.data.myChampion}`,
       context: { input: parsed.data, keyPoints: draft.keyPoints.map((p) => p.title) }, decision: "none",
     });
     return c.json(draft);

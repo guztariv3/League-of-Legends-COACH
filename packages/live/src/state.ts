@@ -112,11 +112,11 @@ export function laneOpponent(state: GameState): PlayerState | null {
   return same.length === 1 ? same[0]! : null;
 }
 
-const MAP_NAMES: Record<number, string> = { 11: "Grieta del Invocador", 12: "Abismo de los Lamentos" };
-const MODE_NAMES: Record<string, string> = { CLASSIC: "", PRACTICETOOL: "Herramienta de práctica", ARAM: "ARAM" };
+const MAP_NAMES: Record<number, string> = { 11: "Summoner's Rift", 12: "Howling Abyss" };
+const MODE_NAMES: Record<string, string> = { CLASSIC: "", PRACTICETOOL: "Practice Tool", ARAM: "ARAM" };
 
 export interface ModeInfo {
-  /** What the window shows, e.g. "ARAM · Abismo de los Lamentos". */
+  /** What the window shows, e.g. "ARAM · Howling Abyss". */
   label: string;
   /** Whether the game reports lane positions (Summoner's Rift): lane-opponent notices need them. */
   lanes: boolean;
@@ -131,5 +131,5 @@ export function modeInfo(state: GameState): ModeInfo | null {
   const code = state.mode ?? "";
   const mode = code in MODE_NAMES ? MODE_NAMES[code] : code;
   const map = state.map !== null ? MAP_NAMES[state.map] : undefined;
-  return { label: [mode, map].filter(Boolean).join(" · ") || "Modo desconocido", lanes: state.me?.position != null };
+  return { label: [mode, map].filter(Boolean).join(" · ") || "Unknown mode", lanes: state.me?.position != null };
 }

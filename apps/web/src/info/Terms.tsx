@@ -1,45 +1,45 @@
-import { CONTACT_URL, RIOT_NOTICE_ES } from "./links";
+import { CONTACT_URL, RIOT_NOTICE } from "./links";
 
-const UPDATED = "25 de septiembre de 2026";
+const UPDATED = "September 26, 2026";
 
 export function Terms() {
   return (
     <article className="card stack legal">
-      <h1 className="page-title">Términos de uso</h1>
-      <p className="tile-note">Última actualización: {UPDATED}</p>
+      <h1 className="page-title">Terms of use</h1>
+      <p className="tile-note">Last updated: {UPDATED}</p>
 
-      <h2>Qué es</h2>
+      <h2>What it is</h2>
       <p>
-        KOI Master es un coach de League of Legends gratuito e independiente, en fase de prototipo. Analiza datos de tus partidas y te informa;
-        las decisiones dentro y fuera del juego son siempre tuyas.
+        KOI Master is a free, independent League of Legends coach in prototype stage. It analyzes data from your games and informs you;
+        decisions in and out of the game are always yours.
       </p>
 
-      <h2>Relación con Riot Games</h2>
-      <p>{RIOT_NOTICE_ES}</p>
+      <h2>Relationship with Riot Games</h2>
+      <p>{RIOT_NOTICE}</p>
       <p>
-        Al usar KOI Master sigues sujeto a los términos de servicio de Riot Games. KOI Master solo usa la API oficial de Riot y los datos que el juego publica en tu ordenador;
-        no modifica el juego, no lee su memoria, no automatiza acciones y no interfiere con Vanguard.
+        When you use KOI Master you remain bound by Riot Games' terms of service. KOI Master only uses Riot's official API and the data the game publishes on your computer;
+        it does not modify the game, read its memory, automate actions or interfere with Vanguard.
       </p>
 
-      <h2>Uso aceptable</h2>
+      <h2>Acceptable use</h2>
       <ul>
-        <li>Úsalo para mejorar tu propio juego.</li>
-        <li>No lo uses para acosar a otros jugadores ni para recopilar datos de forma masiva.</li>
-        <li>No intentes saltarte sus límites, acceder a cuentas ajenas ni afectar a su funcionamiento.</li>
+        <li>Use it to improve your own play.</li>
+        <li>Do not use it to harass other players or to collect data in bulk.</li>
+        <li>Do not try to bypass its limits, access other people's accounts or disrupt how it works.</li>
       </ul>
 
-      <h2>Sin garantías</h2>
+      <h2>No warranty</h2>
       <p>
-        Es un prototipo: puede fallar, cambiar o dejar de estar disponible. Los análisis se basan en datos públicos y en estadística; pueden equivocarse, sobre todo con pocas partidas,
-        y por eso siempre indicamos el tamaño de la muestra. En la medida que permita la ley, KOI Master se ofrece "tal cual", sin garantías.
+        It is a prototype: it may fail, change or stop being available. The analysis is based on public data and statistics; it can be wrong, especially with few games,
+        which is why we always show the sample size. To the extent permitted by law, KOI Master is provided "as is", without warranty.
       </p>
 
-      <h2>Tu cuenta</h2>
-      <p>Puedes borrar tu cuenta y tus datos cuando quieras desde Ajustes. Podemos suspender cuentas que incumplan estos términos.</p>
+      <h2>Your account</h2>
+      <p>You can delete your account and your data at any time from Settings. We may suspend accounts that break these terms.</p>
 
-      <h2>Cambios y contacto</h2>
+      <h2>Changes and contact</h2>
       <p>
-        Si cambian estos términos, se actualizará la fecha de arriba. Para cualquier duda, usa <a href={CONTACT_URL} rel="noopener noreferrer" target="_blank">el contacto del proyecto</a>.
+        If these terms change, the date above will be updated. For any question, use <a href={CONTACT_URL} rel="noopener noreferrer" target="_blank">the project's contact page</a>.
       </p>
     </article>
   );

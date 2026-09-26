@@ -33,7 +33,7 @@ const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,
 
 const ROLES: [RegExp, string, string][] = [
   [/\b(top)\b/, "TOP", "Top"],
-  [/\b(jungla|jungle|jg|jungler)\b/, "JUNGLE", "Jungla"],
+  [/\b(jungla|jungle|jg|jungler)\b/, "JUNGLE", "Jungle"],
   [/\b(mid|medio)\b/, "MIDDLE", "Mid"],
   [/\b(adc|bot|tirador)\b/, "BOTTOM", "ADC"],
   [/\b(support|supp|soporte)\b/, "UTILITY", "Support"],
@@ -75,7 +75,7 @@ export function search(raw: string, index: SearchIndex): SearchResult[] {
   const champs = findChampions(q, index);
   const count = Number(/\b(?:ultimas?|last)\s+(\d{1,3})\b/.exec(q)?.[1] ?? NaN);
   const role = ROLES.find(([re]) => re.test(q));
-  const result = /\b(victorias|ganadas|wins?|gane)\b/.test(q) ? "win" : /\b(derrotas|perdidas|loss(es)?|perdi)\b/.test(q) ? "loss" : undefined;
+  const result = /\b(victorias|ganadas|wins?|won|gane)\b/.test(q) ? "win" : /\b(derrotas|perdidas|loss(es)?|lost|perdi)\b/.test(q) ? "loss" : undefined;
   const aram = /\baram\b/.test(q);
 
   // Matchup: "A vs B" / "A contra B"
@@ -84,8 +84,8 @@ export function search(raw: string, index: SearchIndex): SearchResult[] {
     const n = index.matchups.get(`${a.id}|${b.id}`) ?? 0;
     out.push({
       type: "matchup",
-      title: `${a.name} contra ${b.name}`,
-      subtitle: n ? `${n} partidas tuyas en este enfrentamiento` : "No tienes partidas en este enfrentamiento",
+      title: `${a.name} vs ${b.name}`,
+      subtitle: n ? `${n} of your games in this matchup` : "You have no games in this matchup",
       href: `/matches?champion=${encodeURIComponent(a.id)}&opponent=${encodeURIComponent(b.id)}`,
     });
   }
@@ -95,21 +95,21 @@ export function search(raw: string, index: SearchIndex): SearchResult[] {
   if (wantsMatches) {
     const params = new URLSearchParams();
     const parts: string[] = [];
-    if (champs[0] && champs.length === 1) { params.set("champion", champs[0].id); parts.push(`con ${champs[0].name}`); }
-    if (role) { params.set("role", role[1]); parts.push(`de ${role[2]}`); }
-    if (result) { params.set("result", result); parts.push(result === "win" ? "(victorias)" : "(derrotas)"); }
-    if (aram) { params.set("mode", "aram"); parts.push("en ARAM"); }
+    if (champs[0] && champs.length === 1) { params.set("champion", champs[0].id); parts.push(`on ${champs[0].name}`); }
+    if (role) { params.set("role", role[1]); parts.push(`as ${role[2]}`); }
+    if (result) { params.set("result", result); parts.push(result === "win" ? "(wins)" : "(losses)"); }
+    if (aram) { params.set("mode", "aram"); parts.push("in ARAM"); }
     if (!Number.isNaN(count)) params.set("limit", String(Math.min(100, count)));
     out.push({
       type: "matches",
-      title: `${Number.isNaN(count) ? "Tus partidas" : `Tus últimas ${Math.min(100, count)} partidas`} ${parts.join(" ")}`.trim(),
+      title: `${Number.isNaN(count) ? "Your games" : `Your last ${Math.min(100, count)} games`} ${parts.join(" ")}`.trim(),
       href: `/matches?${params}`,
     });
   }
 
   const championResult = (c: ChampionRef): SearchResult => {
     const n = index.playerChampions.get(c.id) ?? 0;
-    return { type: "champion", title: c.name, subtitle: n ? `${n} partidas tuyas` : "Sin partidas tuyas", href: `/champions/${encodeURIComponent(c.id)}` };
+    return { type: "champion", title: c.name, subtitle: n ? `${n} of your games` : "No games of yours", href: `/champions/${encodeURIComponent(c.id)}` };
   };
   for (const c of champs.slice(0, 3)) out.push(championResult(c));
 
@@ -120,10 +120,10 @@ export function search(raw: string, index: SearchIndex): SearchResult[] {
   }
 
   if (/\b(evolucion|progreso|mejorando|mejorado|empeorando|cambio|improv\w*|progress)\b/.test(q)) {
-    out.push({ type: "profile", title: "Tu evolución", subtitle: "Cambios consolidados y línea temporal", href: "/profile#evolution" });
+    out.push({ type: "profile", title: "Your progress", subtitle: "Consolidated changes and timeline", href: "/profile#evolution" });
   }
   if (/\b(adapt\w*)\b/.test(q)) {
-    out.push({ type: "profile", title: "Cómo te adaptas", subtitle: "Según el rival y el estado de la partida", href: "/profile#adaptation" });
+    out.push({ type: "profile", title: "How you adapt", subtitle: "By opponent and game state", href: "/profile#adaptation" });
   }
 
   const words = q.split(/\s+/).filter((w) => w.length >= 4);

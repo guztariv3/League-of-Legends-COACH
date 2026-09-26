@@ -31,11 +31,11 @@ export function Dashboard() {
       <SplashBackdrop champion={main?.champions[0]?.championName} />
       <header className="row">
         <div>
-          <h1 className="page-title">Hola, {me?.user.displayName}</h1>
+          <h1 className="page-title">Hi, {me?.user.displayName}</h1>
           <p className="page-sub" style={{ margin: 0 }}>
             {data.summary.analyzableGames
-              ? `Basado en ${data.summary.analyzableGames} partidas analizables.`
-              : "Todavía no hay partidas analizadas."}
+              ? `Based on ${data.summary.analyzableGames} analyzable games.`
+              : "No analyzed games yet."}
           </p>
         </div>
         <span className="spacer" />
@@ -44,49 +44,49 @@ export function Dashboard() {
 
       {syncing && (
         <div className="card stack" aria-live="polite">
-          <h2>Analizando tus partidas</h2>
+          <h2>Analyzing your games</h2>
           <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={syncing.sync.progress?.total ?? 50} aria-valuenow={syncing.sync.progress?.done ?? 0}>
             <span style={{ width: `${syncing.sync.progress?.total ? (100 * syncing.sync.progress.done) / syncing.sync.progress.total : 5}%` }} />
           </div>
-          <p className="tile-note" style={{ margin: 0 }}>Puedes seguir navegando; el panel se actualizará solo.</p>
+          <p className="tile-note" style={{ margin: 0 }}>Keep browsing; this page will update on its own.</p>
         </div>
       )}
 
       {main && (
         <section aria-label="Resumen" className="tiles">
           <StatTile
-            label={`Victorias · ${modeLabel[main.mode]}`}
+            label={`Win rate · ${modeLabel[main.mode]}`}
             value={pct(main.winRate)}
-            note={`${main.wins} de ${main.games} · rango probable ${pct(main.winRateInterval.low)}–${pct(main.winRateInterval.high)}`}
+            note={`${main.wins} of ${main.games} · likely range ${pct(main.winRateInterval.low)}–${pct(main.winRateInterval.high)}`}
           />
-          <StatTile label="KDA medio" value={num(main.avgKda, 2)} />
-          {main.avgCsPerMin !== null && <StatTile label="CS por minuto" value={num(main.avgCsPerMin)} note={main.mainRole ? `Rol principal: ${roleLabel[main.mainRole]}` : undefined} />}
+          <StatTile label="Average KDA" value={num(main.avgKda, 2)} />
+          {main.avgCsPerMin !== null && <StatTile label="CS per minute" value={num(main.avgCsPerMin)} note={main.mainRole ? `Main role: ${roleLabel[main.mainRole]}` : undefined} />}
         </section>
       )}
 
       {main && main.champions.length > 0 && (
         <section className="card" aria-labelledby="h-recent-champs">
-          <h2 id="h-recent-champs">Campeones más jugados</h2>
+          <h2 id="h-recent-champs">Most played champions</h2>
           <div className="recent-champs">
             {main.champions.slice(0, 3).map((c) => (
               <Link key={c.championName} to={`/champions/${encodeURIComponent(c.championName)}`} className="recent-champ">
                 <LoadingArt champion={c.championName} />
                 <span className="recent-champ-name">{c.championName}</span>
                 <span className="recent-champ-pct">{pct(c.games / main.games)}</span>
-                <span className="tile-note">{c.games} partidas · {pct(c.wins / c.games)} victorias</span>
+                <span className="tile-note">{c.games} games · {pct(c.wins / c.games)} win rate</span>
               </Link>
             ))}
           </div>
-          <p className="tile-note" style={{ margin: "8px 0 0" }}>% de tus partidas analizadas en {modeLabel[main.mode]}.</p>
+          <p className="tile-note" style={{ margin: "8px 0 0" }}>% of your analyzed games in {modeLabel[main.mode]}.</p>
         </section>
       )}
 
       {goals.data && (goals.data.goals.length > 0 || goals.data.suggestions.length > 0) && (
         <section className="card stack" aria-labelledby="goals-h">
           <div className="row">
-            <h2 id="goals-h" style={{ margin: 0 }}>Tus objetivos</h2>
+            <h2 id="goals-h" style={{ margin: 0 }}>Your goals</h2>
             <span className="spacer" />
-            <Link to="/profile#goals">Gestionar</Link>
+            <Link to="/profile#goals">Manage</Link>
           </div>
           <Goals data={goals.data} onChange={reload} compact />
         </section>
@@ -94,10 +94,10 @@ export function Dashboard() {
 
       <div className="grid grid-2">
         <section className="card stack" aria-labelledby="insights-h">
-          <h2 id="insights-h">Lo que más importa ahora</h2>
+          <h2 id="insights-h">What matters most now</h2>
           {data.insufficientData ? (
             <p className="page-sub" style={{ margin: 0 }}>
-              Todavía no tengo suficiente información fiable para sacar conclusiones. Con más partidas analizadas empezaré a detectar patrones.
+              I do not have enough reliable information to draw conclusions yet. With more analyzed games I will start spotting patterns.
             </p>
           ) : (
             data.insights.map((i) => (
@@ -107,7 +107,7 @@ export function Dashboard() {
                   style={{ padding: "4px 0", fontSize: "0.8rem", color: "var(--text-muted)" }}
                   onClick={async () => { await api.feedback(i.id, i.title); reload(); }}
                 >
-                  No me resulta útil
+                  Not useful to me
                 </button>
               </InsightView>
             ))
@@ -116,14 +116,14 @@ export function Dashboard() {
 
         <section className="card stack" aria-labelledby="recent-h">
           <div className="row">
-            <h2 id="recent-h" style={{ margin: 0 }}>Últimas partidas</h2>
+            <h2 id="recent-h" style={{ margin: 0 }}>Recent games</h2>
             <span className="spacer" />
-            <Link to="/matches">Ver todas</Link>
+            <Link to="/matches">See all</Link>
           </div>
           {data.recent.length ? (
             <ul className="match-list">{data.recent.map((m) => <MatchItem key={m.matchId} m={m} compact />)}</ul>
           ) : (
-            <p className="page-sub" style={{ margin: 0 }}>Aún no hay partidas.</p>
+            <p className="page-sub" style={{ margin: 0 }}>No games yet.</p>
           )}
         </section>
       </div>

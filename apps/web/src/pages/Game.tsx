@@ -5,7 +5,7 @@ import { api, type DraftAnalysis, type DraftPoint, type ScoutResult } from "../a
 import { ErrorNotice, Loading, SyntheticBadge } from "../components/ui";
 import { useLoad } from "../session";
 
-const kindLabel = { fact: "Hecho", observation: "Observación", hypothesis: "Hipótesis" } as const;
+const kindLabel = { fact: "Fact", observation: "Observation", hypothesis: "Hypothesis" } as const;
 
 /**
  * Pre-game area (brief §41–44): a draft prepared by hand (champions only) and,
@@ -16,8 +16,8 @@ export function Game() {
   return (
     <div className="stack" style={{ gap: 24 }}>
       <header>
-        <h1 className="page-title">Antes de jugar</h1>
-        <p className="page-sub" style={{ margin: 0 }}>Prepara tu partida y, cuando esté en la pantalla de carga, consulta a tus rivales.</p>
+        <h1 className="page-title">Pre-game</h1>
+        <p className="page-sub" style={{ margin: 0 }}>Prepare your game and, once you are at the loading screen, check your opponents.</p>
       </header>
       <LiveGame />
       <ManualDraft />
@@ -35,17 +35,17 @@ function Points({ draft }: { draft: DraftAnalysis }) {
   );
   return (
     <div className="stack">
-      <h3 className="tile-label" style={{ margin: 0 }}>Esto es lo que más importa</h3>
-      {draft.keyPoints.length ? draft.keyPoints.map(point) : <p className="page-sub" style={{ margin: 0 }}>No veo nada destacable con la información disponible.</p>}
+      <h3 className="tile-label" style={{ margin: 0 }}>This is what matters most</h3>
+      {draft.keyPoints.length ? draft.keyPoints.map(point) : <p className="page-sub" style={{ margin: 0 }}>Nothing stands out with the information available.</p>}
       {draft.morePoints.length > 0 && (
         <details className="layer">
-          <summary>Más detalles ({draft.morePoints.length})</summary>
+          <summary>More details ({draft.morePoints.length})</summary>
           <div className="stack" style={{ marginTop: 8 }}>{draft.morePoints.map(point)}</div>
         </details>
       )}
-      {draft.unknownChampions.length > 0 && <p className="tile-note" style={{ margin: 0 }}>Sin datos para: {draft.unknownChampions.join(", ")}.</p>}
+      {draft.unknownChampions.length > 0 && <p className="tile-note" style={{ margin: 0 }}>No data for: {draft.unknownChampions.join(", ")}.</p>}
       <details className="layer">
-        <summary>Límites de este análisis</summary>
+        <summary>Limits of this analysis</summary>
         <ul className="tile-note">{draft.limits.map((l) => <li key={l}>{l}</li>)}</ul>
       </details>
     </div>
@@ -63,37 +63,37 @@ function LiveGame() {
   return (
     <section className="card stack" aria-labelledby="h-live">
       <div className="row">
-        <h2 id="h-live" style={{ margin: 0 }}>Partida en curso</h2>
+        <h2 id="h-live" style={{ margin: 0 }}>Game in progress</h2>
         <span className="spacer" />
         {d?.simulated && <SyntheticBadge />}
-        <button className="btn btn-primary" onClick={load} disabled={state.loading}>{state.loading ? "Buscando…" : d ? "Actualizar" : "Buscar mi partida"}</button>
+        <button className="btn btn-primary" onClick={load} disabled={state.loading}>{state.loading ? "Searching…" : d ? "Refresh" : "Find my game"}</button>
       </div>
       <p className="tile-note" style={{ margin: 0 }}>
-        Solo funciona desde la pantalla de carga: durante la selección de campeones no se consulta información de otros jugadores.
+        It only works from the loading screen: no information about other players is looked up during champion select.
       </p>
-      {state.loading && <Loading label="Consultando la partida y el historial reciente de tus rivales…" />}
+      {state.loading && <Loading label="Looking up the game and your opponents' recent history…" />}
       {state.error ? <ErrorNotice error={state.error} /> : null}
       {d && !d.inGame && <div className="notice">{d.message}</div>}
       {d?.inGame && (
         <>
           <div className="stack" style={{ gap: 8 }}>
-            <h3 className="section-title">Tus rivales</h3>
+            <h3 className="section-title">Your opponents</h3>
             <div className="rivals">
               {d.enemies!.map((e, i) => <RivalCard key={i} e={e} />)}
             </div>
             <p className="tile-note" style={{ margin: 0 }}>
-              Rango y maestría vienen de Riot; el resto, de sus últimas partidas. Con pocas partidas no se puede juzgar el nivel de nadie: es solo contexto.
+              Rank and mastery come from Riot; the rest from their recent games. A few games cannot judge anyone's skill: it is only context.
             </p>
           </div>
           <div className="stack">
-            <h3 className="section-title">Tu equipo</h3>
+            <h3 className="section-title">Your team</h3>
             <div className="row" style={{ gap: 6 }}>
               <ChampionIcon champion={d.myChampion!.id} size={52} className="portrait" />
               {d.allies!.map((a) => <ChampionIcon key={a.id} champion={a.id} size={34} />)}
             </div>
             <p style={{ margin: 0 }}>
-              Juegas <strong>{d.myChampion!.name}</strong> con {d.allies!.map((a) => a.name).join(", ")}.
-              {d.account && <span className="tile-note"> Cuenta: {d.account}</span>}
+              You play <strong>{d.myChampion!.name}</strong> with {d.allies!.map((a) => a.name).join(", ")}.
+              {d.account && <span className="tile-note"> Account: {d.account}</span>}
             </p>
             <Points draft={d.draft!} />
           </div>
@@ -126,7 +126,7 @@ function ManualDraft() {
 
   return (
     <section className="card stack" aria-labelledby="h-draft">
-      <h2 id="h-draft">Preparar una partida</h2>
+      <h2 id="h-draft">Prepare a game</h2>
       <form
         className="stack"
         onSubmit={async (e) => {
@@ -138,19 +138,19 @@ function ManualDraft() {
         }}
       >
         <div className="row">
-          {select("draft-me", "Tu campeón", me, setMe)}
-          {select("draft-opp", "Rival de línea (opcional)", opponent, setOpponent)}
+          {select("draft-me", "Your champion", me, setMe)}
+          {select("draft-opp", "Lane opponent (optional)", opponent, setOpponent)}
         </div>
         <details className="layer" open>
-          <summary>Aliados y rivales</summary>
+          <summary>Allies and enemies</summary>
           <div className="row" style={{ marginTop: 8 }}>
-            {allies.map((v, i) => select(`draft-ally-${i}`, `Aliado ${i + 1}`, v, (x) => setAllies(allies.map((a, j) => (j === i ? x : a)))))}
+            {allies.map((v, i) => select(`draft-ally-${i}`, `Ally ${i + 1}`, v, (x) => setAllies(allies.map((a, j) => (j === i ? x : a)))))}
           </div>
           <div className="row" style={{ marginTop: 8 }}>
-            {enemies.map((v, i) => select(`draft-enemy-${i}`, `Rival ${i + 1}`, v, (x) => setEnemies(enemies.map((a, j) => (j === i ? x : a)))))}
+            {enemies.map((v, i) => select(`draft-enemy-${i}`, `Enemy ${i + 1}`, v, (x) => setEnemies(enemies.map((a, j) => (j === i ? x : a)))))}
           </div>
         </details>
-        <div><button className="btn btn-primary" disabled={!me}>Analizar</button></div>
+        <div><button className="btn btn-primary" disabled={!me}>Analyze</button></div>
       </form>
       {result.error ? <ErrorNotice error={result.error} /> : null}
       {result.data && <Points draft={result.data} />}

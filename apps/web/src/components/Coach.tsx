@@ -71,8 +71,8 @@ export function Coach() {
 
   const expression: Expression = thinking || syncing ? "thinking" : insight?.priority === "important" ? "concerned" : "idle";
   const message = syncing
-    ? `Estoy analizando tus partidas${syncing.sync.progress ? ` (${syncing.sync.progress.done}/${syncing.sync.progress.total})` : ""}. Puedes ir explorando mientras tanto.`
-    : coachHint ?? insight?.title ?? "Ahora mismo no veo nada importante que comentarte.";
+    ? `I am analyzing your games${syncing.sync.progress ? ` (${syncing.sync.progress.done}/${syncing.sync.progress.total})` : ""}. Feel free to look around meanwhile.`
+    : coachHint ?? insight?.title ?? "Nothing important to mention right now.";
 
   return (
     <aside className="coach" aria-label="Coach">
@@ -81,19 +81,19 @@ export function Coach() {
           <p>{explanation ? explanation.text : message}</p>
           <div className="row" style={{ gap: 4 }}>
             {!syncing && !coachHint && insight && !explanation && (
-              <button className="btn btn-ghost" onClick={explain} disabled={thinking}>{thinking ? "Pensando…" : "¿Por qué?"}</button>
+              <button className="btn btn-ghost" onClick={explain} disabled={thinking}>{thinking ? "Thinking…" : "Why?"}</button>
             )}
-            <button className="btn btn-ghost" onClick={dismiss}>Entendido</button>
+            <button className="btn btn-ghost" onClick={dismiss}>Got it</button>
             {!syncing && !coachHint && insight && (
               <button className="btn btn-ghost" onClick={async () => { await api.feedback(insight.id, insight.title); setInsight(null); setOpen(false); setExplanation(null); }}>
-                No me sirve
+                Not useful
               </button>
             )}
-            <button className="btn btn-ghost" onClick={toggleMute}>{muted ? "Activar avisos" : "Silenciar"}</button>
+            <button className="btn btn-ghost" onClick={toggleMute}>{muted ? "Turn on notices" : "Mute"}</button>
           </div>
         </div>
       )}
-      <button className="coach-avatar-btn" onClick={() => (open ? dismiss() : setOpen(true))} aria-expanded={open} aria-label={open ? "Cerrar coach" : "Abrir coach"}>
+      <button className="coach-avatar-btn" onClick={() => (open ? dismiss() : setOpen(true))} aria-expanded={open} aria-label={open ? "Close coach" : "Open coach"}>
         <CoachAvatar expression={expression} quiet={!open && (muted || !insight)} />
       </button>
     </aside>

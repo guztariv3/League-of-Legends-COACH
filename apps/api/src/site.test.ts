@@ -38,7 +38,7 @@ describe("production site", () => {
   });
 
   it("serves the public pages without the password, and nothing private", async () => {
-    for (const path of ["/info/", "/info/privacidad", "/info/terminos"]) {
+    for (const path of ["/info/", "/info/privacy", "/info/terms", "/info/privacidad"]) {
       const res = await site.request(path);
       expect(res.status, path).toBe(200);
       expect(await res.text()).toContain("KOI Master info");

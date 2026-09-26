@@ -29,19 +29,19 @@ interface Scout {
 const POLL_MS = 30_000;
 
 const TIERS: Record<string, string> = {
-  IRON: "Hierro", BRONZE: "Bronce", SILVER: "Plata", GOLD: "Oro", PLATINUM: "Platino", EMERALD: "Esmeralda",
-  DIAMOND: "Diamante", MASTER: "Maestro", GRANDMASTER: "Gran Maestro", CHALLENGER: "Retador",
+  IRON: "Iron", BRONZE: "Bronze", SILVER: "Silver", GOLD: "Gold", PLATINUM: "Platinum", EMERALD: "Emerald",
+  DIAMOND: "Diamond", MASTER: "Master", GRANDMASTER: "Grandmaster", CHALLENGER: "Challenger",
 };
 
 const errorText: Record<SiteError, string> = {
-  invalid_url: "Esa dirección no es válida. Cópiala de la web (Ajustes → App de escritorio).",
-  insecure_url: "La dirección debe empezar por https://.",
-  offline: "No se pudo contactar con la web. Revisa tu conexión.",
-  unauthorized: "Código incorrecto o caducado. Genera uno nuevo en la web.",
-  rate_limited: "Demasiados intentos. Espera un minuto.",
-  server_error: "La web ha fallado. Inténtalo de nuevo en un momento.",
-  unexpected_response: "La web respondió algo inesperado. ¿Es la dirección correcta?",
-  unavailable: "Solo disponible en la app de escritorio.",
+  invalid_url: "That address is not valid. Copy it from the website (Settings → Desktop app).",
+  insecure_url: "The address must start with https://.",
+  offline: "Could not reach the website. Check your connection.",
+  unauthorized: "Wrong or expired code. Generate a new one on the website.",
+  rate_limited: "Too many attempts. Wait a minute.",
+  server_error: "The website failed. Try again in a moment.",
+  unexpected_response: "The website answered something unexpected. Is the address right?",
+  unavailable: "Only available in the desktop app.",
 };
 
 function readLink(): SiteLink | null {
@@ -61,9 +61,9 @@ function writeLink(link: SiteLink | null) {
 }
 
 function rankText(e: ScoutedRival) {
-  if (e.rankStatus === "unavailable" || !e.rank) return e.rankStatus === "unranked" ? "Sin clasificar" : "Rango no disponible";
+  if (e.rankStatus === "unavailable" || !e.rank) return e.rankStatus === "unranked" ? "Unranked" : "Rank unavailable";
   const r = e.rank;
-  const tier = r.tier ? TIERS[r.tier] ?? r.tier : "Clasificado";
+  const tier = r.tier ? TIERS[r.tier] ?? r.tier : "Ranked";
   const division = r.division && !["MASTER", "GRANDMASTER", "CHALLENGER"].includes(r.tier ?? "") ? ` ${r.division}` : "";
   return `${tier}${division}${r.lp !== null ? ` · ${r.lp} LP` : ""}${r.queue === "flex" ? " (flex)" : ""}`;
 }
@@ -72,8 +72,8 @@ const pct = (x: number) => `${Math.round(x * 100)}%`;
 
 function winRate(e: ScoutedRival) {
   const r = e.rank && e.rank.wins + e.rank.losses > 0 ? e.rank : null;
-  if (r) return { value: pct(r.wins / (r.wins + r.losses)), note: `${r.wins}V ${r.losses}D clasif.` };
-  if (e.games) return { value: pct(e.wins / e.games), note: `últimas ${e.games}` };
+  if (r) return { value: pct(r.wins / (r.wins + r.losses)), note: `${r.wins}W ${r.losses}L ranked` };
+  if (e.games) return { value: pct(e.wins / e.games), note: `last ${e.games}` };
   return null;
 }
 
@@ -93,14 +93,14 @@ function RivalRow({ e, assets }: { e: ScoutedRival; assets: Scout["assets"] }) {
     <li className="rival">
       <Champ id={e.championId} name={e.championName} size={40} assets={assets} />
       <div className="rival-main">
-        <div className="rival-id" title={e.riotId ?? undefined}>{e.riotId ?? "Riot ID oculto"}</div>
+        <div className="rival-id" title={e.riotId ?? undefined}>{e.riotId ?? "Riot ID hidden"}</div>
         <div className={`rival-rank rank-${(e.rank?.tier ?? e.rankStatus).toLowerCase()}`}>{rankText(e)}</div>
       </div>
       <div className="rival-wr">
-        {wr ? <><strong>{wr.value}</strong><small>{wr.note}</small></> : <small>sin datos</small>}
+        {wr ? <><strong>{wr.value}</strong><small>{wr.note}</small></> : <small>no data</small>}
       </div>
       {e.topChampions.length > 0 && (
-        <div className="rival-top" aria-label={`${e.topSource === "mastery" ? "Mejores campeones" : "Más jugados"}: ${e.topChampions.map((c) => c.name).join(", ")}`}>
+        <div className="rival-top" aria-label={`${e.topSource === "mastery" ? "Top champions" : "Most played"}: ${e.topChampions.map((c) => c.name).join(", ")}`}>
           {e.topChampions.map((c) => <Champ key={c.id} id={c.id} name={c.name} size={22} assets={assets} />)}
         </div>
       )}
@@ -135,7 +135,7 @@ export function useRivals(liveMode: "waiting" | "live" | "demo") {
       if (r.ok) { setScout(r.data); setProblem(null); }
       else if (r.error === "unauthorized") {
         writeLink(null); setLink(null); setScout(null);
-        setProblem("La app se ha desconectado de la web. Vuelve a conectarla con un código nuevo.");
+        setProblem("The app was disconnected from the website. Connect it again with a new code.");
         return;
       } else setProblem(errorText[r.error]);
       timer = setTimeout(poll, POLL_MS);
@@ -158,10 +158,10 @@ export function RivalsPanel({ scout, collapsed }: { scout: Scout | null; collaps
   return (
     <section className="rivals" aria-labelledby="rivals-h">
       <div className="bar">
-        <h2 id="rivals-h">Tus rivales</h2>
+        <h2 id="rivals-h">Your opponents</h2>
         {scout.mode && <span className="quiet">{scout.mode}</span>}
         <span className="spacer" />
-        <button className="btn" aria-expanded={show} onClick={() => setOpen(!show)}>{show ? "Ocultar" : "Ver"}</button>
+        <button className="btn" aria-expanded={show} onClick={() => setOpen(!show)}>{show ? "Hide" : "Show"}</button>
       </div>
       {show && <ul>{scout.enemies.map((e, i) => <RivalRow key={`${e.championId}-${i}`} e={e} assets={scout.assets} />)}</ul>}
     </section>
@@ -179,9 +179,9 @@ export function ConnectForm({ link, problem, onConnect, onDisconnect }: {
   if (link) {
     return (
       <div className="connect">
-        <p className="quiet">Conectada a <strong>{new URL(link.origin).host}</strong>. Verás a tus rivales al cargar la partida.</p>
-        <button className="btn" onClick={() => { if (confirm("¿Desconectar la app de la web?")) onDisconnect(); }}>Desconectar</button>
-        <p className="quiet">También puedes desconectarla desde la web (Ajustes → App de escritorio).</p>
+        <p className="quiet">Connected to <strong>{new URL(link.origin).host}</strong>. You will see your opponents when the game loads.</p>
+        <button className="btn" onClick={() => { if (confirm("Disconnect the app from the website?")) onDisconnect(); }}>Disconnect</button>
+        <p className="quiet">You can also disconnect it from the website (Settings → Desktop app).</p>
       </div>
     );
   }
@@ -189,7 +189,7 @@ export function ConnectForm({ link, problem, onConnect, onDisconnect }: {
   const submit = async (ev: FormEvent) => {
     ev.preventDefault();
     setBusy(true); setError(null);
-    const r = await claimDevice(url, code, "App de escritorio");
+    const r = await claimDevice(url, code, "Desktop app");
     setBusy(false);
     if (r.ok) { onConnect({ origin: r.data.origin, token: r.data.token }); setCode(""); }
     else setError(errorText[r.error]);
@@ -197,10 +197,10 @@ export function ConnectForm({ link, problem, onConnect, onDisconnect }: {
 
   return (
     <form className="connect" onSubmit={submit}>
-      <p className="quiet">Para ver a tus rivales, genera un código en la web (Ajustes → App de escritorio) y escríbelo aquí.</p>
-      <label>Dirección de la web<input type="url" required value={url} onChange={(e) => setUrl(e.target.value)} autoComplete="url" /></label>
-      <label>Código<input required value={code} onChange={(e) => setCode(e.target.value)} placeholder="ABCD-EFGH" autoComplete="off" spellCheck={false} maxLength={20} /></label>
-      <button className="btn btn-primary" disabled={busy || !inTauri}>{busy ? "Conectando…" : "Conectar"}</button>
+      <p className="quiet">To see your opponents, generate a code on the website (Settings → Desktop app) and enter it here.</p>
+      <label>Website address<input type="url" required value={url} onChange={(e) => setUrl(e.target.value)} autoComplete="url" /></label>
+      <label>Code<input required value={code} onChange={(e) => setCode(e.target.value)} placeholder="ABCD-EFGH" autoComplete="off" spellCheck={false} maxLength={20} /></label>
+      <button className="btn btn-primary" disabled={busy || !inTauri}>{busy ? "Connecting…" : "Connect"}</button>
       {(error ?? problem) && <p className="quiet" role="alert">{error ?? problem}</p>}
     </form>
   );

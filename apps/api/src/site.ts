@@ -30,7 +30,7 @@ export function createSite(deps: AppDeps) {
 
   const password = deps.cfg.prototypePassword;
   if (password) {
-    const gate = basicAuth({ username: "kairos", password, realm: "KOI Master (prototipo privado)" });
+    const gate = basicAuth({ username: "kairos", password, realm: "KOI Master (private prototype)" });
     // The desktop pairing routes carry their own credentials (one-time code or device token).
     const open = new Set(["/api/health", "/api/desktop/claim", "/api/desktop/scout", "/api/desktop/build", "/favicon.svg"]);
     // Public pages (what KOI Master is, download, privacy, terms) and the built static files

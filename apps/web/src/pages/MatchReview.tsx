@@ -10,12 +10,12 @@ const toY = (y: number) => 1000 - (y / MAP) * 1000;
 const fmtTime = (t: number) => `${Math.floor(t / 60_000)}:${String(Math.floor((t % 60_000) / 1000)).padStart(2, "0")}`;
 
 export const categoryMeta: Record<MomentCategory, { label: string; icon: string; cls: string }> = {
-  error: { label: "Posible error", icon: "!", cls: "moment-error" },
-  opportunity: { label: "Oportunidad", icon: "◆", cls: "moment-opportunity" },
-  good: { label: "Buena decisión", icon: "✓", cls: "moment-good" },
-  event: { label: "Evento", icon: "•", cls: "moment-event" },
+  error: { label: "Possible mistake", icon: "!", cls: "moment-error" },
+  opportunity: { label: "Opportunity", icon: "◆", cls: "moment-opportunity" },
+  good: { label: "Good decision", icon: "✓", cls: "moment-good" },
+  event: { label: "Event", icon: "•", cls: "moment-event" },
 };
-const kindLabel = { fact: "Hecho", observation: "Observación", hypothesis: "Hipótesis" } as const;
+const kindLabel = { fact: "Fact", observation: "Observation", hypothesis: "Hypothesis" } as const;
 
 /**
  * Match Review ("Replay", D-05): map playback reconstructed from the
@@ -26,13 +26,13 @@ export function MatchReview() {
   const { matchId = "" } = useParams();
   const { data, error, loading } = useLoad(() => api.review(matchId), [matchId]);
 
-  if (loading && !data) return <Loading label="Reconstruyendo la partida…" />;
+  if (loading && !data) return <Loading label="Reconstructing the game…" />;
   if (error) return <ErrorNotice error={error} />;
   if (!data) return null;
   if (!data.available) {
     return (
       <div className="stack">
-        <Link to={`/matches/${encodeURIComponent(matchId)}`}>← Detalle de la partida</Link>
+        <Link to={`/matches/${encodeURIComponent(matchId)}`}>← Game details</Link>
         <div className="notice">{data.message}</div>
       </div>
     );
@@ -68,11 +68,11 @@ function ReviewPlayer({ review, synthetic }: { review: Review; synthetic: boolea
 
   return (
     <div className="stack" style={{ gap: 20 }}>
-      <Link to={`/matches/${encodeURIComponent(review.matchId)}`}>← Detalle de la partida</Link>
+      <Link to={`/matches/${encodeURIComponent(review.matchId)}`}>← Game details</Link>
       <header className="row">
         <div>
-          <h1 className="page-title">Revisión de la partida</h1>
-          <p className="page-sub" style={{ margin: 0 }}>Jugabas {me.championName}. Reconstruida a partir de la línea temporal, minuto a minuto.</p>
+          <h1 className="page-title">Game review</h1>
+          <p className="page-sub" style={{ margin: 0 }}>You played {me.championName}. Reconstructed from the timeline, minute by minute.</p>
         </div>
         <span className="spacer" />
         {synthetic && <SyntheticBadge />}
@@ -80,7 +80,7 @@ function ReviewPlayer({ review, synthetic }: { review: Review; synthetic: boolea
 
       {highlights.length > 0 && (
         <section aria-labelledby="h-key" className="stack">
-          <h2 id="h-key" className="tile-label" style={{ margin: 0 }}>Los momentos que más enseñan</h2>
+          <h2 id="h-key" className="tile-label" style={{ margin: 0 }}>The most instructive moments</h2>
           <div className="grid grid-2">
             {highlights.map((m) => (
               <button key={m.id} className={`tile moment-card ${categoryMeta[m.category].cls}${selected?.id === m.id ? " selected" : ""}`} onClick={() => jump(m)}>
@@ -93,13 +93,13 @@ function ReviewPlayer({ review, synthetic }: { review: Review; synthetic: boolea
       )}
 
       <div className="review-layout">
-        <section className="card" aria-label="Mapa">
+        <section className="card" aria-label="Map">
           <div className="row" style={{ marginBottom: 8 }}>
-            <span className="tile-label">Minuto {frame.minute}</span>
+            <span className="tile-label">Minute {frame.minute}</span>
             <span className="spacer" />
-            <label className="toggle"><input type="checkbox" checked={impact} onChange={(e) => setImpact(e.target.checked)} /> Mapa de impacto</label>
+            <label className="toggle"><input type="checkbox" checked={impact} onChange={(e) => setImpact(e.target.checked)} /> Impact map</label>
           </div>
-          <svg className="review-map" viewBox="0 0 1000 1000" role="img" aria-label={impact ? "Mapa de impacto: tus kills y muertes en la partida" : `Posiciones en el minuto ${frame.minute}`}>
+          <svg className="review-map" viewBox="0 0 1000 1000" role="img" aria-label={impact ? "Impact map: your kills and deaths in the game" : `Positions at minute ${frame.minute}`}>
             <defs>
               <radialGradient id="map-bg" cx="50%" cy="50%" r="70%">
                 <stop offset="0" stopColor="#1d2636" />
@@ -149,8 +149,8 @@ function ReviewPlayer({ review, synthetic }: { review: Review; synthetic: boolea
                           <rect x={-18} y={-18} width={36} height={36} transform="rotate(45)" fill={color} stroke="var(--surface-1)" strokeWidth={2} />
                         )}
                         <text textAnchor="middle" dy="5" fontSize="15" fontWeight="700" fill="#0b0e14">{initials}</text>
-                        {info.isMe && <text textAnchor="middle" y={-34} fontSize="18" fontWeight="700" fill="#ffffff">Tú</text>}
-                        <title>{`${info.championName}${info.isMe ? " (tú)" : info.isAlly ? " (aliado)" : " (rival)"}`}</title>
+                        {info.isMe && <text textAnchor="middle" y={-34} fontSize="18" fontWeight="700" fill="#ffffff">You</text>}
+                        <title>{`${info.championName}${info.isMe ? " (you)" : info.isAlly ? " (ally)" : " (enemy)"}`}</title>
                       </g>
                     );
                   })}
@@ -158,13 +158,13 @@ function ReviewPlayer({ review, synthetic }: { review: Review; synthetic: boolea
               )}
           </svg>
           <div className="row legend" aria-hidden="true">
-            <span><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="var(--team-ally)" /></svg> Tu equipo</span>
-            <span><svg width="14" height="14"><rect x="3" y="3" width="8" height="8" transform="rotate(45 7 7)" fill="var(--team-enemy)" /></svg> Rivales</span>
-            <span>✕ {impact ? "Tus muertes" : "Muertes en este minuto"}</span>
+            <span><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="var(--team-ally)" /></svg> Your team</span>
+            <span><svg width="14" height="14"><rect x="3" y="3" width="8" height="8" transform="rotate(45 7 7)" fill="var(--team-enemy)" /></svg> Enemies</span>
+            <span>✕ {impact ? "Your deaths" : "Deaths this minute"}</span>
           </div>
 
           <div className="stack" style={{ gap: 8, marginTop: 12 }}>
-            <div className="timeline-markers" aria-label="Momentos en la línea temporal">
+            <div className="timeline-markers" aria-label="Moments on the timeline">
               {explorable.map((m) => (
                 <button
                   key={m.id}
@@ -178,33 +178,33 @@ function ReviewPlayer({ review, synthetic }: { review: Review; synthetic: boolea
                 </button>
               ))}
             </div>
-            <label htmlFor="scrub" className="visually-hidden">Minuto</label>
+            <label htmlFor="scrub" className="visually-hidden">Minute</label>
             <input id="scrub" type="range" min={0} max={last} value={minute} onChange={(e) => { setMinute(Number(e.target.value)); setPlaying(false); }} style={{ width: "100%" }} />
             <div className="row" style={{ gap: 6 }}>
-              <button className="btn" onClick={() => setMinute((m) => Math.max(0, m - 1))} aria-label="Retroceder un minuto">−1 min</button>
-              <button className="btn btn-primary" onClick={() => { if (minute >= last) setMinute(0); setPlaying((p) => !p); }}>{playing ? "Pausa" : "Reproducir"}</button>
-              <button className="btn" onClick={() => setMinute((m) => Math.min(last, m + 1))} aria-label="Avanzar un minuto">+1 min</button>
-              <button className="btn" onClick={nextMoment}>Siguiente momento</button>
+              <button className="btn" onClick={() => setMinute((m) => Math.max(0, m - 1))} aria-label="Back one minute">−1 min</button>
+              <button className="btn btn-primary" onClick={() => { if (minute >= last) setMinute(0); setPlaying((p) => !p); }}>{playing ? "Pause" : "Play"}</button>
+              <button className="btn" onClick={() => setMinute((m) => Math.min(last, m + 1))} aria-label="Forward one minute">+1 min</button>
+              <button className="btn" onClick={nextMoment}>Next moment</button>
             </div>
-            <p className="tile-note" style={{ margin: 0 }}>Los saltos son de un minuto porque es la resolución de los datos de posición; los eventos tienen su hora exacta.</p>
+            <p className="tile-note" style={{ margin: 0 }}>Steps are one minute because that is the resolution of the position data; events have their exact time.</p>
           </div>
         </section>
 
         <aside className="stack">
           <section className="card stack" aria-live="polite">
-            <h2>Minuto {frame.minute}</h2>
+            <h2>Minute {frame.minute}</h2>
             <p style={{ margin: 0 }}>
-              Oro del equipo: <strong>{frame.teamGoldDiff > 0 ? "+" : ""}{Math.round(frame.teamGoldDiff).toLocaleString("es-ES")}</strong>
-              <span className="tile-note"> {frame.teamGoldDiff >= 0 ? "a favor de tu equipo" : "a favor del rival"}</span>
+              Team gold: <strong>{frame.teamGoldDiff > 0 ? "+" : ""}{Math.round(frame.teamGoldDiff).toLocaleString("en-US")}</strong>
+              <span className="tile-note"> {frame.teamGoldDiff >= 0 ? "in your team's favor" : "in the enemy's favor"}</span>
             </p>
             {eventsNow.length ? (
               <ul className="stack" style={{ listStyle: "none", margin: 0, padding: 0, gap: 4 }}>
                 {eventsNow.map((e, i) => (
-                  <li key={i} className="tile-note"><span style={{ color: "var(--text-secondary)" }}>{fmtTime(e.t)}</span> · {e.label}{e.myInvolvement === "victim" ? " (tú)" : ""}</li>
+                  <li key={i} className="tile-note"><span style={{ color: "var(--text-secondary)" }}>{fmtTime(e.t)}</span> · {e.label}{e.myInvolvement === "victim" ? " (you)" : ""}</li>
                 ))}
               </ul>
             ) : (
-              <p className="tile-note" style={{ margin: 0 }}>Sin eventos registrados en este minuto.</p>
+              <p className="tile-note" style={{ margin: 0 }}>No events recorded this minute.</p>
             )}
           </section>
 
@@ -217,18 +217,18 @@ function ReviewPlayer({ review, synthetic }: { review: Review; synthetic: boolea
               <strong>{selected.title}</strong>
               <p className="insight-detail">{selected.detail}</p>
               <details className="layer">
-                <summary>Ver evidencia</summary>
+                <summary>See evidence</summary>
                 <dl>
                   {selected.evidence.map((e, i) => <div key={i} style={{ display: "contents" }}><dt>{e.label}</dt><dd>{e.value}</dd></div>)}
-                  <dt>Cambio de oro del equipo (±2 min)</dt><dd>{selected.goldSwing > 0 ? "+" : ""}{Math.round(selected.goldSwing)}</dd>
-                  <dt>Confianza</dt><dd>{pct(selected.confidence)}</dd>
+                  <dt>Team gold swing (±2 min)</dt><dd>{selected.goldSwing > 0 ? "+" : ""}{Math.round(selected.goldSwing)}</dd>
+                  <dt>Confidence</dt><dd>{pct(selected.confidence)}</dd>
                 </dl>
               </details>
             </section>
           )}
 
           <details className="card layer">
-            <summary>Qué no puede saber esta revisión</summary>
+            <summary>What this review cannot know</summary>
             <ul className="tile-note">{review.limits.map((l) => <li key={l}>{l}</li>)}</ul>
           </details>
         </aside>

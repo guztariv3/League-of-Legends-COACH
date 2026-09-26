@@ -14,9 +14,12 @@ import "../styles.css";
  * desktop download, privacy and terms. A separate entry so it needs no session or API.
  */
 const pages: Record<string, { title: string; Page: () => React.JSX.Element }> = {
-  "": { title: "KOI Master · Coach personal de League of Legends", Page: Landing },
-  privacidad: { title: "Privacidad · KOI Master", Page: Privacy },
-  terminos: { title: "Términos · KOI Master", Page: Terms },
+  "": { title: "KOI Master · Your personal League of Legends coach", Page: Landing },
+  privacy: { title: "Privacy · KOI Master", Page: Privacy },
+  terms: { title: "Terms · KOI Master", Page: Terms },
+  // Earlier Spanish addresses keep working.
+  privacidad: { title: "Privacy · KOI Master", Page: Privacy },
+  terminos: { title: "Terms · KOI Master", Page: Terms },
 };
 
 function InfoSite() {
@@ -26,15 +29,15 @@ function InfoSite() {
   return (
     <div className="shell">
       <header className="topbar">
-        <a href="/info/" className="brand" aria-label="KOI Master, presentación">
+        <a href="/info/" className="brand" aria-label="KOI Master, home">
           <span style={{ width: 28, height: 28, display: "inline-flex" }}><CoachAvatar quiet /></span>
           KOI MASTER
         </a>
-        <nav className="nav" aria-label="Principal">
-          <a href="/info/" aria-current={slug === "" ? "page" : undefined}>Inicio</a>
-          <a href="/info/#descargar">Descargar</a>
-          <a href="/info/privacidad" aria-current={slug === "privacidad" ? "page" : undefined}>Privacidad</a>
-          <a href="/info/terminos" aria-current={slug === "terminos" ? "page" : undefined}>Términos</a>
+        <nav className="nav" aria-label="Main">
+          <a href="/info/" aria-current={slug === "" ? "page" : undefined}>Home</a>
+          <a href="/info/#download">Download</a>
+          <a href="/info/privacy" aria-current={slug === "privacy" ? "page" : undefined}>Privacy</a>
+          <a href="/info/terms" aria-current={slug === "terms" ? "page" : undefined}>Terms</a>
         </nav>
       </header>
       <main id="main"><Page /></main>

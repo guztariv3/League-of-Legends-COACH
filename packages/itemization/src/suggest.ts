@@ -80,7 +80,7 @@ function archetypeOf(champ: CatalogChampion | undefined): Archetype {
 }
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
-const list = (names: string[]) => (names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} y ${names.at(-1)}`);
+const list = (names: string[]) => (names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`);
 
 /** Components of an item and what is left to pay, counting the ones already in the inventory. */
 export function purchasePath(item: CatalogItem, inventory: number[], gold: number | null, catalog: Catalog): PurchasePath {
@@ -148,7 +148,7 @@ export function suggestItems(input: SuggestInput): Suggestions {
   const enemy = { magicShare, healers, armor: Math.round(avgArmor), magicResist: Math.round(avgMr) };
   const top = (xs: { name: string; w: number }[]) => xs.sort((a, b) => b.w - a.w).slice(0, 3).map((x) => x.name);
 
-  if (!catalog.items.size) return { next: null, alternatives: [], boots: null, enemy, note: "Sin el catálogo de objetos no hay sugerencias." };
+  if (!catalog.items.size) return { next: null, alternatives: [], boots: null, enemy, note: "No item catalog, so no suggestions." };
 
   // ---- What the player needs.
   const offenseWeight = { Mage: 1, Marksman: 1, Assassin: 1, Fighter: 0.7, Support: 0.5, Tank: 0.25 }[archetype];
@@ -181,29 +181,29 @@ export function suggestItems(input: SuggestInput): Suggestions {
     let s = offense(i) * offenseWeight;
     if (offense(i) > 0) {
       reasons.push(lean === "magic"
-        ? `Da ${stat(i, AP)} de poder de habilidad, lo que usa ${me.champion}.`
-        : `Da daño físico${stat(i, AS) ? " y velocidad de ataque" : ""}${stat(i, CRIT) ? " y crítico" : ""}, lo que usa ${me.champion}.`);
+        ? `Gives ${stat(i, AP)} ability power, which ${me.champion} uses.`
+        : `Gives physical damage${stat(i, AS) ? " and attack speed" : ""}${stat(i, CRIT) ? " and crit" : ""}, which ${me.champion} uses.`);
     }
     const d = defense(i) * defenseWeight;
     s += d;
-    if (stat(i, MR) > 0 && magicShare >= 0.55) reasons.push(`El ${pct(magicShare)} del daño rival es mágico (${list(top(magicDealers))}): da resistencia mágica.`);
-    if (stat(i, ARMOR) > 0 && physShare >= 0.55) reasons.push(`El ${pct(physShare)} del daño rival es físico (${list(top(physDealers))}): da armadura.`);
-    if (d > 0 && struggling >= 0.2) reasons.push(`Vas ${me.kills}/${me.deaths}: algo de defensa te mantiene más tiempo en las peleas.`);
+    if (stat(i, MR) > 0 && magicShare >= 0.55) reasons.push(`${pct(magicShare)} of the enemy damage is magic (${list(top(magicDealers))}): gives magic resist.`);
+    if (stat(i, ARMOR) > 0 && physShare >= 0.55) reasons.push(`${pct(physShare)} of the enemy damage is physical (${list(top(physDealers))}): gives armor.`);
+    if (d > 0 && struggling >= 0.2) reasons.push(`You are ${me.kills}/${me.deaths}: some defense keeps you in fights longer.`);
     if (i.antiHeal && healShare >= 0.3 && !ownsAntiHeal) {
       s += 0.9 * (offense(i) > 0 || frontline ? 1 : 0.3);
-      reasons.push(`${list(healers.slice(0, 3))} se ${healers.length > 1 ? "curan" : "cura"} con robo de vida: aplica Heridas graves.`);
+      reasons.push(`${list(healers.slice(0, 3))} ${healers.length > 1 ? "heal" : "heals"} with lifesteal: applies Grievous Wounds.`);
     }
     if (lean === "physical" && i.tags.includes("ArmorPenetration") && avgArmor >= 50) {
       s += 0.5;
-      reasons.push(`Los rivales llevan de media ${Math.round(avgArmor)} de armadura en objetos: da penetración de armadura.`);
+      reasons.push(`Enemies average ${Math.round(avgArmor)} armor from items: gives armor penetration.`);
     }
     if (lean === "magic" && i.tags.includes("MagicPenetration") && avgMr >= 40) {
       s += 0.5;
-      reasons.push(`Los rivales llevan de media ${Math.round(avgMr)} de resistencia mágica en objetos: da penetración mágica.`);
+      reasons.push(`Enemies average ${Math.round(avgMr)} magic resist from items: gives magic penetration.`);
     }
     if (usual.has(i.id)) {
       s += 0.3;
-      reasons.push(`Lo sueles terminar con ${me.champion}.`);
+      reasons.push(`You usually finish it on ${me.champion}.`);
     }
     return { item: i, score: s, reasons, path: purchasePath(i, me.items, input.gold, catalog) };
   };
@@ -223,11 +223,11 @@ export function suggestItems(input: SuggestInput): Suggestions {
       const reasons: string[] = [];
       let s = 0.1;
       // A team that deals mostly one damage type makes the matching resist boots stand out.
-      if (stat(i, ARMOR) > 0) { s += physShare * 1.2 * (0.5 + defenseWeight) + (physShare >= 0.7 ? 0.4 : 0); if (physShare >= 0.55) reasons.push(`El ${pct(physShare)} del daño rival es físico: estas botas dan armadura.`); }
-      if (stat(i, MR) > 0) { s += magicShare * 1.2 * (0.5 + defenseWeight) + (magicShare >= 0.7 ? 0.4 : 0); if (magicShare >= 0.55) reasons.push(`El ${pct(magicShare)} del daño rival es mágico: estas botas dan resistencia mágica.`); }
-      if (lean === "magic" && i.tags.includes("MagicPenetration")) { s += 0.6 * offenseWeight + 0.3; reasons.push("Dan penetración mágica para tu daño."); }
-      if (lean === "physical" && stat(i, AS) > 0) { s += (archetype === "Marksman" ? 0.9 : 0.4) * offenseWeight; reasons.push("Dan velocidad de ataque para tu daño."); }
-      if (usual.has(i.id)) { s += 0.3; reasons.push(`Las sueles llevar con ${me.champion}.`); }
+      if (stat(i, ARMOR) > 0) { s += physShare * 1.2 * (0.5 + defenseWeight) + (physShare >= 0.7 ? 0.4 : 0); if (physShare >= 0.55) reasons.push(`${pct(physShare)} of the enemy damage is physical: these boots give armor.`); }
+      if (stat(i, MR) > 0) { s += magicShare * 1.2 * (0.5 + defenseWeight) + (magicShare >= 0.7 ? 0.4 : 0); if (magicShare >= 0.55) reasons.push(`${pct(magicShare)} of the enemy damage is magic: these boots give magic resist.`); }
+      if (lean === "magic" && i.tags.includes("MagicPenetration")) { s += 0.6 * offenseWeight + 0.3; reasons.push("Magic penetration for your damage."); }
+      if (lean === "physical" && stat(i, AS) > 0) { s += (archetype === "Marksman" ? 0.9 : 0.4) * offenseWeight; reasons.push("Attack speed for your damage."); }
+      if (usual.has(i.id)) { s += 0.3; reasons.push(`You usually wear them on ${me.champion}.`); }
       return reasons.length ? { item: i, score: s, reasons, path: purchasePath(i, me.items, input.gold, catalog) } : null;
     };
     boots = [...catalog.items.values()].filter((i) => i.boots).map(bootScore)
@@ -240,6 +240,6 @@ export function suggestItems(input: SuggestInput): Suggestions {
     alternatives: ranked.slice(1, 3),
     boots,
     enemy,
-    note: ranked.length ? null : "No hay objetos de este mapa que encajen con tu campeón en el catálogo.",
+    note: ranked.length ? null : "No items on this map fit your champion in the catalog.",
   };
 }

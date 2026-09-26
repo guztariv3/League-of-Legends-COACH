@@ -1,57 +1,57 @@
 import { CONTACT_URL } from "./links";
 
-const UPDATED = "25 de septiembre de 2026";
+const UPDATED = "September 26, 2026";
 
 /** Plain description of what KOI Master stores, why, where and for how long. Keep it in sync with the code. */
 export function Privacy() {
   return (
     <article className="card stack legal">
-      <h1 className="page-title">Política de privacidad</h1>
-      <p className="tile-note">Última actualización: {UPDATED}</p>
+      <h1 className="page-title">Privacy policy</h1>
+      <p className="tile-note">Last updated: {UPDATED}</p>
       <p>
-        KOI Master es un proyecto independiente. Esta página explica qué datos usa, para qué y cómo borrarlos. Para cualquier pregunta o para ejercer tus derechos,
-        escríbenos en <a href={CONTACT_URL} rel="noopener noreferrer" target="_blank">el apartado de contacto del proyecto</a>.
+        KOI Master is an independent project. This page explains what data it uses, what for, and how to delete it. For any question, or to exercise your rights,
+        write to us through <a href={CONTACT_URL} rel="noopener noreferrer" target="_blank">the project's contact page</a>.
       </p>
 
-      <h2>Qué datos guardamos</h2>
+      <h2>What we store</h2>
       <ul>
-        <li><strong>Tu cuenta de KOI Master:</strong> un nombre visible y tus preferencias (nivel de detalle, idioma, qué puede recordar el coach).</li>
-        <li><strong>Tus cuentas de Riot vinculadas:</strong> Riot ID, región y el identificador de jugador de Riot (PUUID).</li>
-        <li><strong>Datos de partidas</strong> que ofrece la API oficial de Riot Games: tus partidas y, dentro de ellas, las estadísticas públicas de los demás jugadores tal como las publica Riot.</li>
-        <li><strong>Lo que genera el coach:</strong> los análisis de tus partidas, tus objetivos, lo que el coach recuerda (puedes desactivarlo por categorías) y el historial de recomendaciones.</li>
-        <li><strong>La app de escritorio conectada:</strong> su nombre, cuándo se conectó y cuándo se usó por última vez. Del código y del token solo guardamos una huella (hash), nunca el valor.</li>
-        <li><strong>Una cookie de sesión</strong> para mantenerte conectado (dura 30 días). No usamos cookies de publicidad ni de analítica, ni rastreadores de terceros.</li>
+        <li><strong>Your KOI Master account:</strong> a display name and your preferences (level of detail, what the coach may remember).</li>
+        <li><strong>Your linked Riot accounts:</strong> Riot ID, region and Riot's player identifier (PUUID).</li>
+        <li><strong>Match data</strong> provided by Riot Games' official API: your games and, within them, the other players' public statistics as Riot publishes them.</li>
+        <li><strong>What the coach produces:</strong> the analysis of your games, your goals, what the coach remembers (you can turn this off by category) and the recommendation history.</li>
+        <li><strong>The connected desktop app:</strong> its name, when it was connected and when it was last used. For the code and the token we only store a fingerprint (hash), never the value.</li>
+        <li><strong>A session cookie</strong> to keep you signed in (lasts 30 days). We use no advertising or analytics cookies, and no third-party trackers.</li>
       </ul>
 
-      <h2>Para qué</h2>
-      <p>Solo para darte el servicio: analizar tus partidas, enseñarte a tus rivales en la pantalla de carga y recordar tus preferencias. No vendemos ni cedemos datos y no mostramos publicidad.</p>
+      <h2>What for</h2>
+      <p>Only to provide the service: analyze your games, show you your opponents at the loading screen and remember your preferences. We do not sell or share data, and we show no ads.</p>
 
-      <h2>Quién más interviene</h2>
+      <h2>Who else is involved</h2>
       <ul>
-        <li><strong>Riot Games:</strong> de su API salen los datos de partidas. Las imágenes del juego (campeones, objetos, runas) las descarga tu navegador directamente de Data Dragon, el servicio de Riot, que por tanto recibe tu dirección IP.</li>
-        <li><strong>Render</strong> aloja la web y la base de datos en Fráncfort (Unión Europea).</li>
-        <li><strong>Anthropic</strong> (si las explicaciones con IA están activadas): recibe solo el texto de una conclusión ya calculada y sus cifras, para redactarla mejor. No recibe tu Riot ID, tu nombre ni tus partidas completas.</li>
+        <li><strong>Riot Games:</strong> match data comes from its API. Game images (champions, items, runes) are downloaded by your browser directly from Data Dragon, Riot's service, which therefore receives your IP address.</li>
+        <li><strong>Render</strong> hosts the website and the database in Frankfurt (European Union).</li>
+        <li><strong>Anthropic</strong> (if AI explanations are turned on): receives only the text of an already computed conclusion and its figures, to phrase it better. It does not receive your Riot ID, your name or your full games.</li>
       </ul>
 
-      <h2>Cuánto tiempo</h2>
+      <h2>How long</h2>
       <ul>
-        <li>Tus datos se guardan mientras tengas la cuenta.</li>
-        <li><strong>Ajustes → Borrar todos mis datos</strong> elimina al momento tu cuenta, tus cuentas de Riot vinculadas, tus análisis personales, objetivos, memoria, preferencias, apps conectadas y sesiones.</li>
-        <li>Al desvincular una cuenta de Riot se borra su historial en KOI Master.</li>
-        <li>Los datos de partidas que ya no usa ninguna cuenta vinculada (por ejemplo, las partidas de rivales consultadas en la pantalla de carga) se borran automáticamente a los 30 días.</li>
-        <li>Los códigos de conexión sin usar y las sesiones caducadas se borran solos.</li>
+        <li>Your data is kept while you have an account.</li>
+        <li><strong>Settings → Delete all my data</strong> immediately deletes your account, your linked Riot accounts, your personal analysis, goals, memory, preferences, connected apps and sessions.</li>
+        <li>Unlinking a Riot account deletes its history in KOI Master.</li>
+        <li>Match data no linked account uses any more (for example, opponents' games looked up at the loading screen) is deleted automatically after 30 days.</li>
+        <li>Unused connection codes and expired sessions are deleted automatically.</li>
       </ul>
 
-      <h2>La app de escritorio</h2>
+      <h2>The desktop app</h2>
       <p>
-        Durante la partida, la app solo lee los datos que el propio juego publica en tu ordenador (la Live Client Data API) y no los envía a ningún sitio.
-        Si la conectas a la web, pide la lista de tus rivales a tu cuenta de KOI Master con su token; puedes desconectarla desde Ajustes cuando quieras.
+        During a game, the app only reads the data the game itself publishes on your computer (the Live Client Data API) and does not send it anywhere.
+        If you connect it to the website, it asks your KOI Master account for your opponents' list with its token; you can disconnect it from Settings at any time.
       </p>
 
-      <h2>Tus derechos</h2>
+      <h2>Your rights</h2>
       <p>
-        Puedes acceder a tus datos, corregirlos, borrarlos, limitar su uso u oponerte a él, y pedir una copia. La mayoría lo puedes hacer tú desde Ajustes; para lo demás, usa el contacto.
-        Si vives en la Unión Europea, también puedes reclamar ante la autoridad de protección de datos de tu país.
+        You can access, correct and delete your data, restrict or object to its use, and ask for a copy. You can do most of it yourself from Settings; for anything else, use the contact page.
+        If you live in the European Union, you can also complain to your country's data protection authority.
       </p>
     </article>
   );

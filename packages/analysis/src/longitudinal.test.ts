@@ -31,7 +31,7 @@ describe("inflection points", () => {
     expect(inf).not.toBeNull();
     expect(inf.attribution).not.toBe("player");
     expect(inf.kind).toBe("hypothesis");
-    expect(inf.context.join(" ")).toMatch(/parche/);
+    expect(inf.context.join(" ")).toMatch(/patch/);
   });
 });
 
@@ -46,7 +46,7 @@ describe("anomalies", () => {
     const list = detectAnomalies(analyses({ patchSplitIndex: 0, traits: { csPerMin: 5, improvement: { fromIndex: 5, csPerMinDelta: 4 } } }));
     const cs = list.find((a) => a.metric === "csPerMin" && a.direction === "better");
     expect(cs?.verdict).toBe("possible_change");
-    expect(cs?.explanation).toMatch(/aún no está consolidado/);
+    expect(cs?.explanation).toMatch(/not consolidated yet/);
   });
 });
 

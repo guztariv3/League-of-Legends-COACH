@@ -2,14 +2,14 @@ import { api, type AdaptationContext } from "../api";
 import { ErrorNotice, Loading } from "./ui";
 import { useLoad } from "../session";
 
-const DATE = new Intl.DateTimeFormat("es-ES", { day: "numeric", month: "short", year: "numeric" });
+const DATE = new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short", year: "numeric" });
 const typeIcon = { inflection: "▲", champion_shift: "◆", patch: "•" } as const;
 const verdictLabel: Record<AdaptationContext["verdict"], string> = {
-  insufficient: "Posible falta de adaptación",
-  over: "Posible sobre-adaptación",
-  no_clear_difference: "Sin diferencias claras",
+  insufficient: "Possible under-adaptation",
+  over: "Possible over-adaptation",
+  no_clear_difference: "No clear difference",
 };
-const attributionLabel = { player: "Parece un cambio tuyo", environment_possible: "Puede deberse al entorno", unclear: "Origen poco claro" } as const;
+const attributionLabel = { player: "Looks like a change in you", environment_possible: "May be due to the environment", unclear: "Unclear origin" } as const;
 
 /** Evolution (brief §54, §81–83): consolidated changes, recent shifts and a compact timeline. */
 export function EvolutionSection() {
@@ -21,28 +21,28 @@ export function EvolutionSection() {
   return (
     <>
       <section className="card stack" aria-labelledby="h-evo" id="evolution">
-        <h2 id="h-evo">Tu evolución</h2>
+        <h2 id="h-evo">Your progress</h2>
         {data.inflections.length === 0 && shifts.length === 0 ? (
           <p className="page-sub" style={{ margin: 0 }}>
-            En tus {data.games} partidas no hay cambios consolidados. Eso es normal: los cambios reales tardan en distinguirse de la variación entre partidas.
+            There are no consolidated changes in your {data.games} games. That is normal: real changes take time to stand out from game-to-game variation.
           </p>
         ) : (
           <div className="stack">
             {data.inflections.map((inf) => (
               <article key={inf.metric} className="insight">
                 <div className="row" style={{ gap: 6 }}>
-                  <span className={`badge ${inf.direction === "improved" ? "badge-win" : "badge-loss"}`}>{inf.direction === "improved" ? "▲ Mejora" : "▼ Bajada"}</span>
+                  <span className={`badge ${inf.direction === "improved" ? "badge-win" : "badge-loss"}`}>{inf.direction === "improved" ? "▲ Improvement" : "▼ Decline"}</span>
                   <span className="badge badge-kind">{attributionLabel[inf.attribution]}</span>
                 </div>
                 <p className="insight-title" style={{ marginTop: 6 }}>
-                  {inf.label}: {inf.before.mean.toFixed(2)} → {inf.after.mean.toFixed(2)} desde el {DATE.format(inf.at)}
+                  {inf.label}: {inf.before.mean.toFixed(2)} → {inf.after.mean.toFixed(2)} since {DATE.format(inf.at)}
                 </p>
                 <p className="insight-detail">{inf.context.join(" ")}</p>
               </article>
             ))}
             {shifts.map((a) => (
               <article key={a.metric + a.direction} className="insight">
-                <span className="badge badge-kind">Observación reciente</span>
+                <span className="badge badge-kind">Recent observation</span>
                 <p className="insight-detail" style={{ marginTop: 6 }}>{a.explanation}</p>
               </article>
             ))}
@@ -50,7 +50,7 @@ export function EvolutionSection() {
         )}
         {data.timeline.length > 0 && (
           <details className="layer">
-            <summary>Ver línea temporal ({data.timeline.length})</summary>
+            <summary>See timeline ({data.timeline.length})</summary>
             <ol className="stack" style={{ listStyle: "none", margin: "8px 0 0", padding: 0, gap: 6 }}>
               {data.timeline.map((e, i) => (
                 <li key={i} className="row" style={{ alignItems: "baseline", gap: 8 }}>
@@ -63,14 +63,14 @@ export function EvolutionSection() {
           </details>
         )}
         <p className="tile-note" style={{ margin: 0 }}>
-          Un cambio solo aparece cuando supera con claridad la variación normal, y siempre comprobamos si coincide con un cambio de parche o de campeones.
+          A change only shows up when it clearly exceeds normal variation, and we always check whether it coincides with a patch or champion change.
         </p>
       </section>
 
       {(data.adaptation.byOpponentClass.length > 0 || data.adaptation.lead) && (
         <section className="card stack" aria-labelledby="h-adapt" id="adaptation">
-          <h2 id="h-adapt">Cómo te adaptas</h2>
-          <p className="tile-note" style={{ margin: 0 }}>Hipótesis a partir de tus resultados según el contexto; no sabemos qué intentabas hacer.</p>
+          <h2 id="h-adapt">How you adapt</h2>
+          <p className="tile-note" style={{ margin: 0 }}>Hypotheses from your results by context; we do not know what you were trying to do.</p>
           {(() => {
             const all = [...(data.adaptation.lead ? [data.adaptation.lead] : []), ...data.adaptation.byOpponentClass];
             const notable = all.filter((c) => c.verdict !== "no_clear_difference");
@@ -84,10 +84,10 @@ export function EvolutionSection() {
                 </div>
                 <span className="tile-note">{c.detail}</span>
                 <details className="layer">
-                  <summary>Ver datos</summary>
+                  <summary>See data</summary>
                   <dl>
                     {c.metrics.map((m) => (
-                      <div key={m.label} style={{ display: "contents" }}><dt>{m.label}</dt><dd>{m.here} (resto: {m.elsewhere})</dd></div>
+                      <div key={m.label} style={{ display: "contents" }}><dt>{m.label}</dt><dd>{m.here} (elsewhere: {m.elsewhere})</dd></div>
                     ))}
                   </dl>
                 </details>
@@ -96,12 +96,12 @@ export function EvolutionSection() {
             return (
               <>
                 {notable.length > 0 ? <div className="grid grid-2">{notable.map(card)}</div> : (
-                  <p style={{ margin: 0 }}>No detectamos diferencias claras en cómo juegas según el contexto ({quiet.length} contextos analizados).</p>
+                  <p style={{ margin: 0 }}>We see no clear difference in how you play by context ({quiet.length} contexts analyzed).</p>
                 )}
-                {quiet.length > 0 && notable.length > 0 && <p className="tile-note" style={{ margin: 0 }}>En {quiet.length} contextos más no hay diferencias claras.</p>}
+                {quiet.length > 0 && notable.length > 0 && <p className="tile-note" style={{ margin: 0 }}>{quiet.length} more contexts show no clear difference.</p>}
                 {quiet.length > 0 && (
                   <details className="layer">
-                    <summary>Ver contextos sin diferencias</summary>
+                    <summary>See contexts with no difference</summary>
                     <div className="grid grid-2" style={{ marginTop: 8 }}>{quiet.map(card)}</div>
                   </details>
                 )}
@@ -114,8 +114,8 @@ export function EvolutionSection() {
   );
 }
 
-const decisionLabel = { accepted: "Aceptado", rejected: "Rechazado", dismissed: "Marcado como no útil", none: "Consultado" } as const;
-const kindLabel = { goal_suggestion: "Objetivo sugerido", insight: "Conclusión del Coach", draft: "Preparación de partida" } as const;
+const decisionLabel = { accepted: "Accepted", rejected: "Rejected", dismissed: "Marked as not useful", none: "Viewed" } as const;
+const kindLabel = { goal_suggestion: "Suggested goal", insight: "Coach conclusion", draft: "Game prep" } as const;
 
 /** Recommendation → decision → what happened next (brief §40, §79). */
 export function DecisionHistory() {
@@ -124,10 +124,10 @@ export function DecisionHistory() {
   if (!data) return <Loading />;
   return (
     <details className="layer">
-      <summary>Historial de recomendaciones y decisiones ({data.items.length})</summary>
+      <summary>Recommendation and decision history ({data.items.length})</summary>
       <p className="tile-note">{data.note}</p>
       {data.items.length === 0 ? (
-        <p className="tile-note">Aún no hay decisiones registradas.</p>
+        <p className="tile-note">No decisions recorded yet.</p>
       ) : (
         <ul className="stack" style={{ listStyle: "none", margin: 0, padding: 0, gap: 6 }}>
           {data.items.map((i) => (
@@ -136,16 +136,16 @@ export function DecisionHistory() {
                 <span className="badge">{kindLabel[i.kind]}</span>
                 {i.decision && <span className="badge badge-kind">{decisionLabel[i.decision]}</span>}
                 <span className="spacer" />
-                <span className="tile-note">{new Date(i.createdAt).toLocaleDateString("es-ES")}</span>
+                <span className="tile-note">{new Date(i.createdAt).toLocaleDateString("en-US")}</span>
               </div>
               <span>{i.title}</span>
-              {i.outcome && <span className="tile-note">Después: {i.outcome}</span>}
+              {i.outcome && <span className="tile-note">Afterwards: {i.outcome}</span>}
             </li>
           ))}
         </ul>
       )}
       {data.items.length > 0 && (
-        <button className="btn btn-ghost" onClick={async () => { await api.clearHistory(); location.reload(); }}>Borrar historial</button>
+        <button className="btn btn-ghost" onClick={async () => { await api.clearHistory(); location.reload(); }}>Clear history</button>
       )}
     </details>
   );

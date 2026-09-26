@@ -32,7 +32,7 @@ async function player(name: string) {
   return cookie;
 }
 
-const claim = (code: string, ip = "10.0.0.1") => call("/desktop/claim", { method: "POST", ip, body: JSON.stringify({ code, label: "PC de prueba" }) });
+const claim = (code: string, ip = "10.0.0.1") => call("/desktop/claim", { method: "POST", ip, body: JSON.stringify({ code, label: "Test PC" }) });
 const scout = (token: string) => call("/desktop/scout", { headers: { Authorization: `Bearer ${token}` } });
 
 describe("desktop pairing", () => {
@@ -68,7 +68,7 @@ describe("desktop pairing", () => {
 
     const devices = await call("/desktop/devices", { cookie });
     expect(devices.body.devices).toHaveLength(1);
-    expect(devices.body.devices[0].label).toBe("PC de prueba");
+    expect(devices.body.devices[0].label).toBe("Test PC");
     expect(devices.body.devices[0].lastUsedAt).toBeTruthy();
 
     // Another player cannot revoke it.
@@ -107,7 +107,7 @@ describe("desktop pairing", () => {
 
     const none = await call("/desktop/build?champion=NoSuchChampion&mode=summoners_rift", { headers: auth });
     expect(none.body).toMatchObject({ games: 0, items: [] });
-    expect(none.body.note).toContain("Aún no tienes partidas");
+    expect(none.body.note).toContain("You have no games");
 
     expect((await call("/desktop/build?champion=../x&mode=summoners_rift", { headers: auth })).res.status).toBe(400);
     expect((await call(`/desktop/build?champion=${main}&mode=summoners_rift`)).res.status).toBe(401);

@@ -35,13 +35,13 @@ export function useArt(fromSite: Art | null): Art {
   return { cdn: version ? DDRAGON : null, version };
 }
 
-/** The official item and champion catalog (Spanish) for the current patch, from Data Dragon. */
+/** The official item and champion catalog (English) for the current patch, from Data Dragon. */
 export function useCatalog(art: Art): Catalog | null {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   useEffect(() => {
     if (!art.cdn || !art.version) return;
     let stopped = false;
-    const base = `${art.cdn}/cdn/${art.version}/data/es_ES`;
+    const base = `${art.cdn}/cdn/${art.version}/data/en_US`;
     Promise.all([fetch(`${base}/item.json`), fetch(`${base}/champion.json`)])
       .then(([i, c]) => (i.ok && c.ok ? Promise.all([i.json(), c.json()]) : Promise.reject(new Error("catalog"))))
       .then(([items, champs]) => { if (!stopped) setCatalog(parseCatalog(items, champs)); })
@@ -72,7 +72,7 @@ function Items({ ids, names, art }: { ids: number[]; names: Map<number, string>;
     <span className="items">
       {slots.map((id, i) => id === null
         ? <span key={`e${i}`} className="item item-empty" aria-hidden="true" />
-        : <ItemArt key={`${id}-${i}`} id={id} name={names.get(id) ?? `Objeto ${id}`} size={20} art={art} />)}
+        : <ItemArt key={`${id}-${i}`} id={id} name={names.get(id) ?? `Item ${id}`} size={20} art={art} />)}
     </span>
   );
 }
@@ -82,10 +82,10 @@ function PlayerRow({ p, names, art, me }: { p: PlayerState; names: Map<number, s
     <li className={`player${me ? " player-me" : ""}${p.isDead ? " player-dead" : ""}`}>
       <span className="player-art">
         <ChampArt id={p.championId} name={p.champion} size={32} art={art} />
-        <span className="player-level" aria-label={`Nivel ${p.level}`}>{p.level}</span>
+        <span className="player-level" aria-label={`Level ${p.level}`}>{p.level}</span>
       </span>
       <span className="player-main">
-        <span className="player-name" title={p.name}>{me ? "Tú" : p.name.split("#")[0] || p.champion}</span>
+        <span className="player-name" title={p.name}>{me ? "You" : p.name.split("#")[0] || p.champion}</span>
         <span className="player-kda">{p.champion} · {p.kills}/{p.deaths}/{p.assists} · {p.cs} CS</span>
       </span>
       <Items ids={p.items} names={names} art={art} />
@@ -108,9 +108,9 @@ function HowToBuy({ s, gold, art }: { s: Suggestion; gold: number | null; art: A
   return (
     <div className="howto">
       {steps.length > 0 && (
-        <div className="recipe" aria-label="Componentes">
+        <div className="recipe" aria-label="Components">
           {steps.map((c, i) => (
-            <span key={`${c.id}-${i}`} className={`piece${c.owned ? " piece-owned" : ""}`} title={`${c.name} · ${c.gold} de oro${c.owned ? " · ya lo tienes" : ""}`}>
+            <span key={`${c.id}-${i}`} className={`piece${c.owned ? " piece-owned" : ""}`} title={`${c.name} · ${c.gold} gold${c.owned ? " · you have it" : ""}`}>
               <ItemArt id={c.id} name={c.name} size={24} art={art} owned={c.owned} />
               {c.owned && <span className="tick" aria-hidden="true">✓</span>}
             </span>
@@ -118,11 +118,11 @@ function HowToBuy({ s, gold, art }: { s: Suggestion; gold: number | null; art: A
         </div>
       )}
       <p className="quiet">
-        {remaining === 0 ? "Ya tienes todas las piezas." : `Te faltan ${remaining} de oro en total.`}
+        {remaining === 0 ? "You have all the pieces." : `You need ${remaining} more gold in total.`}
         {gold !== null && affordableNow && (affordableNow.id === s.item.id
-          ? ` Con tus ${Math.floor(gold)} de oro ya alcanza para completarlo.`
-          : ` Con tus ${Math.floor(gold)} de oro alcanza para: ${affordableNow.name} (${affordableNow.gold}).`)}
-        {gold !== null && !affordableNow && remaining > 0 && ` Con tus ${Math.floor(gold)} de oro aún no alcanza para ninguna pieza.`}
+          ? ` Your ${Math.floor(gold)} gold is enough to complete it.`
+          : ` Your ${Math.floor(gold)} gold buys: ${affordableNow.name} (${affordableNow.gold}).`)}
+        {gold !== null && !affordableNow && remaining > 0 && ` Your ${Math.floor(gold)} gold is not enough for any piece yet.`}
       </p>
     </div>
   );
@@ -133,24 +133,24 @@ function ItemsTab({ state, catalog, build, art, connected, demo }: {
 }) {
   const me = state.me!;
   const previous = useRef<number | null>(null);
-  if (demo) return <p className="quiet">En la demostración los objetos son inventados, así que no hay sugerencias. En una partida real aquí verás el siguiente objeto sugerido y cómo comprarlo.</p>;
-  if (!catalog) return <p className="quiet">Cargando el catálogo de objetos del parche… (necesita conexión a Internet)</p>;
+  if (demo) return <p className="quiet">In the demo the items are made up, so there are no suggestions. In a real game you will see your next suggested item here and how to buy it.</p>;
+  if (!catalog) return <p className="quiet">Loading the patch item catalog… (needs an Internet connection)</p>;
   const usual = build && build !== "loading" ? build.items.map((i) => i.id) : [];
   const s = suggestItems({ catalog, map: state.map, gold: state.gold, me, enemies: state.enemies, usual, previous: previous.current });
   previous.current = s.next?.item.id ?? null;
-  const price = (x: Suggestion) => `${x.item.gold} de oro`;
+  const price = (x: Suggestion) => `${x.item.gold} gold`;
   return (
     <div className="suggest">
       <p className="quiet enemy-line">
-        Daño rival: {Math.round(s.enemy.magicShare * 100)}% mágico · {100 - Math.round(s.enemy.magicShare * 100)}% físico
-        {s.enemy.healers.length > 0 && ` · se curan: ${s.enemy.healers.join(", ")}`}
+        Enemy damage: {Math.round(s.enemy.magicShare * 100)}% magic · {100 - Math.round(s.enemy.magicShare * 100)}% physical
+        {s.enemy.healers.length > 0 && ` · healing: ${s.enemy.healers.join(", ")}`}
       </p>
       {s.next ? (
-        <section className="next" aria-label="Siguiente objeto sugerido">
+        <section className="next" aria-label="Next suggested item">
           <div className="next-head">
             <ItemArt id={s.next.item.id} name={s.next.item.name} size={44} art={art} />
             <div>
-              <div className="label">Siguiente objeto sugerido</div>
+              <div className="label">Next suggested item</div>
               <div className="next-name">{s.next.item.name}</div>
               <div className="quiet">{price(s.next)}</div>
             </div>
@@ -162,22 +162,22 @@ function ItemsTab({ state, catalog, build, art, connected, demo }: {
         <p className="quiet">{s.note}</p>
       )}
       {s.boots && (
-        <section className="alt" aria-label="Botas sugeridas">
+        <section className="alt" aria-label="Suggested boots">
           <ItemArt id={s.boots.item.id} name={s.boots.item.name} size={32} art={art} />
-          <div><div className="label">Botas</div><div className="alt-name">{s.boots.item.name}</div><div className="quiet">{s.boots.reasons[0]}</div></div>
+          <div><div className="label">Boots</div><div className="alt-name">{s.boots.item.name}</div><div className="quiet">{s.boots.reasons[0]}</div></div>
         </section>
       )}
       {s.alternatives.map((a) => (
-        <section key={a.item.id} className="alt" aria-label={`Alternativa: ${a.item.name}`}>
+        <section key={a.item.id} className="alt" aria-label={`Alternative: ${a.item.name}`}>
           <ItemArt id={a.item.id} name={a.item.name} size={32} art={art} />
-          <div><div className="label">Alternativa</div><div className="alt-name">{a.item.name}</div><div className="quiet">{a.reasons.at(-1)}</div></div>
+          <div><div className="label">Alternative</div><div className="alt-name">{a.item.name}</div><div className="quiet">{a.reasons.at(-1)}</div></div>
         </section>
       ))}
-      <p className="quiet small">Sugerencias calculadas con los objetos y el marcador de esta partida y los datos oficiales de cada objeto. Tú decides.</p>
+      <p className="quiet small">Suggestions computed from this game's items and scoreboard and each item's official data. You decide.</p>
       {connected && build && build !== "loading" && build.items.length > 0 && (
         <details className="history">
-          <summary>Tu historial con {me.champion} ({build.games} partidas)</summary>
-          <ul>{build.items.map((i) => <li key={i.id}><ItemArt id={i.id} name={i.name} size={20} art={art} /> {i.name} · {i.games}/{build.games} partidas · {Math.round((i.wins / i.games) * 100)}% V</li>)}</ul>
+          <summary>Your history on {me.champion} ({build.games} games)</summary>
+          <ul>{build.items.map((i) => <li key={i.id}><ItemArt id={i.id} name={i.name} size={20} art={art} /> {i.name} · {i.games}/{build.games} games · {Math.round((i.wins / i.games) * 100)}% W</li>)}</ul>
         </details>
       )}
     </div>
@@ -192,9 +192,9 @@ export function Board({ state, names, art, catalog, build, connected, demo = fal
 }) {
   const [tab, setTab] = useState<Tab>("items");
   if (!state.me) return null;
-  const tabs: [Tab, string][] = [["items", "Objetos"], ["rivals", "Rivales"], ["team", "Tu equipo"]];
+  const tabs: [Tab, string][] = [["items", "Items"], ["rivals", "Enemies"], ["team", "Your team"]];
   return (
-    <section className="board" aria-label="Partida">
+    <section className="board" aria-label="Game">
       <div className="tabs" role="tablist">
         {tabs.map(([k, label]) => (
           <button key={k} role="tab" aria-selected={tab === k} className="tab" onClick={() => setTab(k)}>{label}</button>

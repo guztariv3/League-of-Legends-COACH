@@ -42,26 +42,26 @@ function Layout() {
 
   return (
     <>
-      <a href="#main" className="visually-hidden">Saltar al contenido</a>
+      <a href="#main" className="visually-hidden">Skip to content</a>
       <div className="shell">
         <header className="topbar">
-          <Link to="/" className="brand" aria-label="KOI Master, inicio">
+          <Link to="/" className="brand" aria-label="KOI Master, home">
             <span style={{ width: 28, height: 28, display: "inline-flex" }}><CoachAvatar quiet /></span>
             KOI MASTER
           </Link>
-          <nav className="nav" aria-label="Principal">
-            <NavLink to="/" end>Inicio</NavLink>
-            <NavLink to="/matches">Partidas</NavLink>
-            <NavLink to="/champions">Campeones</NavLink>
-            <NavLink to="/game">Antes de jugar</NavLink>
-            <NavLink to="/profile">Perfil</NavLink>
+          <nav className="nav" aria-label="Main">
+            <NavLink to="/" end>Home</NavLink>
+            <NavLink to="/matches">Matches</NavLink>
+            <NavLink to="/champions">Champions</NavLink>
+            <NavLink to="/game">Pre-game</NavLink>
+            <NavLink to="/profile">Profile</NavLink>
           </nav>
           <SearchBox />
-          <NavLink to="/settings" className="profile" aria-label="Ajustes y cuenta">
+          <NavLink to="/settings" className="profile" aria-label="Settings and account">
             {lastChampion ? <ChampionIcon champion={lastChampion} size={40} className="portrait" /> : <span className="profile-empty" aria-hidden="true" />}
             <span className="profile-text">
               <span className="profile-name">{me?.accounts[0]?.riotId.split("#")[0] ?? me?.user.displayName}</span>
-              <span className="profile-sub">Ajustes</span>
+              <span className="profile-sub">Settings</span>
             </span>
           </NavLink>
         </header>

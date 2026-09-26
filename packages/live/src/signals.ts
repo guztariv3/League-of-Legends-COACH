@@ -32,10 +32,10 @@ export interface SignalConfig {
 export const DEFAULT_SIGNAL_CONFIG: SignalConfig = { bigItemGold: 2200, spikeLevels: [6, 11, 16] };
 
 const OBJECTIVES: Record<string, string> = {
-  DragonKill: "un dragón",
-  BaronKill: "el Barón Nashor",
-  HeraldKill: "el Heraldo",
-  InhibKilled: "un inhibidor",
+  DragonKill: "a dragon",
+  BaronKill: "Baron Nashor",
+  HeraldKill: "the Rift Herald",
+  InhibKilled: "an inhibitor",
 };
 
 function bigItems(items: number[], cfg: SignalConfig): number[] {
@@ -61,12 +61,12 @@ export function detectSignals(prev: GameState, next: GameState, cfg: SignalConfi
   if (before) {
     for (const lvl of cfg.spikeLevels) {
       if (before.level < lvl && me.level >= lvl) {
-        out.push({ key: `own-level-${lvl}`, category: "own_level_spike", priority: lvl === 6 ? "important" : "info", text: `Has llegado a nivel ${lvl}: tu definitiva ${lvl === 6 ? "ya está disponible" : "sube de rango"}.`, at });
+        out.push({ key: `own-level-${lvl}`, category: "own_level_spike", priority: lvl === 6 ? "important" : "info", text: `You reached level ${lvl}: your ultimate ${lvl === 6 ? "is now available" : "ranks up"}.`, at });
       }
     }
     const newBig = bigItems(me.items, cfg).filter((id) => !before.items.includes(id));
     for (const id of newBig) {
-      out.push({ key: `own-item-${id}`, category: "own_item_spike", priority: "important", text: `Has completado ${cfg.itemNames?.get(id) ?? "un objeto importante"}: es un pico de poder.`, at });
+      out.push({ key: `own-item-${id}`, category: "own_item_spike", priority: "important", text: `You completed ${cfg.itemNames?.get(id) ?? "a major item"}: that is a power spike.`, at });
     }
   }
 
@@ -77,17 +77,17 @@ export function detectSignals(prev: GameState, next: GameState, cfg: SignalConfi
     const lead = itemLeader(next, cfg);
     const leadBefore = itemLeader(prev, cfg);
     if (lead && (lead.champion !== leadBefore?.champion || lead.count > leadBefore.count)) {
-      out.push({ key: `enemy-leader-${lead.champion}-${lead.count}`, category: "enemy_item_spike", priority: "important", text: `${lead.champion} es el rival con más objetos grandes completados (${lead.count}).`, at });
+      out.push({ key: `enemy-leader-${lead.champion}-${lead.count}`, category: "enemy_item_spike", priority: "important", text: `${lead.champion} is the enemy with the most completed major items (${lead.count}).`, at });
     }
   }
   const oppBefore = opp ? prev.enemies.find((e) => e.name === opp.name && e.champion === opp.champion) : undefined;
   if (opp && oppBefore) {
     if (oppBefore.level < 6 && opp.level >= 6) {
-      out.push({ key: `enemy-level-6-${opp.champion}`, category: "enemy_level_spike", priority: "important", text: `${opp.champion} ha llegado a nivel 6.`, at });
+      out.push({ key: `enemy-level-6-${opp.champion}`, category: "enemy_level_spike", priority: "important", text: `${opp.champion} reached level 6.`, at });
     }
     const newBig = bigItems(opp.items, cfg).filter((id) => !oppBefore.items.includes(id));
     for (const id of newBig) {
-      out.push({ key: `enemy-item-${opp.champion}-${id}`, category: "enemy_item_spike", priority: "important", text: `${opp.champion} ha completado ${cfg.itemNames?.get(id) ?? "un objeto importante"}.`, at });
+      out.push({ key: `enemy-item-${opp.champion}-${id}`, category: "enemy_item_spike", priority: "important", text: `${opp.champion} completed ${cfg.itemNames?.get(id) ?? "a major item"}.`, at });
     }
   }
 
@@ -98,9 +98,9 @@ export function detectSignals(prev: GameState, next: GameState, cfg: SignalConfi
     if (!what) continue;
     const killer = String((e as Record<string, unknown>)["KillerName"] ?? "");
     const allyNames = new Set([me.name, ...next.allies.map((a) => a.name)]);
-    const side = killer ? (allyNames.has(killer) ? "Tu equipo" : "El equipo rival") : null;
+    const side = killer ? (allyNames.has(killer) ? "Your team" : "The enemy team") : null;
     // Stamped with the event's own time, so objectives from before the Coach started are dropped as stale.
-    out.push({ key: `obj-${e.EventID}`, category: "objective_taken", priority: "info", text: side ? `${side} ha conseguido ${what}.` : `Se ha conseguido ${what}.`, at: e.EventTime });
+    out.push({ key: `obj-${e.EventID}`, category: "objective_taken", priority: "info", text: side ? `${side} took ${what}.` : `Someone took ${what}.`, at: e.EventTime });
   }
 
   // Focus progress (the player's own goal), every 5 minutes from minute 10
@@ -112,7 +112,7 @@ export function detectSignals(prev: GameState, next: GameState, cfg: SignalConfi
         key: `focus-cs-${mark}`,
         category: "goal_progress",
         priority: "info",
-        text: `Tu CS por minuto: ${cspm.toFixed(1)}${cfg.focusTarget ? ` (tu objetivo: ${cfg.focusTarget})` : ""}.`,
+        text: `Your CS per minute: ${cspm.toFixed(1)}${cfg.focusTarget ? ` (your goal: ${cfg.focusTarget})` : ""}.`,
         at,
       });
     }

@@ -7,8 +7,8 @@ const insight: Insight = {
   kind: "observation",
   priority: "important",
   confidence: 0.7,
-  title: "Mueres 2 o más veces antes del minuto 14 en 12 de 30 partidas",
-  detail: "En esas partidas perdiste el 67%; en el resto, el 44%.",
+  title: "You die 2+ times before minute 14 in 12 of 30 games",
+  detail: "You lost 67% of those games, versus 44% of the rest.",
   evidence: [{ label: "Partidas con timeline (SR)", value: "30" }],
   sampleSize: 30,
   matchIds: [],
@@ -36,7 +36,7 @@ describe("integrity guard", () => {
 });
 
 describe("explainInsight", () => {
-  const req = { insight, level: "intermediate" as const, language: "es" as const };
+  const req = { insight, level: "intermediate" as const, language: "en" as const };
 
   it("falls back to deterministic text with no providers", async () => {
     const r = await explainInsight([], req);
@@ -45,7 +45,7 @@ describe("explainInsight", () => {
   });
 
   it("uses the next provider when one fails, and rejects hallucinated numbers", async () => {
-    const r = await explainInsight([provider(new Error("down")), provider("Tienes 99 muertes."), provider("En 12 de 30 partidas mueres antes del 14.")], req);
-    expect(r).toMatchObject({ source: "ai", text: "En 12 de 30 partidas mueres antes del 14." });
+    const r = await explainInsight([provider(new Error("down")), provider("You have 99 deaths."), provider("In 12 of 30 games you die 2+ times before minute 14.")], req);
+    expect(r).toMatchObject({ source: "ai", text: "In 12 of 30 games you die 2+ times before minute 14." });
   });
 });

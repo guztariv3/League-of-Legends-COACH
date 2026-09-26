@@ -23,12 +23,12 @@ export interface MetricDef {
 }
 
 export const GOAL_METRICS: Record<GoalMetric, MetricDef> = {
-  earlyDeaths: { label: "Muertes antes del minuto 14", unit: ["muerte", "muertes"], higherIsBetter: false, modes: ["summoners_rift"], step: 1, extract: (a) => a.earlyDeaths },
-  csPerMin: { label: "CS por minuto", unit: ["CS/min", "CS/min"], higherIsBetter: true, modes: ["summoners_rift"], step: 0.5, extract: (a) => (a.role === "UTILITY" ? null : a.csPerMin) },
-  deathsPerMin: { label: "Muertes por minuto", unit: ["muertes/min", "muertes/min"], higherIsBetter: false, modes: ["summoners_rift", "aram"], step: 0.05, extract: (a) => a.deathsPerMin },
-  goldDiff10: { label: "Oro frente a tu rival al minuto 10", unit: ["de oro", "de oro"], higherIsBetter: true, modes: ["summoners_rift"], step: 100, extract: (a) => a.goldDiff10 },
-  visionPerMin: { label: "Visión por minuto", unit: ["visión/min", "visión/min"], higherIsBetter: true, modes: ["summoners_rift"], step: 0.1, extract: (a) => a.visionPerMin },
-  killParticipation: { label: "Participación en kills", unit: ["", ""], higherIsBetter: true, modes: ["summoners_rift", "aram"], step: 0.05, extract: (a) => a.killParticipation },
+  earlyDeaths: { label: "Deaths before minute 14", unit: ["death", "deaths"], higherIsBetter: false, modes: ["summoners_rift"], step: 1, extract: (a) => a.earlyDeaths },
+  csPerMin: { label: "CS per minute", unit: ["CS/min", "CS/min"], higherIsBetter: true, modes: ["summoners_rift"], step: 0.5, extract: (a) => (a.role === "UTILITY" ? null : a.csPerMin) },
+  deathsPerMin: { label: "Deaths per minute", unit: ["deaths/min", "deaths/min"], higherIsBetter: false, modes: ["summoners_rift", "aram"], step: 0.05, extract: (a) => a.deathsPerMin },
+  goldDiff10: { label: "Gold vs your lane opponent at minute 10", unit: ["gold", "gold"], higherIsBetter: true, modes: ["summoners_rift"], step: 100, extract: (a) => a.goldDiff10 },
+  visionPerMin: { label: "Vision per minute", unit: ["vision/min", "vision/min"], higherIsBetter: true, modes: ["summoners_rift"], step: 0.1, extract: (a) => a.visionPerMin },
+  killParticipation: { label: "Kill participation", unit: ["", ""], higherIsBetter: true, modes: ["summoners_rift", "aram"], step: 0.05, extract: (a) => a.killParticipation },
 };
 
 export const MAX_ACTIVE_GOALS = 3;
@@ -52,7 +52,7 @@ export function describeTarget(spec: GoalSpec): string {
   const def = GOAL_METRICS[spec.metric];
   const n = +spec.target.toFixed(2);
   const value = spec.metric === "killParticipation" ? `${Math.round(spec.target * 100)}%` : `${n} ${def.unit[n === 1 ? 0 : 1]}`.trim();
-  return `${def.label}: ${def.higherIsBetter ? "al menos" : "como mucho"} ${value}`;
+  return `${def.label}: ${def.higherIsBetter ? "at least" : "at most"} ${value}`;
 }
 
 function roundTo(x: number, step: number): number {
@@ -103,12 +103,12 @@ export function evaluateGoal(spec: GoalSpec, baselineRate: number, since: MatchA
   const base = `${Math.round(baselineRate * 100)}%`;
   const summary =
     n === 0
-      ? "Aún no hay partidas desde que aceptaste este objetivo."
+      ? "No games yet since you accepted this goal."
       : consolidated
-        ? `Lo cumples en ${met} de ${n} partidas, claramente por encima de tu ${base} anterior. Parece un hábito consolidado.`
+        ? `You meet it in ${met} of ${n} games, clearly above your previous ${base}. It looks like a consolidated habit.`
         : n < MIN_GAMES_FOR_CONSOLIDATION
-          ? `Lo cumples en ${met} de ${n} partidas (antes: ${base}). Hacen falta al menos ${MIN_GAMES_FOR_CONSOLIDATION} partidas para saber si es un cambio real.`
-          : `Lo cumples en ${met} de ${n} partidas (antes: ${base}). Todavía no se distingue de la variación normal.`;
+          ? `You meet it in ${met} of ${n} games (before: ${base}). It takes at least ${MIN_GAMES_FOR_CONSOLIDATION} games to know whether the change is real.`
+          : `You meet it in ${met} of ${n} games (before: ${base}). It cannot be told apart from normal variation yet.`;
   return { games: n, met, rate, interval, baselineRate, status, summary };
 }
 
@@ -142,7 +142,7 @@ export function suggestGoals(
       metric: i.metric,
       target: proposal.spec.target,
       title: describeTarget(proposal.spec),
-      reason: `Basado en: “${i.title}”. El objetivo es el nivel que ya alcanzas en tu mejor cuarta parte de partidas (ahora lo cumples en el ${Math.round(proposal.baselineRate * 100)}%).`,
+      reason: `Based on: “${i.title}”. The target is the level you already reach in your best quarter of games (you meet it ${Math.round(proposal.baselineRate * 100)}% of the time now).`,
       baselineRate: proposal.baselineRate,
       sourceInsightId: i.id,
     });

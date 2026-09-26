@@ -93,29 +93,29 @@ const earlyDeaths: Detector = (_ctx, usable) => {
   const scope = patternScope(withTl, (a) => (a.earlyDeaths === null ? null : a.earlyDeaths >= 2));
   const scopeText =
     scope.scope === "champion"
-      ? ` Se concentra sobre todo en ${scope.champion}; con tus otros campeones ocurre bastante menos.`
+      ? ` It is concentrated on ${scope.champion}; it happens much less with your other champions.`
       : scope.scope === "global"
-        ? " Ocurre con varios de tus campeones, así que parece un hábito general más que algo del campeón."
+        ? " It happens across several of your champions, so it looks like a general habit rather than something about one champion."
         : "";
   return {
     id: "early-deaths",
     kind: "observation",
     title:
       scope.scope === "champion"
-        ? `Con ${scope.champion} mueres 2 o más veces antes del minuto 14 mucho más que con el resto`
-        : `Mueres 2 o más veces antes del minuto 14 en ${heavy.length} de ${withTl.length} partidas`,
+        ? `On ${scope.champion} you die 2+ times before minute 14 much more often than on other champions`
+        : `You die 2+ times before minute 14 in ${heavy.length} of ${withTl.length} games`,
     detail:
-      `En esas partidas perdiste el ${pct(lossRateHeavy)}; en el resto, el ${pct(lossRateLight)}. ` +
-      "Es una correlación, no prueba que las muertes causen la derrota, pero merece revisarlo." +
+      `You lost ${pct(lossRateHeavy)} of those games, versus ${pct(lossRateLight)} of the rest. ` +
+      "This is a correlation, not proof that those deaths cause the losses, but it is worth reviewing." +
       scopeText,
     evidence: [
-      { label: "Partidas con timeline (SR)", value: String(withTl.length) },
-      { label: "Con 2+ muertes antes del 14", value: String(heavy.length) },
-      { label: "Media de muertes tempranas", value: fmt(mean(withTl.map((a) => a.earlyDeaths ?? 0))) },
-      ...scope.perChampion.slice(0, 3).map((c) => ({ label: c.championName, value: `${c.hits} de ${c.games}` })),
+      { label: "Games with timeline (SR)", value: String(withTl.length) },
+      { label: "With 2+ deaths before 14:00", value: String(heavy.length) },
+      { label: "Average early deaths", value: fmt(mean(withTl.map((a) => a.earlyDeaths ?? 0))) },
+      ...scope.perChampion.slice(0, 3).map((c) => ({ label: c.championName, value: `${c.hits} of ${c.games}` })),
     ],
     metric: "earlyDeaths",
-    review: "Abre esas partidas y mira las muertes antes del 14: qué información tenías del jungla rival y cuánta vida y recursos te quedaban.",
+    review: "Open those games and look at the deaths before 14:00: what you knew about the enemy jungler, and how much health and resources you had left.",
     sampleSize: withTl.length,
     matchIds: heavy.map((a) => a.matchId),
     impact: 0.8,
@@ -128,7 +128,7 @@ const earlyDeaths: Detector = (_ctx, usable) => {
  * §54, §71). This replaces the older "last 10 vs rest" trend detectors, which
  * used a weaker test.
  */
-const DATE = new Intl.DateTimeFormat("es-ES", { day: "numeric", month: "short" });
+const DATE = new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short" });
 
 const consolidatedChange: Detector = (_ctx, usable) => {
   const inf = findInflections(usable)[0];
@@ -138,12 +138,12 @@ const consolidatedChange: Detector = (_ctx, usable) => {
   return {
     id: `change-${inf.metric}`,
     kind: inf.kind,
-    title: `Tu ${inf.label} ${inf.direction === "improved" ? "ha mejorado" : "ha bajado"} de forma consolidada desde el ${DATE.format(inf.at)}`,
-    detail: `De ${f(inf.before.mean)} a ${f(inf.after.mean)}. ${inf.context.join(" ")}`,
+    title: `Your ${inf.label} has ${inf.direction === "improved" ? "improved" : "dropped"} consistently since ${DATE.format(inf.at)}`,
+    detail: `From ${f(inf.before.mean)} to ${f(inf.after.mean)}. ${inf.context.join(" ")}`,
     evidence: [
-      { label: "Antes", value: `${f(inf.before.mean)} (${inf.before.n} partidas)` },
-      { label: "Después", value: `${f(inf.after.mean)} (${inf.after.n} partidas)` },
-      ...(inf.sameChampion ? [{ label: `Solo con ${inf.sameChampion.champion}`, value: `${f(inf.sameChampion.before)} → ${f(inf.sameChampion.after)}` }] : []),
+      { label: "Before", value: `${f(inf.before.mean)} (${inf.before.n} games)` },
+      { label: "After", value: `${f(inf.after.mean)} (${inf.after.n} games)` },
+      ...(inf.sameChampion ? [{ label: `On ${inf.sameChampion.champion} only`, value: `${f(inf.sameChampion.before)} → ${f(inf.sameChampion.after)}` }] : []),
     ],
     sampleSize: inf.before.n + inf.after.n,
     matchIds: [],
@@ -160,9 +160,9 @@ const recentShift: Detector = (_ctx, usable) => {
   return {
     id: `shift-${a.metric}-${a.direction}`,
     kind: "observation",
-    title: `Tus últimas partidas se salen de lo habitual en ${a.label} (${a.direction === "better" ? "para bien" : "para mal"})`,
+    title: `Your latest games are outside your usual range in ${a.label} (${a.direction === "better" ? "for the better" : "for the worse"})`,
     detail: a.explanation,
-    evidence: [{ label: "Tu valor habitual (mediana)", value: a.baseline.toFixed(2) }, { label: "Partidas afectadas", value: `${a.count} de 5` }],
+    evidence: [{ label: "Your usual value (median)", value: a.baseline.toFixed(2) }, { label: "Games affected", value: `${a.count} of 5` }],
     sampleSize: a.count,
     matchIds: a.matchIds,
     impact: a.direction === "worse" ? 0.6 : 0.45,
@@ -180,17 +180,17 @@ const lostLeads: Detector = (_ctx, usable) => {
   return {
     id: "lost-leads",
     kind: "fact",
-    title: `Has perdido ${lost.length} de ${ahead.length} partidas en las que tu equipo iba por delante al minuto 15`,
-    detail: "Ir por delante al 15 significa una ventaja de oro del equipo de al menos 1500. Revisar qué pasó después puede enseñar mucho.",
+    title: `You lost ${lost.length} of ${ahead.length} games where your team was ahead at minute 15`,
+    detail: "Ahead at 15:00 means a team gold lead of at least 1,500. Reviewing what happened next can teach a lot.",
     evidence: [
-      { label: "Partidas por delante al 15", value: String(ahead.length) },
-      { label: "Perdidas", value: String(lost.length) },
+      { label: "Games ahead at 15:00", value: String(ahead.length) },
+      { label: "Lost", value: String(lost.length) },
     ],
     sampleSize: ahead.length,
     matchIds: lost.map((a) => a.matchId),
     impact: 0.7,
     completeness: 1,
-    review: "En esas partidas, fíjate en tus muertes a partir del 15 y en qué objetivos se perdieron justo después.",
+    review: "In those games, look at your deaths after 15:00 and which objectives were lost right after.",
   };
 };
 
@@ -205,19 +205,19 @@ const lateDeathsWhenAhead: Detector = (_ctx, usable) => {
   return {
     id: "late-deaths-ahead",
     kind: "observation",
-    title: "Cuando tu equipo va por delante, mueres más a partir del minuto 15 que en partidas igualadas",
-    detail: `${fmt(cmp.a, 2)} muertes por minuto por delante frente a ${fmt(cmp.b, 2)} en partidas igualadas. Puede ser una forma de arriesgar de más con ventaja, aunque también influyen el campeón y la partida.`,
+    title: "When your team is ahead, you die more after minute 15 than in even games",
+    detail: `${fmt(cmp.a, 2)} deaths per minute when ahead versus ${fmt(cmp.b, 2)} in even games. It may be taking too many risks with a lead, though the champion and the game also play a part.`,
     evidence: [
-      { label: "Por delante (muertes/min tras el 15)", value: fmt(cmp.a, 2) },
-      { label: "Igualadas (muertes/min tras el 15)", value: fmt(cmp.b, 2) },
-      { label: "Partidas por delante / igualadas", value: `${ahead.length} / ${even.length}` },
+      { label: "Ahead (deaths/min after 15:00)", value: fmt(cmp.a, 2) },
+      { label: "Even (deaths/min after 15:00)", value: fmt(cmp.b, 2) },
+      { label: "Games ahead / even", value: `${ahead.length} / ${even.length}` },
     ],
     sampleSize: ahead.length + even.length,
     matchIds: [],
     impact: 0.65,
     completeness: 1,
     metric: "deathsPerMin",
-    review: "Busca en esas partidas las muertes tras el 15: ¿estabas lejos de tu equipo o sin visión?",
+    review: "Look for the deaths after 15:00 in those games: were you far from your team, or without vision?",
   };
 };
 
@@ -230,9 +230,9 @@ const championPool: Detector = (_ctx, usable) => {
   return {
     id: "champion-pool",
     kind: "fact",
-    title: `Tus 3 campeones más jugados suman el ${pct(topShare)} de tus partidas`,
+    title: `Your 3 most played champions make up ${pct(topShare)} of your games`,
     detail: top.map(([c, n]) => `${c} (${n})`).join(", "),
-    evidence: top.map(([c, n]) => ({ label: c, value: `${n} partidas` })),
+    evidence: top.map(([c, n]) => ({ label: c, value: `${n} games` })),
     sampleSize: usable.length,
     matchIds: [],
     impact: 0.3,
@@ -302,13 +302,13 @@ export function generateInsights(ctx: InsightContext, opts: InsightOptions = {})
 /** One short, deterministic line for a single match in the Match Center. */
 export function matchHeadline(a: MatchAnalysis, averages: { deathsPerMin: number; kda: number }): string | null {
   if (!a.analyzable) return null;
-  if (a.earlyDeaths !== null && a.earlyDeaths >= 3) return `${a.earlyDeaths} muertes antes del minuto 14`;
+  if (a.earlyDeaths !== null && a.earlyDeaths >= 3) return `${a.earlyDeaths} deaths before minute 14`;
   if (a.goldDiff15 !== null && Math.abs(a.goldDiff15) >= 1500) {
     return a.goldDiff15 > 0
-      ? `+${Math.round(a.goldDiff15)} de oro sobre tu rival de línea al 15`
-      : `${Math.round(a.goldDiff15)} de oro frente a tu rival de línea al 15`;
+      ? `+${Math.round(a.goldDiff15)} gold over your lane opponent at 15:00`
+      : `${Math.round(a.goldDiff15)} gold versus your lane opponent at 15:00`;
   }
-  if (averages.kda > 0 && a.kda >= averages.kda * 1.8 && a.kda >= 4) return "Uno de tus mejores KDA recientes";
-  if (averages.deathsPerMin > 0 && a.deathsPerMin >= averages.deathsPerMin * 1.8) return "Muchas más muertes de lo habitual en ti";
+  if (averages.kda > 0 && a.kda >= averages.kda * 1.8 && a.kda >= 4) return "One of your best recent KDAs";
+  if (averages.deathsPerMin > 0 && a.deathsPerMin >= averages.deathsPerMin * 1.8) return "Many more deaths than usual for you";
   return null;
 }

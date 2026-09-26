@@ -25,7 +25,7 @@ export function evolutionRoutes({ db, knowledge, services }: { db: Db; knowledge
     // Goals marked as achieved also belong to the player's evolution.
     const achieved = await db.select().from(schema.goals).where(eq(schema.goals.userId, userId));
     for (const g of achieved.filter((x) => x.status === "achieved" && x.closedAt)) {
-      timeline.push({ at: g.closedAt!.getTime(), type: "inflection", title: `Objetivo conseguido: ${describeTarget({ metric: g.metric as GoalMetric, target: g.target })}`, detail: "Marcado como conseguido tras consolidarse." });
+      timeline.push({ at: g.closedAt!.getTime(), type: "inflection", title: `Goal achieved: ${describeTarget({ metric: g.metric as GoalMetric, target: g.target })}`, detail: "Marked as achieved once it consolidated." });
     }
     timeline.sort((a, b) => a.at - b.at);
     const tags = new Map((knowledge.active()?.champions ?? []).map((ch) => [ch.id, ch.tags]));
@@ -47,15 +47,15 @@ export function evolutionRoutes({ db, knowledge, services }: { db: Db; knowledge
     const goals = new Map((await db.select().from(schema.goals).where(eq(schema.goals.userId, userId))).map((g) => [g.id, g]));
     const { analyses } = await services.profileAnalyses(userId);
     return c.json({
-      note: "Mostramos lo que pasó después, pero eso no demuestra que la recomendación lo causara.",
+      note: "We show what happened afterwards, but that does not prove the recommendation caused it.",
       items: rows.map((r) => {
         let outcome: string | null = null;
         if (r.kind === "goal_suggestion" && r.decision === "accepted" && r.ref) {
           const g = goals.get(r.ref);
           if (g) {
             const progress = evaluateGoal({ metric: g.metric as GoalMetric, target: g.target }, g.baselineRate, analyses.filter((a) => a.startedAt >= g.createdAt.getTime()));
-            outcome = `${g.status === "achieved" ? "Conseguido. " : g.status === "archived" ? "Archivado. " : ""}${progress.summary}`;
-          } else outcome = "El objetivo ya no existe.";
+            outcome = `${g.status === "achieved" ? "Achieved. " : g.status === "archived" ? "Archived. " : ""}${progress.summary}`;
+          } else outcome = "The goal no longer exists.";
         }
         return { id: r.id, kind: r.kind, title: r.title, decision: r.decision, createdAt: r.createdAt, outcome };
       }),

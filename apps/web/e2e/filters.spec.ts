@@ -4,15 +4,15 @@ import { expect, test } from "@playwright/test";
 test("match filters changed in the same tick are both kept", async ({ page }, info) => {
   const player = `Filters${info.project.name}`;
   await page.goto("/");
-  await page.getByLabel("Tu nombre").fill(player);
-  await page.getByRole("button", { name: "Entrar" }).click();
+  await page.getByLabel("Your name").fill(player);
+  await page.getByRole("button", { name: "Sign in" }).click();
   await page.getByLabel("Riot ID").fill(`${player}#EUW`);
-  await page.getByLabel("Región").selectOption("euw1");
-  await page.getByRole("button", { name: "Vincular y analizar" }).click();
-  await expect(page.getByText(/Basado en \d+ partidas analizables/)).toBeVisible({ timeout: 30_000 });
+  await page.getByLabel("Region").selectOption("euw1");
+  await page.getByRole("button", { name: "Link and analyze" }).click();
+  await expect(page.getByText(/Based on \d+ analyzable games/)).toBeVisible({ timeout: 30_000 });
 
   await page.goto("/matches");
-  await expect(page.locator('p[aria-live="polite"]', { hasText: /^\d+ partidas/ })).toBeVisible();
+  await expect(page.locator('p[aria-live="polite"]', { hasText: /^\d+ games/ })).toBeVisible();
   await page.evaluate(() => {
     const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!;
     for (const [id, v] of [["f-result", "win"], ["f-mode", "summoners_rift"]] as const) {

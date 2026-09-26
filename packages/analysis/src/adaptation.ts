@@ -22,13 +22,13 @@ export interface AdaptationContext {
   metrics: { label: string; here: string; elsewhere: string }[];
 }
 
-const CLASS_ES: Record<string, string> = {
-  Assassin: "asesinos",
-  Mage: "magos",
-  Fighter: "luchadores",
-  Tank: "tanques",
-  Marksman: "tiradores",
-  Support: "soportes",
+const CLASS_NAMES: Record<string, string> = {
+  Assassin: "assassins",
+  Mage: "mages",
+  Fighter: "fighters",
+  Tank: "tanks",
+  Marksman: "marksmen",
+  Support: "supports",
 };
 
 interface Diff {
@@ -54,12 +54,12 @@ function judge(risk: Diff, lane: Diff, farm: Diff): { verdict: AdaptationVerdict
   const worseLane = l.consolidated && l.diff < 0;
   const lessFarm = f.consolidated && f.diff < 0;
   if (moreRisk && (worseLane || !l.consolidated)) {
-    return { verdict: "insufficient", why: "mueres más pronto que en el resto de tus partidas" + (worseLane ? " y la línea te va peor" : "") + "; puede que no ajustes tu forma de jugar a este tipo de rival." };
+    return { verdict: "insufficient", why: "you die earlier than in your other games" + (worseLane ? " and your lane goes worse" : "") + "; you may not be adjusting your play to this kind of opponent." };
   }
   if (lessRisk && (lessFarm || worseLane)) {
-    return { verdict: "over", why: "mueres menos, pero pierdes bastante " + (lessFarm ? "farmeo" : "oro en línea") + "; quizá juegas más a la defensiva de lo necesario." };
+    return { verdict: "over", why: "you die less, but you lose a lot of " + (lessFarm ? "farm" : "lane gold") + "; you may be playing more defensively than needed." };
   }
-  return { verdict: "no_clear_difference", why: "no vemos diferencias claras respecto a tus otras partidas." };
+  return { verdict: "no_clear_difference", why: "we see no clear difference from your other games." };
 }
 
 /**
@@ -68,22 +68,22 @@ function judge(risk: Diff, lane: Diff, farm: Diff): { verdict: AdaptationVerdict
 export function adaptationByOpponentClass(analyses: MatchAnalysis[], tagsOf: (championId: string) => string[] | undefined): AdaptationContext[] {
   const sr = analyses.filter((a) => a.analyzable && a.mode === "summoners_rift" && a.laneOpponentChampion);
   const out: AdaptationContext[] = [];
-  for (const cls of Object.keys(CLASS_ES)) {
+  for (const cls of Object.keys(CLASS_NAMES)) {
     const here = sr.filter((a) => (tagsOf(a.laneOpponentChampion!) ?? [])[0] === cls);
     const elsewhere = sr.filter((a) => !here.includes(a));
     if (here.length < 5 || elsewhere.length < 5) continue;
     const pick = (list: MatchAnalysis[], f: (a: MatchAnalysis) => number | null) => list.map(f).filter((v): v is number => v !== null);
-    const risk: Diff = { label: "Muertes antes del 14", here: pick(here, (a) => a.earlyDeaths), elsewhere: pick(elsewhere, (a) => a.earlyDeaths), digits: 1 };
-    const lane: Diff = { label: "Oro vs rival al 10", here: pick(here, (a) => a.goldDiff10), elsewhere: pick(elsewhere, (a) => a.goldDiff10), digits: 0 };
-    const farm: Diff = { label: "CS por minuto", here: pick(here, (a) => a.csPerMin), elsewhere: pick(elsewhere, (a) => a.csPerMin), digits: 1 };
+    const risk: Diff = { label: "Deaths before 14:00", here: pick(here, (a) => a.earlyDeaths), elsewhere: pick(elsewhere, (a) => a.earlyDeaths), digits: 1 };
+    const lane: Diff = { label: "Gold vs opponent at 10:00", here: pick(here, (a) => a.goldDiff10), elsewhere: pick(elsewhere, (a) => a.goldDiff10), digits: 0 };
+    const farm: Diff = { label: "CS per minute", here: pick(here, (a) => a.csPerMin), elsewhere: pick(elsewhere, (a) => a.csPerMin), digits: 1 };
     const { verdict, why } = judge(risk, lane, farm);
     out.push({
       id: `vs-${cls}`,
-      label: `Contra ${CLASS_ES[cls]} en tu línea`,
+      label: `Against ${CLASS_NAMES[cls]} in your lane`,
       games: here.length,
       verdict,
       kind: "hypothesis",
-      detail: `Contra ${CLASS_ES[cls]} (${here.length} partidas) ${why}`,
+      detail: `Against ${CLASS_NAMES[cls]} (${here.length} games) ${why}`,
       metrics: [risk, lane, farm].filter((d) => d.here.length && d.elsewhere.length).map(fmt),
     });
   }
@@ -101,14 +101,14 @@ export function adaptationToLead(analyses: MatchAnalysis[]): AdaptationContext |
   const verdict: AdaptationVerdict = cmp.consolidated && cmp.diff > 0 ? "insufficient" : "no_clear_difference";
   return {
     id: "lead",
-    label: "Con ventaja",
+    label: "With a lead",
     games: ahead.length,
     verdict,
     kind: "hypothesis",
     detail:
       verdict === "insufficient"
-        ? "Cuando tu equipo va por delante mueres más a partir del 15 que en partidas igualadas; puede que arriesgues de más con ventaja."
-        : "Tu riesgo tras el 15 yendo por delante es parecido al de partidas igualadas.",
-    metrics: [{ label: "Muertes/min tras el 15", here: mean(ahead).toFixed(2), elsewhere: mean(even).toFixed(2) }],
+        ? "When your team is ahead you die more after 15:00 than in even games; you may be taking too many risks with a lead."
+        : "Your risk after 15:00 when ahead is similar to even games.",
+    metrics: [{ label: "Deaths/min after 15:00", here: mean(ahead).toFixed(2), elsewhere: mean(even).toFixed(2) }],
   };
 }

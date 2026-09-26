@@ -43,7 +43,7 @@ export function createApp(deps: AppDeps) {
     console.error(err);
     const riot = riotFailure(err);
     if (riot) return c.json({ error: "riot_unavailable", message: riot.message }, riot.status);
-    return c.json({ error: "internal", message: "Algo ha fallado en el servidor. Inténtalo de nuevo." }, 500);
+    return c.json({ error: "internal", message: "Something went wrong on the server. Please try again." }, 500);
   });
 
   // ------------------------------------------------------------ public
@@ -149,7 +149,7 @@ export function createApp(deps: AppDeps) {
     const { gameName, tagLine, platform } = parsed.data;
 
     const resolved = await source.resolveAccount(platform, gameName, tagLine);
-    if (!resolved) return c.json({ error: "account_not_found", message: "No encontramos ese Riot ID en la región elegida." }, 404);
+    if (!resolved) return c.json({ error: "account_not_found", message: "We could not find that Riot ID in the selected region." }, 404);
 
     const userId = c.get("userId");
     const [existing] = await db.select().from(schema.riotAccounts)
@@ -385,10 +385,10 @@ export function createApp(deps: AppDeps) {
     const userId = c.get("userId");
     const insight = (await insightsFor(userId, 10)).insights.find((i) => i.id === parsed.data.insightId);
     if (!insight) {
-      return c.json({ text: "No tengo suficiente información fiable para explicar esto ahora mismo.", source: "deterministic" });
+      return c.json({ text: "I do not have enough reliable information to explain this right now.", source: "deterministic" });
     }
     const prefs = await prefsFor(userId);
-    return c.json(await explainInsight(deps.aiProviders, { insight, level: prefs.level as ExplanationLevel, language: prefs.language }));
+    return c.json(await explainInsight(deps.aiProviders, { insight, level: prefs.level as ExplanationLevel, language: "en" }));
   });
 
   authed.route("/", personalRoutes({ db, source, knowledge, services }));

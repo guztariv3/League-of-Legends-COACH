@@ -23,26 +23,26 @@ describe("suggestions follow the enemy team", () => {
   it("a mage against a fed magic team gets magic resist, with the reason and the names", () => {
     const s = suggestItems({ catalog, map: 11, gold: 1000, me: p("Ahri", [6655]), enemies: [p("Syndra", [3089], 6), p("Brand", [6655], 4), p("Lux"), p("Malphite"), p("Jinx")] });
     expect(s.enemy.magicShare).toBeGreaterThan(0.55);
-    expect(s.next?.item.name).toBe("Velo de la banshee");
-    expect(s.next?.reasons.join(" ")).toMatch(/daño rival es mágico \(Syndra, Brand/);
-    expect(s.boots?.item.name).toBe("Botas de mercurio");
+    expect(s.next?.item.name).toBe("Banshee's Veil");
+    expect(s.next?.reasons.join(" ")).toMatch(/of the enemy damage is magic \(Syndra, Brand/);
+    expect(s.boots?.item.name).toBe("Mercury's Treads");
   });
 
   it("a mage dying to physical assassins gets armor, and says why", () => {
     const s = suggestItems({ catalog, map: 11, gold: 500, me: p("Ahri", [6655], 1, 5), enemies: [p("Zed", [3072], 7), p("Draven", [3031], 5), p("Garen"), p("Jinx"), p("Malphite")] });
-    expect(s.next?.item.name).toBe("Reloj de arena de Zhonya");
+    expect(s.next?.item.name).toBe("Zhonya's Hourglass");
     const why = s.next!.reasons.join(" ");
-    expect(why).toMatch(/daño rival es físico/);
-    expect(why).toMatch(/Vas 1\/5/);
+    expect(why).toMatch(/of the enemy damage is physical/);
+    expect(why).toMatch(/You are 1\/5/);
   });
 
   it("anti-heal against lifesteal, only once", () => {
     const enemies = [p("Aatrox", [3072], 5), p("Draven", [3072], 4), p("Garen"), p("Malphite"), p("Lux")];
     const mage = suggestItems({ catalog, map: 11, gold: 0, me: p("Ahri", [6655]), enemies });
     expect(mage.next?.item.name).toBe("Morellonomicon");
-    expect(mage.next?.reasons.join(" ")).toMatch(/Aatrox y Draven se curan con robo de vida: aplica Heridas graves/);
+    expect(mage.next?.reasons.join(" ")).toMatch(/Aatrox and Draven heal with lifesteal: applies Grievous Wounds/);
     const adc = suggestItems({ catalog, map: 11, gold: 0, me: p("Jinx", [3031]), enemies });
-    expect(adc.next?.item.name).toBe("Recordatorio mortal");
+    expect(adc.next?.item.name).toBe("Mortal Reminder");
     const already = suggestItems({ catalog, map: 11, gold: 0, me: p("Ahri", [6655, 3165]), enemies });
     expect(already.next?.item.name).not.toBe("Morellonomicon");
   });
@@ -52,15 +52,15 @@ describe("suggestions follow the enemy team", () => {
     const all = [adc.next, ...adc.alternatives].map((x) => x!.item);
     expect(all.every((i) => !i.stats["FlatMagicDamageMod"])).toBe(true);
     expect(all.some((i) => i.id === 3031)).toBe(false);
-    expect(adc.boots?.item.name).toBe("Grebas de berserker");
+    expect(adc.boots?.item.name).toBe("Berserker's Greaves");
     const aram = suggestItems({ catalog, map: 12, gold: 0, me: p("Ahri", [6655], 0, 6), enemies: [p("Zed", [3072], 6), p("Draven", [3031], 5), p("Garen"), p("Jinx"), p("Malphite")] });
     expect([aram.next, ...aram.alternatives].some((x) => x?.item.id === 3157)).toBe(false);
   });
 
   it("a tank against physical damage and lifesteal gets armor with anti-heal", () => {
     const s = suggestItems({ catalog, map: 11, gold: 0, me: p("Malphite", [3065]), enemies: [p("Zed", [3072], 4), p("Draven", [3072], 5), p("Jinx", [3031]), p("Garen"), p("Lux")] });
-    expect(s.next?.item.name).toBe("Malla de espinas");
-    expect(s.next?.reasons.join(" ")).toMatch(/Heridas graves/);
+    expect(s.next?.item.name).toBe("Thornmail");
+    expect(s.next?.reasons.join(" ")).toMatch(/Grievous Wounds/);
   });
 
   it("explains with facts and never gives orders", () => {
@@ -71,7 +71,7 @@ describe("suggestions follow the enemy team", () => {
     for (const s of cases) {
       for (const x of [s.next, ...s.alternatives, s.boots]) {
         expect(x?.reasons.length).toBeGreaterThan(0);
-        for (const r of x!.reasons) expect(r).not.toMatch(/\b(compra|cómpralo|debes|tienes que|ve a|haz)\b/i);
+        for (const r of x!.reasons) expect(r).not.toMatch(/\b(buy|you must|you should|you need to|go)\b/i);
       }
     }
   });
@@ -90,12 +90,12 @@ describe("how to buy it", () => {
     const banshee = catalog.items.get(3102)!;
     const path = purchasePath(banshee, [1026], 950, catalog);
     expect(path.steps).toEqual([
-      { id: 1026, name: "Vara explosiva", gold: 850, owned: true },
-      { id: 1057, name: "Capa de negatrón", gold: 900, owned: false },
+      { id: 1026, name: "Blasting Wand", gold: 850, owned: true },
+      { id: 1057, name: "Negatron Cloak", gold: 900, owned: false },
     ]);
     expect(path.remaining).toBe(3000 - 850);
-    expect(path.affordableNow).toEqual({ id: 1057, name: "Capa de negatrón", gold: 900 });
-    expect(purchasePath(banshee, [1026], 2200, catalog).affordableNow).toEqual({ id: 3102, name: "Velo de la banshee", gold: 2150 });
+    expect(path.affordableNow).toEqual({ id: 1057, name: "Negatron Cloak", gold: 900 });
+    expect(purchasePath(banshee, [1026], 2200, catalog).affordableNow).toEqual({ id: 3102, name: "Banshee's Veil", gold: 2150 });
     // Two of the same component: each owned copy counts once.
     const luden = purchasePath(catalog.items.get(6655)!, [1052], 100, catalog);
     expect(luden.steps.map((s) => s.owned)).toEqual([true, false, false]);

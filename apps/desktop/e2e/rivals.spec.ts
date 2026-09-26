@@ -27,8 +27,8 @@ test("desktop: connect with a code and see the rivals from the loading screen", 
             return { token: "device-token-for-tests-only", origin: "https://koi.example" };
           case "desktop_scout":
             return {
-              inGame: true, mode: "Clasificatoria solo/dúo",
-              enemies: [rival("Rival#EUW", "Zed", "GOLD"), rival("Otro#EUW", "Lux", null)],
+              inGame: true, mode: "Ranked Solo/Duo",
+              enemies: [rival("Rival#EUW", "Zed", "GOLD"), rival("Other#EUW", "Lux", null)],
               assets: { cdn: null, version: null },
             };
           default: throw `unknown ${cmd}`;
@@ -40,35 +40,35 @@ test("desktop: connect with a code and see the rivals from the loading screen", 
   });
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Conectar" }).click();
-  await page.getByLabel("Dirección de la web").fill("https://koi.example/settings");
-  await page.getByLabel("Código").fill("WRNG-CODE");
-  await page.getByRole("button", { name: "Conectar" }).click();
-  await expect(page.getByRole("alert")).toContainText("Código incorrecto o caducado");
+  await page.getByRole("button", { name: "Connect" }).click();
+  await page.getByLabel("Website address").fill("https://koi.example/settings");
+  await page.getByLabel("Code").fill("WRNG-CODE");
+  await page.getByRole("button", { name: "Connect" }).click();
+  await expect(page.getByRole("alert")).toContainText("Wrong or expired code");
 
-  await page.getByLabel("Código").fill("ABCD-EFGH");
-  await page.getByRole("button", { name: "Conectar" }).click();
-  await page.getByText("Ajustes", { exact: true }).click();
-  await expect(page.getByText(/Conectada a/)).toContainText("koi.example");
+  await page.getByLabel("Code").fill("ABCD-EFGH");
+  await page.getByRole("button", { name: "Connect" }).click();
+  await page.getByText("Settings", { exact: true }).click();
+  await expect(page.getByText(/Connected to/)).toContainText("koi.example");
 
-  const rivals = page.getByRole("region", { name: "Tus rivales" });
+  const rivals = page.getByRole("region", { name: "Your opponents" });
   await expect(rivals).toBeVisible();
   await expect(rivals).toContainText("Rival#EUW");
-  await expect(rivals).toContainText("Oro II · 45 LP");
+  await expect(rivals).toContainText("Gold II · 45 LP");
   await expect(rivals).toContainText("60%");
-  await expect(rivals).toContainText("Sin clasificar");
+  await expect(rivals).toContainText("Unranked");
   await expect(rivals.getByRole("img", { name: "Ahri" }).first()).toBeVisible();
 
   // The token is used for scouting and stays on this machine; the link survives a restart.
   const scoutCall = await page.evaluate(() => (window as unknown as { __calls: { cmd: string; args: Record<string, unknown> }[] }).__calls.find((c) => c.cmd === "desktop_scout"));
   expect(scoutCall?.args).toEqual({ baseUrl: "https://koi.example", token: "device-token-for-tests-only" });
   await page.reload();
-  await expect(page.getByRole("region", { name: "Tus rivales" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Your opponents" })).toBeVisible();
   await page.screenshot({ path: "test-results/rivals.png" });
 
   page.once("dialog", (d) => d.accept());
-  await page.getByText("Ajustes", { exact: true }).click();
-  await page.getByRole("button", { name: "Desconectar" }).click();
-  await expect(page.getByRole("region", { name: "Tus rivales" })).toHaveCount(0);
-  await expect(page.getByRole("region", { name: "Conecta con la web" }).getByRole("button", { name: "Conectar" })).toBeVisible();
+  await page.getByText("Settings", { exact: true }).click();
+  await page.getByRole("button", { name: "Disconnect" }).click();
+  await expect(page.getByRole("region", { name: "Your opponents" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Connect to the website" }).getByRole("button", { name: "Connect" })).toBeVisible();
 });

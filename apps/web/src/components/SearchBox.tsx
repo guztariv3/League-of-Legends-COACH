@@ -3,10 +3,10 @@ import { useNavigate } from "react-router";
 import { api, type SearchResult } from "../api";
 
 const typeLabel: Record<SearchResult["type"], string> = {
-  champion: "Campeón",
+  champion: "Champion",
   matchup: "Enfrentamiento",
-  matches: "Partidas",
-  profile: "Tu perfil",
+  matches: "Matches",
+  profile: "Your profile",
   insight: "Coach",
 };
 
@@ -37,11 +37,11 @@ export function SearchBox() {
 
   return (
     <div className="search" onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false); }}>
-      <label htmlFor="global-search" className="visually-hidden">Buscar</label>
+      <label htmlFor="global-search" className="visually-hidden">Search</label>
       <input
         id="global-search"
         type="search"
-        placeholder="Buscar: “Aurelith vs Korvane”, “mis últimas 10”…"
+        placeholder="Search: “Ahri vs Zed”, “my last 10”…"
         value={q}
         role="combobox"
         aria-expanded={open && results.length > 0}
@@ -60,7 +60,7 @@ export function SearchBox() {
       {open && q.trim().length >= 2 && (
         <ul id={listId} role="listbox" className="search-results">
           {results.length === 0 ? (
-            <li className="tile-note" style={{ padding: 12 }}>Nada por aquí. Prueba con un campeón, un rol o “mis últimas 10 partidas”.</li>
+            <li className="tile-note" style={{ padding: 12 }}>Nothing here. Try a champion, a role or “my last 10 games”.</li>
           ) : (
             results.map((r, i) => (
               <li
