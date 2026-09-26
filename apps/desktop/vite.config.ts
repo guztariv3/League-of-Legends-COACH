@@ -6,5 +6,6 @@ export default defineConfig({
   plugins: [react()],
   clearScreen: false,
   server: { port: 1420, strictPort: true },
-  build: { target: "es2022", outDir: "dist" },
+  // Two pages: the Live Coach window and the optional overlay window (D-11).
+  build: { target: "es2022", outDir: "dist", rollupOptions: { input: { main: "index.html", overlay: "overlay.html" } } },
 });

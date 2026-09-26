@@ -3,6 +3,7 @@ import { isAdjustment, liveCoach, pickNow, SLOT_KEY, usualMaxOrder, type CoachDe
 import { parseCatalog, type Catalog, type Suggestion } from "@coach/itemization";
 import type { GameState, PlayerState } from "@coach/live";
 import { CoachCard } from "@coach/ui";
+import { sendOverlay } from "./bridge";
 
 /** Where game art comes from: Data Dragon (Riot's public CDN), or nothing (letters). */
 export interface Art { cdn: string | null; version: string | null }
@@ -287,8 +288,10 @@ function NowArt({ d, art, coach }: { d: CoachDecision; art: Art; coach: LiveCoac
 }
 
 /** The scoreboard the game already shows (Tab), in the side window, plus the Coach's read of it. */
-export function Board({ state, names, art, catalog, build, connected, demo = false }: {
+export function Board({ state, names, art, catalog, build, connected, demo = false, overlay = false }: {
   state: GameState; names: Map<number, string>; art: Art; catalog: Catalog | null; build: PersonalBuild | null | "loading"; connected: boolean; demo?: boolean;
+  /** Also feed the optional overlay window (D-11). */
+  overlay?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("items");
   const [shownId, setShownId] = useState<string | null>(null);
@@ -318,6 +321,22 @@ export function Board({ state, names, art, catalog, build, connected, demo = fal
     if (nextItem) lastItem.current = nextItem;
   }, [nextItem?.id]);
   useEffect(() => { if (now) setShownId(now.id); }, [now?.id]);
+
+  // The overlay gets the same numbers as the Gold tab and the next items, on every update.
+  useEffect(() => {
+    if (!overlay || !coach?.gold) return;
+    const g = coach.gold;
+    const next = [coach.items?.next, ...(coach.items?.alternatives ?? [])].filter((x) => x != null).slice(0, 3)
+      .map((x) => ({ id: x.item.id, name: x.item.name }));
+    void sendOverlay({
+      art: { cdn: art.cdn, version: art.version },
+      rows: g.rows.map((r) => ({ ally: { id: r.ally.championId, name: r.ally.champion }, enemy: { id: r.enemy.championId, name: r.enemy.champion }, diff: r.diff })),
+      allyTotal: g.allyTotal,
+      enemyTotal: g.enemyTotal,
+      next,
+      gold: state.gold,
+    });
+  });
 
   if (!state.me || !coach) return null;
   const adjusted = now !== null && now.id === adjustedId;

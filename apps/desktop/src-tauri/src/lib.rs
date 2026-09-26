@@ -6,6 +6,9 @@
 //! - No memory reading, injection, overlays drawn into the game, input
 //!   automation, or access to protected processes/files. Nothing here touches
 //!   the game process or Vanguard.
+//! - The optional overlay (D-11, off by default) is an ordinary transparent
+//!   window placed above the others and click-through; it never hooks into the
+//!   game's rendering.
 //! - Polling is driven by the UI (and slowed down by Safe Mode), with short
 //!   timeouts so the Coach never waits on the game.
 
@@ -13,6 +16,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use serde::Serialize;
+use tauri::Manager;
 use sysinfo::{MemoryRefreshKind, RefreshKind, System, CpuRefreshKind};
 
 const LIVE_URL: &str = "https://127.0.0.1:2999/liveclientdata/allgamedata";
@@ -50,6 +54,25 @@ fn system_load(state: tauri::State<'_, AppState>) -> LoadSample {
     sys.refresh_memory();
     let total = sys.total_memory().max(1) as f64;
     LoadSample { cpu: sys.global_cpu_usage(), mem_available: sys.available_memory() as f64 / total }
+}
+
+/// Shows or hides the optional overlay: a separate, transparent, always-on-top window that lets
+/// every click through to the game. It sits on the left edge, a third of the way down the screen.
+#[tauri::command]
+fn set_overlay(app: tauri::AppHandle, visible: bool) -> Result<(), String> {
+    let window = app.get_webview_window("overlay").ok_or("no_overlay")?;
+    if !visible {
+        return window.hide().map_err(|e| e.to_string());
+    }
+    window.set_ignore_cursor_events(true).map_err(|e| e.to_string())?;
+    if let Ok(Some(monitor)) = window.current_monitor() {
+        let y = (monitor.size().height as f64 * 0.30) as i32;
+        let origin = monitor.position();
+        window
+            .set_position(tauri::PhysicalPosition::new(origin.x + 12, origin.y + y))
+            .map_err(|e| e.to_string())?;
+    }
+    window.show().map_err(|e| e.to_string())
 }
 
 #[derive(Serialize)]
@@ -192,7 +215,7 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     builder
         .manage(AppState { http: live_client(), site: site_client(), sys: Mutex::new(sys) })
-        .invoke_handler(tauri::generate_handler![live_snapshot, system_load, check_update, install_update, desktop_claim, desktop_scout, desktop_build])
+        .invoke_handler(tauri::generate_handler![live_snapshot, system_load, check_update, install_update, desktop_claim, desktop_scout, desktop_build, set_overlay])
         .run(tauri::generate_context!())
         .expect("error while running KOI Master desktop");
 }
