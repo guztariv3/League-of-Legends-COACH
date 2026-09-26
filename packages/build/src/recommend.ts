@@ -16,6 +16,8 @@ export interface BuildInput {
   owned?: number[];
   /** "TOP" | "JUNGLE" | "MIDDLE" | "BOTTOM" | "UTILITY" (client names), for the starting items. */
   position?: string | null;
+  /** Also suggest the starting items (default: when nothing is owned yet). */
+  starter?: boolean;
 }
 
 export interface ItemPick { id: number; name: string; gold: number; score: number; why: string[] }
@@ -295,7 +297,7 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
     kit: p.facts,
     enemyDamage: e.damage,
     threats: Object.values(e.threats).filter((t) => t.weight >= RELEVANT).sort((a, b) => b.weight - a.weight),
-    starter: owned.size ? null : starter(input, p, e, { ...state, threats: Object.fromEntries(Object.entries(e.threats).map(([k, t]) => [k, t.weight])) as Record<ThreatKind, number>, manaNeed: p.manaNeed }, gold),
+    starter: !(input.starter ?? owned.size === 0) ? null : starter(input, p, e, { ...state, threats: Object.fromEntries(Object.entries(e.threats).map(([k, t]) => [k, t.weight])) as Record<ThreatKind, number>, manaNeed: p.manaNeed }, gold),
     first: first ? pick(first) : null,
     next: core.slice(1).map(pick),
     boots: boots ? pick(boots) : null,

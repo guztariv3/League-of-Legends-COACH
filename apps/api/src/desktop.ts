@@ -21,9 +21,9 @@ import type { MatchSource } from "./sources.js";
  *
  * 1. Signed in on the web, the player asks for a code (valid 10 minutes, single use).
  * 2. The desktop app exchanges it at /desktop/claim for a device token.
- * 3. With `Authorization: Bearer <token>` the app can only read /desktop/scout, /desktop/build, /desktop/plan and /desktop/home.
+ * 3. With `Authorization: Bearer <token>` the app can only read /desktop/scout, /desktop/build, /desktop/plan, /desktop/items and /desktop/home.
  * Only SHA-256 hashes are stored; the player can revoke a device from the web at any time.
- * /desktop/claim, /desktop/scout, /desktop/build, /desktop/plan and /desktop/home are the only API routes the site's password gate lets through,
+ * /desktop/claim, /desktop/scout, /desktop/build, /desktop/plan, /desktop/items and /desktop/home are the only API routes the site's password gate lets through,
  * because they carry their own authentication.
  */
 export const PAIRING_CODE_TTL_MS = 10 * 60_000;
@@ -204,6 +204,48 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
    * The player's home, shown by the desktop app between games: the same profile as the website
    * (accounts, rank, recent results, most played champions, focus and running challenges).
    */
+  /**
+   * The build engine during a game: what to buy next for the items and scores the game shows.
+   * Only champions, item ids and kill/death counts come in (no names). `enemies` is a list of
+   * "Champion~item.item~kills~deaths"; `opening` asks for the starting items too.
+   */
+  r.get("/desktop/items", async (c) => {
+    const device = await deviceFor(c);
+    if (!device) return disconnected(c);
+    const id = z.string().regex(/^[A-Za-z0-9]{1,40}$/);
+    const items = z.string().regex(/^(\d{1,7}(\.\d{1,7}){0,9})?$/).transform((v) => (v ? v.split(".").map(Number) : []));
+    const enemy = z.string().regex(/^[A-Za-z0-9]{1,40}~(\d{1,7}(\.\d{1,7}){0,9})?~\d{1,3}~\d{1,3}$/).transform((v) => {
+      const [champion, list, kills, deaths] = v.split("~");
+      return { champion: champion!, items: list ? list.split(".").map(Number) : [], kills: Number(kills), deaths: Number(deaths) };
+    });
+    const q = z.object({
+      me: id,
+      mine: items,
+      enemies: z.string().max(600).transform((v) => (v ? v.split(",") : [])).pipe(z.array(enemy).max(5)),
+      opponent: id.optional(),
+      position: z.enum(["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"]).optional(),
+      opening: z.enum(["0", "1"]).optional(),
+    }).safeParse({
+      me: c.req.query("me"), mine: c.req.query("mine") ?? "", enemies: c.req.query("enemies") ?? "", opponent: c.req.query("opponent") || undefined,
+      position: c.req.query("position")?.toUpperCase() || undefined, opening: c.req.query("opening") || undefined,
+    });
+    if (!q.success) return c.json({ error: "invalid_query" }, 400);
+    const facts = await deps.gameFacts?.get(2500) ?? null;
+    if (!facts) return c.json({ build: null, reason: "game_data_unavailable" });
+    const kits = new Map(facts.kits.map((k) => [k.id, k]));
+    const byId = new Map(facts.items.map((i) => [i.id, i]));
+    const myKit = kits.get(q.data.me);
+    if (!myKit) return c.json({ build: null, reason: "unknown_champion" });
+    const enemies = q.data.enemies.flatMap((e) => {
+      const kit = kits.get(e.champion);
+      return kit ? [{ kit, items: e.items.map((i) => byId.get(i)).filter((i) => i !== undefined), kills: e.kills, deaths: e.deaths, laneOpponent: e.champion === q.data.opponent }] : [];
+    });
+    const build = recommendBuild({
+      me: myKit, enemies, items: facts.items, owned: q.data.mine, position: q.data.position ?? null, starter: q.data.opening === "1",
+    });
+    return c.json({ build: { ...build, version: facts.version, enemiesKnown: enemies.length, attribution: GAME_DATA_ATTRIBUTION } });
+  });
+
   r.get("/desktop/home", async (c) => {
     const device = await deviceFor(c);
     if (!device) return disconnected(c);

@@ -1,12 +1,12 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { championJson, itemJson } from "../../../packages/itemization/src/test-fixture";
 
 /**
  * A live game as the game's own Live Client Data API reports it, through a stub of Tauri's
  * IPC: the board shows both teams with their items, and "Items" the next item to buy.
  */
-test("in game: both teams with items, and your build from your history", async ({ page }) => {
-  await page.addInitScript(() => {
+async function inGame(page: Page, withEngine: boolean) {
+  await page.addInitScript((withEngine: boolean) => {
     // Me: Ahri with boots and Luden. Enemies: physical, two of them healing with Bloodthirster.
     const champs: [string, string, { itemID: number; displayName: string; price: number }[], number][] = [
       ["Ahri", "Ahri", [{ itemID: 3020, displayName: "Sorcerer's Shoes", price: 1100 }, { itemID: 6655, displayName: "Luden's Companion", price: 2750 }], 2],
@@ -54,13 +54,24 @@ test("in game: both teams with items, and your build from your history", async (
                 loadout: { games: 12, keystone: { name: "Electrocute" }, spells: { names: ["Flash", "Ignite"] }, maxOrder: ["Q", "W", "E"], firstItem: { name: "Luden's Companion" } },
               },
             };
+          case "desktop_items":
+            // The site's build engine; without it (the default here) the local item rules are used.
+            if (!withEngine) throw "server_error";
+            (window as unknown as { __items: unknown }).__items = args;
+            return {
+              build: {
+                first: { id: 3089, name: "Rabadon's Deathcap", score: 1.3, why: ["Gives 130 ability power: Ahri's Q, W, E and R scale with ability power."] },
+                next: [{ id: 3165, name: "Morellonomicon", score: 1.1, why: ["It applies Grievous Wounds: Zed: life steal from items."] }],
+                boots: null, situational: [], starter: null,
+              },
+            };
           default: throw `unknown ${cmd}`;
         }
       },
       transformCallback: () => 0,
       metadata: { currentWindow: { label: "live" }, currentWebview: { label: "live" } },
     };
-  });
+  }, withEngine);
   // Data Dragon stand-in: the version list and a placeholder picture for every image.
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
   await page.route("https://ddragon.leagueoflegends.com/**", (r) => {
@@ -71,6 +82,10 @@ test("in game: both teams with items, and your build from your history", async (
     return r.fulfill({ body: png, contentType: "image/png" });
   });
 
+}
+
+test("in game: both teams with items, and your build from your history", async ({ page }) => {
+  await inGame(page, false);
   await page.goto("/");
   await expect(page.getByText("● In game")).toBeVisible();
   const board = page.getByRole("region", { name: "Game" });
@@ -142,4 +157,19 @@ test("demo: the in-game sections appear in the top navigation", async ({ page })
   await expect(page.getByRole("tablist", { name: "Sections" }).getByRole("tab", { name: "Home" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("region", { name: "Game" })).toHaveCount(0);
   await expect(page.getByRole("tablist", { name: "Sections" }).getByRole("tab", { name: "Items" })).toHaveCount(0);
+});
+
+test("in game with the site connected: Items follows the site's build engine", async ({ page }) => {
+  await inGame(page, true);
+  await page.goto("/");
+  const board = page.getByRole("region", { name: "Game" });
+  const next = board.getByRole("region", { name: "Next suggested item" });
+  await expect(next).toContainText("Rabadon's Deathcap");
+  await expect(next).toContainText("Ahri's Q, W, E and R scale with ability power");
+  await expect(board.getByRole("region", { name: "Next suggested item" })).not.toContainText("Morellonomicon"); // the local rules no longer choose
+  // Only champions, item ids and kill/death counts go to the site.
+  const sent = await page.evaluate(() => (window as unknown as { __items: Record<string, unknown> }).__items);
+  expect(sent).toMatchObject({ me: "Ahri", mine: "3020.6655", opening: false });
+  expect(String(sent.enemies)).toContain("Zed~3072~6~1");
+  expect(JSON.stringify(sent)).not.toContain("Jugador");
 });

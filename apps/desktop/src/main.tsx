@@ -1,8 +1,9 @@
 import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { DEFAULT_CONTROLS, laneOpponent, LiveEngine, modeInfo, type Delivery, type EngineTick, type Intensity, type LiveControls } from "@coach/live";
+import { STARTER_WINDOW_SEC, type EngineItems } from "@coach/coach";
 import { CoachAvatar } from "@coach/ui";
-import { checkUpdate, fetchBuild, fetchPlan, inTauri, installUpdate, readChampSelect, readLoad, readSnapshot, setOverlay, windowControl, type ChampSelect, type UpdateInfo } from "./bridge";
+import { checkUpdate, fetchBuild, fetchItems, fetchPlan, inTauri, installUpdate, readChampSelect, readLoad, readSnapshot, setOverlay, windowControl, type ChampSelect, type UpdateInfo } from "./bridge";
 import { Board, ChampArt, PlanTab, useArt, useCatalog, type BoardTab, type PersonalBuild, type PlanResponse } from "./board";
 import { PreGameBuildView } from "./prebuild";
 import { Home } from "./home";
@@ -76,6 +77,7 @@ function LiveWindow() {
     setMessage(null);
     setBuild(null);
     setPlan(null);
+    setEngine(null);
     itemNames.current = new Map();
     setMode("waiting");
     setView("home");
@@ -176,6 +178,28 @@ function LiveWindow() {
       .then((r) => { if (!stopped) setPlan(r.ok ? r.data : null); });
     return () => { stopped = true; };
   }, [rivals.link, planKey]);
+
+  // The site's build engine during the game (Summoner's Rift): asked again when your items, the
+  // enemies' items or scores change. Without a connected site the local item rules are used.
+  const [engine, setEngine] = useState<EngineItems | null>(null);
+  const opening = Boolean(st?.me && st.time < STARTER_WINDOW_SEC && st.me.itemGold < 300);
+  const engineKey = st?.me && st.map === 11 && st.enemies.length
+    ? [st.me.championId, st.me.position ?? "", opening ? "open" : "", [...st.me.items].sort().join("."), "|",
+       ...st.enemies.map((e) => `${e.championId}:${[...e.items].sort().join(".")}:${e.kills}:${e.deaths}`)].join(",")
+    : null;
+  useEffect(() => {
+    const link = rivals.link;
+    if (!link || !engineKey || !st?.me) { if (!engineKey) setEngine(null); return; }
+    let stopped = false;
+    const me = st.me;
+    const enemies = st.enemies.map((e) => ({ championId: e.championId, items: e.items, kills: e.kills, deaths: e.deaths }));
+    const opponent = laneOpponent(st)?.championId ?? null;
+    const t = setTimeout(() => {
+      void fetchItems<{ build: EngineItems | null }>(link.origin, link.token, { me: me.championId, mine: me.items, enemies, opponent, position: me.position || null, opening })
+        .then((r) => { if (!stopped && r.ok) setEngine(r.data.build); });
+    }, 1500);
+    return () => { stopped = true; clearTimeout(t); };
+  }, [rivals.link, engineKey]);
 
   // Champion select (D-13): read-only polling of the League Client while no game is running.
   const [champSelect, setChampSelect] = useState<ChampSelect | null>(null);
@@ -337,7 +361,7 @@ function LiveWindow() {
           last recommendation); other sections only hide it. */}
       {inGame && tick?.state.me && (
         <div hidden={!boardView}>
-          <Board state={tick.state} art={art} catalog={catalog} demo={mode === "demo"} build={mode === "demo" ? null : build} connected={Boolean(rivals.link) && mode !== "demo"} overlay={overlayVisible} plan={mode === "demo" ? null : plan} tab={boardView ?? "items"} />
+          <Board state={tick.state} art={art} catalog={catalog} demo={mode === "demo"} build={mode === "demo" ? null : build} connected={Boolean(rivals.link) && mode !== "demo"} overlay={overlayVisible} plan={mode === "demo" ? null : plan} engine={mode === "demo" ? null : engine} tab={boardView ?? "items"} />
         </div>
       )}
 

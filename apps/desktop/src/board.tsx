@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { isAdjustment, liveCoach, pickNow, SLOT_KEY, usualMaxOrder, type CoachDecision, type LiveCoach, type Slot } from "@coach/coach";
+import { isAdjustment, liveCoach, pickNow, SLOT_KEY, usualMaxOrder, type CoachDecision, type EngineItems, type LiveCoach, type Slot } from "@coach/coach";
 import { parseCatalog, type Catalog, type Suggestion } from "@coach/itemization";
 import type { GameState } from "@coach/live";
 import { CoachCard } from "@coach/ui";
@@ -297,7 +297,7 @@ function NowArt({ d, art, coach }: { d: CoachDecision; art: Art; coach: LiveCoac
 }
 
 /** The scoreboard the game already shows (Tab), in the side window, plus the Coach's read of it. */
-export function Board({ state, art, catalog, build, connected, tab, demo = false, overlay = false, plan = null }: {
+export function Board({ state, art, catalog, build, connected, tab, demo = false, overlay = false, plan = null, engine = null }: {
   state: GameState; art: Art; catalog: Catalog | null; build: PersonalBuild | null | "loading"; connected: boolean; demo?: boolean;
   /** Which section to show (the navigation lives at the top of the window). */
   tab: BoardTab;
@@ -305,6 +305,8 @@ export function Board({ state, art, catalog, build, connected, tab, demo = false
   overlay?: boolean;
   /** The Coach's game plan for this game, from the website. */
   plan?: PlanResponse | null;
+  /** The site's build engine answer for this moment (replaces the local item rules). */
+  engine?: EngineItems | null;
 }) {
   const [shownId, setShownId] = useState<string | null>(null);
   const [adjustedId, setAdjustedId] = useState<string | null>(null);
@@ -318,6 +320,7 @@ export function Board({ state, art, catalog, build, connected, tab, demo = false
     usualItems: personal?.items.map((i) => i.id) ?? [],
     previousItem: previousItem.current,
     skillHistory: history,
+    engine,
   }) : null;
   previousItem.current = coach?.items?.next?.item.id ?? null;
   const now = coach ? pickNow(coach.decisions, shownId) : null;

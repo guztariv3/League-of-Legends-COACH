@@ -149,6 +149,26 @@ describe("desktop pairing", () => {
     expect(JSON.stringify([tank.body.build.first, ...tank.body.build.next, ...tank.body.build.situational])).not.toContain("Randuin");
     expect((await call("/desktop/plan?me=Malphite&position=mid", { headers: auth })).res.status).toBe(400);
 
+    // During the game: the same engine with the items and scores the game shows.
+    const mid = (enemies: string, mine = "3068") => call(`/desktop/items?me=Malphite&mine=${mine}&enemies=${enemies}&opponent=Syndra&position=top`, { headers: auth });
+    const apTeam = "Syndra~3157~2~1,Brand~6653~1~0,Lux~~0~2,Veigar~~0~0,Annie~~1~1";
+    const vsAp = await mid(apTeam);
+    expect(vsAp.res.status).toBe(200);
+    expect(vsAp.body.build.starter).toBeNull();
+    expect(vsAp.body.build.first.id).not.toBe(3068); // owned items are not suggested again
+    expect(JSON.stringify(vsAp.body.build)).not.toMatch(/"name":"Randuin's Omen"[^}]*"score"/); // no enemy crit: never recommended
+    // Enemy crit items show up as a crit threat that names the item source.
+    const vsCrit = await mid("Tryndamere~3031.3006~5~1,Jinx~3031~3~0,Yasuo~~1~1,MasterYi~~0~0,Soraka~~0~0");
+    const crit = vsCrit.body.build.threats.find((t: { kind: string }) => t.kind === "crit");
+    expect(crit.sources[0].why).toMatch(/critical strike chance from items/);
+    // Starting items when asked at the start of the game.
+    const opening = await call(`/desktop/items?me=Malphite&mine=&enemies=${apTeam}&position=top&opening=1`, { headers: auth });
+    expect(opening.body.build.starter.items.length).toBeGreaterThan(0);
+    for (const bad of ["me=../x", "me=Malphite&enemies=Zed~1~a~0", "me=Malphite&mine=1.2.3.4.5.6.7.8.9.10.11", "me=Malphite&position=mid"]) {
+      expect((await call(`/desktop/items?${bad}`, { headers: auth })).res.status, bad).toBe(400);
+    }
+    expect((await call("/desktop/items?me=Malphite")).res.status).toBe(401);
+
     // Home between games: the same profile as the website, only with the device token.
     const home = await call("/desktop/home", { headers: auth });
     expect(home.res.status).toBe(200);

@@ -91,6 +91,19 @@ export const fetchHome = <T>(baseUrl: string, token: string) => site<T>("desktop
 export const fetchPlan = <T>(baseUrl: string, token: string, c: { me: string; allies: string[]; enemies: string[]; opponent: string | null; position?: string | null }) =>
   site<T>("desktop_plan", { baseUrl, token, me: c.me, allies: c.allies.join(","), enemies: c.enemies.join(","), opponent: c.opponent ?? "", position: c.position ?? "" });
 
+/**
+ * What to buy next during a game, from the site's build engine. Only champion ids, item ids and
+ * kill/death counts are sent (never player names).
+ */
+export const fetchItems = <T>(baseUrl: string, token: string, c: {
+  me: string; mine: number[]; enemies: { championId: string; items: number[]; kills: number; deaths: number }[];
+  opponent: string | null; position: string | null; opening: boolean;
+}) => site<T>("desktop_items", {
+  baseUrl, token, me: c.me, mine: c.mine.join("."),
+  enemies: c.enemies.map((e) => `${e.championId}~${e.items.join(".")}~${Math.min(999, e.kills)}~${Math.min(999, e.deaths)}`).join(","),
+  opponent: c.opponent ?? "", position: c.position ?? "", opening: c.opening,
+});
+
 /** What the optional overlay shows (D-11): the gold difference and the next items. */
 export interface OverlayState {
   art: { cdn: string | null; version: string | null };
