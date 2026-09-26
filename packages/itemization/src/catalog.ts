@@ -33,6 +33,8 @@ export interface CatalogChampion {
   attack: number;
   magic: number;
   defense: number;
+  /** Basic-attack range in game units (melee ≈ 125–175, ranged ≈ 425–650); null when the file lacks it. */
+  attackRange: number | null;
 }
 
 export interface Catalog {
@@ -64,6 +66,7 @@ const DDChampionFile = z.looseObject({
     name: z.string(),
     tags: z.array(z.string()).default([]),
     info: z.looseObject({ attack: z.number(), magic: z.number(), defense: z.number() }).optional(),
+    stats: z.looseObject({ attackrange: z.number().optional() }).optional(),
   })),
 });
 
@@ -101,7 +104,7 @@ export function parseCatalog(itemJson: unknown, championJson: unknown): Catalog 
   }
   const champions = new Map<string, CatalogChampion>();
   for (const c of Object.values(champs.data)) {
-    champions.set(c.id, { id: c.id, name: c.name, tags: c.tags, attack: c.info?.attack ?? 5, magic: c.info?.magic ?? 5, defense: c.info?.defense ?? 5 });
+    champions.set(c.id, { id: c.id, name: c.name, tags: c.tags, attack: c.info?.attack ?? 5, magic: c.info?.magic ?? 5, defense: c.info?.defense ?? 5, attackRange: c.stats?.attackrange ?? null });
   }
   return { version: items.version, items: out, champions };
 }

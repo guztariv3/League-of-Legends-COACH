@@ -8,15 +8,16 @@ import { championJson, itemJson } from "../../../packages/itemization/src/test-f
 test("in game: both teams with items, and your build from your history", async ({ page }) => {
   await page.addInitScript(() => {
     // Me: Ahri with boots and Luden. Enemies: physical, two of them healing with Bloodthirster.
-    const champs: [string, string, { itemID: number; displayName: string }[], number][] = [
-      ["Ahri", "Ahri", [{ itemID: 3020, displayName: "Sorcerer's Shoes" }, { itemID: 6655, displayName: "Luden's Companion" }], 2],
+    const champs: [string, string, { itemID: number; displayName: string; price: number }[], number][] = [
+      ["Ahri", "Ahri", [{ itemID: 3020, displayName: "Sorcerer's Shoes", price: 1100 }, { itemID: 6655, displayName: "Luden's Companion", price: 2750 }], 2],
       ["Lux", "Lux", [], 1], ["Jinx", "Jinx", [], 1], ["Garen", "Garen", [], 1], ["Malphite", "Malphite", [], 1],
-      ["Zed", "Zed", [{ itemID: 3072, displayName: "Bloodthirster" }], 6], ["Draven", "Draven", [{ itemID: 3031, displayName: "Infinity Edge" }], 4],
-      ["Miss Fortune", "MissFortune", [{ itemID: 1055, displayName: "Doran's Blade" }], 1], ["Aatrox", "Aatrox", [{ itemID: 3072, displayName: "Bloodthirster" }], 2],
-      ["Wukong", "MonkeyKing", [{ itemID: 1055, displayName: "Doran's Blade" }], 0],
+      ["Zed", "Zed", [{ itemID: 3072, displayName: "Bloodthirster", price: 3400 }], 6], ["Draven", "Draven", [{ itemID: 3031, displayName: "Infinity Edge", price: 3450 }], 4],
+      ["Miss Fortune", "MissFortune", [{ itemID: 1055, displayName: "Doran's Blade", price: 450 }], 1], ["Aatrox", "Aatrox", [{ itemID: 3072, displayName: "Bloodthirster", price: 3400 }], 2],
+      ["Wukong", "MonkeyKing", [{ itemID: 1055, displayName: "Doran's Blade", price: 450 }], 0],
     ];
     const snapshot = {
-      activePlayer: { riotId: "Yo#EUW", level: 9, currentGold: 1000 },
+      // Q maxed first so far, with two points unspent: the skill advisor follows the player's Q-W-E habit.
+      activePlayer: { riotId: "Yo#EUW", level: 9, currentGold: 1000, abilities: { Q: { abilityLevel: 4 }, W: { abilityLevel: 1 }, E: { abilityLevel: 1 }, R: { abilityLevel: 1 } } },
       allPlayers: champs.map(([name, raw, items, kills], i) => ({
         championName: name, rawChampionName: `game_character_displayname_${raw}`,
         riotId: i === 0 ? "Yo#EUW" : `Jugador${i}#EUW`, team: i < 5 ? "ORDER" : "CHAOS", level: 9, position: "",
@@ -37,6 +38,7 @@ test("in game: both teams with items, and your build from your history", async (
             if (args.champion !== "Ahri" || args.mode !== "summoners_rift") throw "server_error";
             return {
               champion: "Ahri", games: 12, wins: 7, note: null,
+              skillOrders: Array(4).fill([1, 2, 3, 1, 1, 4, 1, 2, 1, 2, 4, 2, 2, 3, 3, 4, 3, 3]),
               items: [{ id: 6655, name: "Luden's Companion", games: 10, wins: 6 }, { id: 3089, name: "Rabadon's Deathcap", games: 8, wins: 5 }],
             };
           default: throw `unknown ${cmd}`;
@@ -68,7 +70,26 @@ test("in game: both teams with items, and your build from your history", async (
   await expect(next.getByLabel("Components").getByRole("img")).toHaveCount(2);
   await expect(next).toContainText("You need 2950 more gold in total. Your 1000 gold buys: Blasting Wand (850).");
   await expect(board).toContainText("Your history on Ahri (12 games)");
+  // The Coach's Now card sits above the tabs, in its own voice.
+  await expect(board.getByRole("region", { name: "Now" })).toBeVisible();
   await page.screenshot({ path: "test-results/board-items.png" });
+
+  // Skills: ranks, and the next ability from the player's own order.
+  await board.getByRole("tab", { name: "Skills" }).click();
+  await expect(board.getByRole("region", { name: "Next ability" })).toContainText("In 4 of your last 4 games with Ahri you took W at this point.");
+  await expect(board).toContainText("You usually max Q → W → E on Ahri (4 games).");
+  await page.screenshot({ path: "test-results/board-skills.png" });
+
+  // Gold: matchups by item value (no lanes here, so list order), team totals and objectives.
+  await board.getByRole("tab", { name: "Gold" }).click();
+  const gold = board.getByRole("region", { name: "Gold difference" });
+  await expect(gold.getByRole("listitem")).toHaveCount(5);
+  await expect(gold.getByRole("listitem").first()).toContainText("+0.5k");
+  await expect(gold).toContainText("Your team 3.9k");
+  await expect(gold).toContainText("Enemy 11.2k");
+  await expect(board).toContainText("Your team is 7.3k item gold behind.");
+  await expect(board.getByRole("region", { name: "Objectives" })).toBeVisible();
+  await page.screenshot({ path: "test-results/board-gold.png" });
 
   await board.getByRole("tab", { name: "Enemies" }).click();
   await expect(board).toContainText("Jugador5");
@@ -78,7 +99,7 @@ test("in game: both teams with items, and your build from your history", async (
   await expect(board.getByRole("listitem")).toHaveCount(5);
   await page.screenshot({ path: "test-results/board-rivals.png" });
 
-  await board.getByRole("tab", { name: "Your team" }).click();
+  await board.getByRole("tab", { name: "Team" }).click();
   await expect(board.getByRole("listitem").first()).toContainText("You");
   await expect(board.getByRole("img", { name: "Luden's Companion" })).toBeVisible();
 

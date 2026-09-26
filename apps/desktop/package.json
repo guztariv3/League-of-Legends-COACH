@@ -10,6 +10,7 @@
     "e2e": "playwright test"
   },
   "dependencies": {
+    "@coach/coach": "workspace:*",
     "@coach/itemization": "workspace:*",
     "@coach/live": "workspace:*",
     "@coach/synthetic": "workspace:*",

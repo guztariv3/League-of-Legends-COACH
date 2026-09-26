@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { parseCatalog, suggestItems, type Catalog, type Suggestion } from "@coach/itemization";
+import { isAdjustment, liveCoach, pickNow, SLOT_KEY, usualMaxOrder, type CoachDecision, type LiveCoach, type Slot } from "@coach/coach";
+import { parseCatalog, type Catalog, type Suggestion } from "@coach/itemization";
 import type { GameState, PlayerState } from "@coach/live";
+import { CoachCard } from "@coach/ui";
 
 /** Where game art comes from: Data Dragon (Riot's public CDN), or nothing (letters). */
 export interface Art { cdn: string | null; version: string | null }
@@ -94,7 +96,7 @@ function PlayerRow({ p, names, art, me }: { p: PlayerState; names: Map<number, s
 }
 
 export interface BuildItem { id: number; name: string; games: number; wins: number }
-export interface PersonalBuild { champion: string; games: number; wins: number; items: BuildItem[]; note: string | null }
+export interface PersonalBuild { champion: string; games: number; wins: number; items: BuildItem[]; note: string | null; skillOrders?: number[][] }
 
 // Reasons go from the generic ("gives ability power") to the specific (the enemy team); a
 // one-line alternative shows the most specific one.
@@ -128,19 +130,25 @@ function HowToBuy({ s, gold, art }: { s: Suggestion; gold: number | null; art: A
   );
 }
 
-function ItemsTab({ state, catalog, build, art, connected, demo }: {
-  state: GameState; catalog: Catalog | null; build: PersonalBuild | null | "loading"; art: Art; connected: boolean; demo: boolean;
+function ItemsTab({ state, coach, build, art, connected, demo, hasCatalog }: {
+  state: GameState; coach: LiveCoach; build: PersonalBuild | null | "loading"; art: Art; connected: boolean; demo: boolean; hasCatalog: boolean;
 }) {
   const me = state.me!;
-  const previous = useRef<number | null>(null);
   if (demo) return <p className="quiet">In the demo the items are made up, so there are no suggestions. In a real game you will see your next suggested item here and how to buy it.</p>;
-  if (!catalog) return <p className="quiet">Loading the patch item catalog… (needs an Internet connection)</p>;
-  const usual = build && build !== "loading" ? build.items.map((i) => i.id) : [];
-  const s = suggestItems({ catalog, map: state.map, gold: state.gold, me, enemies: state.enemies, usual, previous: previous.current });
-  previous.current = s.next?.item.id ?? null;
+  if (!hasCatalog || !coach.items) return <p className="quiet">Loading the patch item catalog… (needs an Internet connection)</p>;
+  const s = coach.items;
   const price = (x: Suggestion) => `${x.item.gold} gold`;
   return (
     <div className="suggest">
+      {coach.starter && (
+        <section className="next" aria-label="Starting items">
+          <div className="label">Start with</div>
+          <div className="recipe">{coach.starter.items.map((i) => <ItemArt key={i.id} id={i.id} name={i.name} size={32} art={art} />)}</div>
+          <div className="next-name">{coach.starter.items.map((i) => i.name).join(" + ")}</div>
+          <ul className="reasons">{coach.starter.reasons.map((r) => <li key={r}>{r}</li>)}</ul>
+          {coach.starter.alternatives.length > 0 && <p className="quiet">Also fine: {coach.starter.alternatives.map((a) => a.name).join(", ")}.</p>}
+        </section>
+      )}
       <p className="quiet enemy-line">
         Enemy damage: {Math.round(s.enemy.magicShare * 100)}% magic · {100 - Math.round(s.enemy.magicShare * 100)}% physical
         {s.enemy.healers.length > 0 && ` · healing: ${s.enemy.healers.join(", ")}`}
@@ -150,7 +158,7 @@ function ItemsTab({ state, catalog, build, art, connected, demo }: {
           <div className="next-head">
             <ItemArt id={s.next.item.id} name={s.next.item.name} size={44} art={art} />
             <div>
-              <div className="label">Next suggested item</div>
+              <div className="label">{coach.starter ? "Then build towards" : "Next suggested item"}</div>
               <div className="next-name">{s.next.item.name}</div>
               <div className="quiet">{price(s.next)}</div>
             </div>
@@ -184,20 +192,142 @@ function ItemsTab({ state, catalog, build, art, connected, demo }: {
   );
 }
 
-type Tab = "items" | "rivals" | "team";
+const SLOTS: Slot[] = [1, 2, 3, 4];
 
-/** The scoreboard the game already shows (Tab), in the side window, plus the player's own build. */
+function SkillsTab({ state, coach, history, connected }: { state: GameState; coach: LiveCoach; history: Slot[][]; connected: boolean }) {
+  const me = state.me!;
+  const ranks = state.abilities;
+  const max = usualMaxOrder(history);
+  const rank = (s: Slot) => (!ranks ? 0 : s === 1 ? ranks.q : s === 2 ? ranks.w : s === 3 ? ranks.e : ranks.r);
+  return (
+    <div className="suggest">
+      {ranks ? (
+        <ul className="ranks" aria-label="Your abilities">
+          {SLOTS.map((s) => (
+            <li key={s} className={coach.skill?.ref === SLOT_KEY[s] ? "rank rank-next" : "rank"}>
+              <span className="rank-key">{SLOT_KEY[s]}</span>
+              <span className="pips" aria-label={`Rank ${rank(s)}`}>{Array.from({ length: s === 4 ? 3 : 5 }, (_, i) => <span key={i} className={i < rank(s) ? "pip pip-on" : "pip"} />)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="quiet">The game isn't reporting your abilities right now.</p>
+      )}
+      {coach.skill ? (
+        <section className="next" aria-label="Next ability">
+          <div className="label">Next ability</div>
+          <div className="next-name">{coach.skill.headline.replace("Level up: ", "")}</div>
+          <ul className="reasons">{coach.skill.reasons.map((r) => <li key={r}>{r}</li>)}</ul>
+        </section>
+      ) : state.skillPoints ? (
+        <p className="quiet">{history.length < 3
+          ? `You have a point to spend. I only suggest basic abilities from your own games with ${me.champion}${connected ? "" : " (connect the website to use your history)"}: play a few more and I will follow your order.`
+          : "You have a point to spend."}</p>
+      ) : (
+        <p className="quiet">No points to spend right now.</p>
+      )}
+      {max && <p className="quiet">You usually max {max.map((s) => SLOT_KEY[s]).join(" → ")} on {me.champion} ({history.length} games).</p>}
+      <p className="quiet small">Your ultimate is suggested as soon as a rank opens (levels 6, 11 and 16). Basic abilities follow your own history with this champion; there is no universal order.</p>
+    </div>
+  );
+}
+
+const k = (n: number) => `${n >= 0 ? "+" : "−"}${(Math.abs(n) / 1000).toFixed(1)}k`;
+
+function GoldTab({ coach, art }: { coach: LiveCoach; art: Art }) {
+  const g = coach.gold;
+  const o = coach.objectives;
+  if (!g) return <p className="quiet">Waiting for the scoreboard…</p>;
+  return (
+    <div className="suggest">
+      <section aria-label="Gold difference">
+        <div className="label">Item gold difference</div>
+        <ul className="gold-rows">
+          {g.rows.map((r) => (
+            <li key={`${r.ally.name}-${r.enemy.name}`} className="gold-row">
+              <ChampArt id={r.ally.championId} name={r.ally.champion} size={24} art={art} />
+              <span className={`gold-diff ${r.diff >= 0 ? "gold-up" : "gold-down"}`}>{k(r.diff)}</span>
+              <ChampArt id={r.enemy.championId} name={r.enemy.champion} size={24} art={art} />
+            </li>
+          ))}
+        </ul>
+        <p className="gold-total"><span>Your team {Math.round(g.allyTotal / 100) / 10}k</span><span>Enemy {Math.round(g.enemyTotal / 100) / 10}k</span></p>
+        <p className="quiet small">By the value of each player's items, as the TAB screen shows; the game doesn't share anyone's gold. {g.pairedBy === "order" ? "No lanes in this mode: players are paired in list order." : ""}</p>
+      </section>
+      {o && (
+        <section aria-label="Objectives">
+          <div className="label">Objectives</div>
+          <table className="obj">
+            <thead><tr><th scope="col"></th><th scope="col">Your team</th><th scope="col">Enemy</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Dragons</th><td>{o.ally.dragons.length}</td><td>{o.enemy.dragons.length}</td></tr>
+              <tr><th scope="row">Heralds</th><td>{o.ally.heralds}</td><td>{o.enemy.heralds}</td></tr>
+              <tr><th scope="row">Barons</th><td>{o.ally.barons}</td><td>{o.enemy.barons}</td></tr>
+              <tr><th scope="row">Turrets</th><td>{o.ally.turrets}</td><td>{o.enemy.turrets}</td></tr>
+              <tr><th scope="row">Inhibitors</th><td>{o.ally.inhibitors}</td><td>{o.enemy.inhibitors}</td></tr>
+            </tbody>
+          </table>
+        </section>
+      )}
+      {coach.strategy.length > 0 && <ul className="reasons">{coach.strategy.map((f) => <li key={f.id}>{f.headline}. {f.reasons[0]}</li>)}</ul>}
+    </div>
+  );
+}
+
+type Tab = "items" | "skills" | "gold" | "rivals" | "team";
+
+function NowArt({ d, art, coach }: { d: CoachDecision; art: Art; coach: LiveCoach }) {
+  if ((d.kind === "item" || d.kind === "boots") && d.ref) {
+    const id = Number(d.ref);
+    const name = coach.starter?.items.find((i) => i.id === id)?.name ?? coach.items?.next?.item.name ?? d.headline;
+    return <ItemArt id={id} name={name} size={32} art={art} />;
+  }
+  if (d.kind === "skill" && d.ref) return <span className="rank-key rank-key-big" aria-hidden="true">{d.ref}</span>;
+  return null;
+}
+
+/** The scoreboard the game already shows (Tab), in the side window, plus the Coach's read of it. */
 export function Board({ state, names, art, catalog, build, connected, demo = false }: {
   state: GameState; names: Map<number, string>; art: Art; catalog: Catalog | null; build: PersonalBuild | null | "loading"; connected: boolean; demo?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("items");
-  if (!state.me) return null;
-  const tabs: [Tab, string][] = [["items", "Items"], ["rivals", "Enemies"], ["team", "Your team"]];
+  const [shownId, setShownId] = useState<string | null>(null);
+  const [adjustedId, setAdjustedId] = useState<string | null>(null);
+  const previousItem = useRef<number | null>(null);
+  const lastItem = useRef<CoachDecision | null>(null);
+  const personal = build && build !== "loading" ? build : null;
+  const history = (personal?.skillOrders ?? []).filter((o) => o.every((s) => s >= 1 && s <= 4)) as Slot[][];
+  const coach = state.me ? liveCoach({
+    state,
+    catalog: demo ? null : catalog,
+    usualItems: personal?.items.map((i) => i.id) ?? [],
+    previousItem: previousItem.current,
+    skillHistory: history,
+  }) : null;
+  previousItem.current = coach?.items?.next?.item.id ?? null;
+  const now = coach ? pickNow(coach.decisions, shownId) : null;
+  const myItems = state.me?.items ?? [];
+
+  // "Coach adjustment": the next-item recommendation changed although the player didn't buy the old
+  // one, i.e. the game changed (an enemy bought something, a threat grew). Skills and the opening
+  // purchase change on their own and are never flagged.
+  const nextItem = coach?.decisions.find((d) => d.id.startsWith("item:")) ?? null;
+  useEffect(() => {
+    const before = lastItem.current;
+    if (nextItem && isAdjustment(before, nextItem) && !(before?.ref && myItems.includes(Number(before.ref)))) setAdjustedId(nextItem.id);
+    if (nextItem) lastItem.current = nextItem;
+  }, [nextItem?.id]);
+  useEffect(() => { if (now) setShownId(now.id); }, [now?.id]);
+
+  if (!state.me || !coach) return null;
+  const adjusted = now !== null && now.id === adjustedId;
+  const tabs: [Tab, string][] = [["items", "Items"], ["skills", "Skills"], ["gold", "Gold"], ["rivals", "Enemies"], ["team", "Team"]];
   return (
     <section className="board" aria-label="Game">
+      {now && <CoachCard label="Now" headline={now.headline} reasons={now.reasons} basis={now.basis} adjustment={adjusted} art={<NowArt d={now} art={art} coach={coach} />} />}
       <div className="tabs" role="tablist">
-        {tabs.map(([k, label]) => (
-          <button key={k} role="tab" aria-selected={tab === k} className="tab" onClick={() => setTab(k)}>{label}</button>
+        {tabs.map(([key, label]) => (
+          <button key={key} role="tab" aria-selected={tab === key} className="tab" onClick={() => setTab(key)}>{label}</button>
         ))}
       </div>
       <div role="tabpanel">
@@ -208,7 +338,9 @@ export function Board({ state, names, art, catalog, build, connected, demo = fal
             {state.allies.map((p) => <PlayerRow key={p.name || p.champion} p={p} names={names} art={art} />)}
           </ul>
         )}
-        {tab === "items" && <ItemsTab state={state} catalog={catalog} build={build} art={art} connected={connected} demo={demo} />}
+        {tab === "items" && <ItemsTab state={state} coach={coach} build={build} art={art} connected={connected} demo={demo} hasCatalog={catalog !== null} />}
+        {tab === "skills" && <SkillsTab state={state} coach={coach} history={history} connected={connected} />}
+        {tab === "gold" && <GoldTab coach={coach} art={art} />}
       </div>
     </section>
   );

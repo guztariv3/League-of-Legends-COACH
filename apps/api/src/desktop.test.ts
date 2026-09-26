@@ -104,9 +104,12 @@ describe("desktop pairing", () => {
       expect(i.games).toBeLessThanOrEqual(played);
       expect(i.wins).toBeLessThanOrEqual(i.games);
     }
+    // Levelling orders from the timelines feed the live skill advisor.
+    expect(build.body.skillOrders.length).toBeGreaterThanOrEqual(3);
+    expect(build.body.skillOrders[0].slice(0, 6)).toEqual([1, 2, 3, 1, 1, 4]);
 
     const none = await call("/desktop/build?champion=NoSuchChampion&mode=summoners_rift", { headers: auth });
-    expect(none.body).toMatchObject({ games: 0, items: [] });
+    expect(none.body).toMatchObject({ games: 0, items: [], skillOrders: [] });
     expect(none.body.note).toContain("You have no games");
 
     expect((await call("/desktop/build?champion=../x&mode=summoners_rift", { headers: auth })).res.status).toBe(400);

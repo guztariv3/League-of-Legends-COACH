@@ -37,9 +37,18 @@ export const itemJson = {
     "3075": item("Thornmail", 2450, { tags: ["Health", "Armor"], from: ["1029", "1028"], stats: { FlatHPPoolMod: 150, FlatArmorMod: 75 }, description: "Applies <status>Grievous Wounds</status>." }),
     "7001": item("Ornn Upgrade", 4000, { tags: ["SpellDamage"], stats: { FlatMagicDamageMod: 200 }, requiredAlly: "Ornn", inStore: false }),
     "2003": item("Health Potion", 50, { tags: ["Consumable"], consumed: true }),
+    "1055": item("Doran's Blade", 450, { tags: ["Damage", "Health", "Lane"], stats: { FlatPhysicalDamageMod: 10, FlatHPPoolMod: 80 } }),
+    "1056": item("Doran's Ring", 400, { tags: ["SpellDamage", "Mana", "Lane"], stats: { FlatMagicDamageMod: 18, FlatHPPoolMod: 90 } }),
+    "1054": item("Doran's Shield", 450, { tags: ["Health", "Lane"], stats: { FlatHPPoolMod: 110 } }),
+    "3865": item("World Atlas", 400, { tags: ["GoldPer", "Lane"] }),
+    "1101": item("Scorchclaw Pup", 450, { tags: ["Jungle"] }),
+    "1102": item("Gustwalker Hatchling", 450, { tags: ["Jungle"] }),
+    "1103": item("Mosstomper Seedling", 450, { tags: ["Jungle"] }),
   },
 };
-const champ = (id: string, tags: string[], attack: number, magic: number, defense: number) => ({ id, name: id, tags, info: { attack, magic, defense } });
+// Attack ranges follow the real champions: melee 125–175, ranged 500–550.
+const RANGE: Record<string, number> = { Ahri: 550, Lux: 550, Zed: 125, Jinx: 525, Garen: 175, Malphite: 125, Aatrox: 175, Syndra: 550, Brand: 550, Draven: 550 };
+const champ = (id: string, tags: string[], attack: number, magic: number, defense: number) => ({ id, name: id, tags, info: { attack, magic, defense }, stats: { attackrange: RANGE[id] } });
 export const championJson = {
   version: "test",
   data: Object.fromEntries([
