@@ -99,6 +99,8 @@ function PlayerRow({ p, names, art, me }: { p: PlayerState; names: Map<number, s
 export interface BuildItem { id: number; name: string; games: number; wins: number }
 export interface PlanLine { text: string; basis: "fact" | "observation" | "hypothesis"; why: string }
 export interface PlanResponse {
+  /** Data Dragon id of your champion (the server maps champion-select keys to it). */
+  champion?: string;
   plan: Record<"primaryObjective" | "secondaryObjective" | "biggestThreat" | "yourPowerSpike" | "enemyPowerSpike" | "avoid" | "lookFor", PlanLine | null> & {
     loadout: { games: number; keystone: { name: string } | null; spells: { names: string[] } | null; maxOrder: string[] | null; firstItem: { name: string } | null };
   };
@@ -289,7 +291,7 @@ const PLAN_ROWS: [keyof Omit<PlanResponse["plan"], "loadout">, string][] = [
   ["yourPowerSpike", "Your power spike"], ["enemyPowerSpike", "Enemy power spike"], ["avoid", "What to avoid"], ["lookFor", "What to look for"],
 ];
 
-function PlanTab({ plan, connected }: { plan: PlanResponse | null; connected: boolean }) {
+export function PlanTab({ plan, connected }: { plan: PlanResponse | null; connected: boolean }) {
   if (!connected) return <p className="quiet">Connect the website (Settings) to get the Coach's game plan: it uses your own games with this champion.</p>;
   if (!plan) return <p className="quiet">Preparing your game plan…</p>;
   const l = plan.plan.loadout;

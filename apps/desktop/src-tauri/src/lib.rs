@@ -11,6 +11,10 @@
 //!   game's rendering.
 //! - Polling is driven by the UI (and slowed down by Safe Mode), with short
 //!   timeouts so the Coach never waits on the game.
+//! - Champion select (D-13, registered with Riot): read-only GETs to the League
+//!   Client's own local API, found through its `lockfile`. Only champion ids and
+//!   the player's own position leave this file; other players' names and ids are
+//!   never read into the result.
 
 use std::sync::Mutex;
 use std::time::Duration;
@@ -23,6 +27,8 @@ const LIVE_URL: &str = "https://127.0.0.1:2999/liveclientdata/allgamedata";
 
 struct AppState {
     http: reqwest::Client,
+    /// League Client (champion select), local and read-only.
+    lcu: reqwest::Client,
     /// Ordinary, certificate-checking client for the player's own KOI Master site.
     site: reqwest::Client,
     sys: Mutex<System>,
@@ -191,6 +197,110 @@ async fn desktop_plan(state: tauri::State<'_, AppState>, base_url: String, token
     site_json(res).await
 }
 
+// ------------------------------------------------------------------ champion select (LCU, read-only)
+
+/// Port and password from the League Client's `lockfile` ("LeagueClient:pid:port:password:https").
+fn parse_lockfile(raw: &str) -> Option<(u16, String)> {
+    let parts: Vec<&str> = raw.trim().split(':').collect();
+    if parts.len() < 5 || parts[4] != "https" {
+        return None;
+    }
+    let port = parts[2].parse::<u16>().ok()?;
+    let password = parts[3].to_string();
+    if password.is_empty() {
+        return None;
+    }
+    Some((port, password))
+}
+
+/// League install folders listed by the Riot Client (`RiotClientInstalls.json`), then the default one.
+fn install_dirs(installs_json: Option<&str>) -> Vec<std::path::PathBuf> {
+    let mut dirs = Vec::new();
+    if let Some(json) = installs_json.and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok()) {
+        if let Some(map) = json.get("associated_client").and_then(|v| v.as_object()) {
+            for key in map.keys() {
+                if key.to_ascii_lowercase().contains("league of legends") {
+                    dirs.push(std::path::PathBuf::from(key));
+                }
+            }
+        }
+    }
+    let default = std::path::PathBuf::from(r"C:\Riot Games\League of Legends");
+    if !dirs.contains(&default) {
+        dirs.push(default);
+    }
+    dirs
+}
+
+fn find_lockfile() -> Option<(u16, String)> {
+    let program_data = std::env::var("PROGRAMDATA").unwrap_or_else(|_| r"C:\ProgramData".into());
+    let installs = std::fs::read_to_string(std::path::Path::new(&program_data).join("Riot Games").join("RiotClientInstalls.json")).ok();
+    install_dirs(installs.as_deref())
+        .into_iter()
+        .find_map(|dir| std::fs::read_to_string(dir.join("lockfile")).ok().and_then(|raw| parse_lockfile(&raw)))
+}
+
+/// Keeps only what the Coach may use from a champion-select session: champion ids and the
+/// player's own assigned position. Other players' names, PUUIDs and summoner ids are dropped here.
+fn reduce_session(session: &serde_json::Value) -> serde_json::Value {
+    let me_cell = session.get("localPlayerCellId").and_then(|v| v.as_i64());
+    let team = |key: &str| session.get(key).and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    let champ = |p: &serde_json::Value, intent: bool| -> u64 {
+        let picked = p.get("championId").and_then(|v| v.as_u64()).unwrap_or(0);
+        if picked > 0 || !intent { picked } else { p.get("championPickIntent").and_then(|v| v.as_u64()).unwrap_or(0) }
+    };
+    let my_team = team("myTeam");
+    let me = my_team.iter().find(|p| p.get("cellId").and_then(|v| v.as_i64()) == me_cell);
+    let allies: Vec<u64> = my_team.iter()
+        .filter(|p| p.get("cellId").and_then(|v| v.as_i64()) != me_cell)
+        .map(|p| champ(p, false)).filter(|c| *c > 0).collect();
+    let enemies: Vec<u64> = team("theirTeam").iter().map(|p| champ(p, false)).filter(|c| *c > 0).collect();
+    serde_json::json!({
+        "phase": "ChampSelect",
+        "me": me.map(|p| serde_json::json!({
+            "championId": champ(p, true),
+            "locked": p.get("championId").and_then(|v| v.as_u64()).unwrap_or(0) > 0,
+            "position": p.get("assignedPosition").and_then(|v| v.as_str()).unwrap_or(""),
+        })),
+        "allies": allies,
+        "enemies": enemies,
+    })
+}
+
+/// Champion select from the League Client (read-only). `Err("no_client")` when the client
+/// isn't running; `{ phase }` outside champion select; the reduced session inside it.
+#[tauri::command]
+async fn lcu_champ_select(state: tauri::State<'_, AppState>) -> Result<serde_json::Value, String> {
+    let (port, password) = find_lockfile().ok_or("no_client")?;
+    let base = format!("https://127.0.0.1:{port}");
+    let get = |path: &str| state.lcu.get(format!("{base}{path}")).basic_auth("riot", Some(&password)).send();
+    let phase: String = get("/lol-gameflow/v1/gameflow-phase").await.map_err(|_| "no_client".to_string())?
+        .json().await.map_err(|_| "no_client".to_string())?;
+    if phase != "ChampSelect" {
+        return Ok(serde_json::json!({ "phase": phase }));
+    }
+    let res = get("/lol-champ-select/v1/session").await.map_err(|_| "no_client".to_string())?;
+    if !res.status().is_success() {
+        return Ok(serde_json::json!({ "phase": phase }));
+    }
+    let session: serde_json::Value = res.json().await.map_err(|_| "unexpected_client_data".to_string())?;
+    Ok(reduce_session(&session))
+}
+
+fn lcu_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        // The League Client serves its local API with a certificate signed by Riot's own root,
+        // like the game's Live Client Data API. This client only ever talks to 127.0.0.1 on the
+        // port from the lockfile, with the lockfile's password.
+        // TODO(verify): pin Riot's published root certificate (riotgames.pem) instead.
+        .danger_accept_invalid_certs(true)
+        .no_proxy()
+        .connect_timeout(Duration::from_millis(500))
+        .timeout(Duration::from_millis(2000))
+        .build()
+        .expect("lcu client")
+}
+
 fn site_client() -> reqwest::Client {
     reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(10))
@@ -225,8 +335,8 @@ pub fn run() {
     #[cfg(feature = "updater")]
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     builder
-        .manage(AppState { http: live_client(), site: site_client(), sys: Mutex::new(sys) })
-        .invoke_handler(tauri::generate_handler![live_snapshot, system_load, check_update, install_update, desktop_claim, desktop_scout, desktop_build, desktop_plan, set_overlay])
+        .manage(AppState { http: live_client(), lcu: lcu_client(), site: site_client(), sys: Mutex::new(sys) })
+        .invoke_handler(tauri::generate_handler![live_snapshot, system_load, check_update, install_update, desktop_claim, desktop_scout, desktop_build, desktop_plan, set_overlay, lcu_champ_select])
         .run(tauri::generate_context!())
         .expect("error while running KOI Master desktop");
 }
@@ -247,6 +357,44 @@ mod tests {
         assert_eq!(site_origin("ftp://example.com").unwrap_err(), "insecure_url");
         assert_eq!(site_origin("https://user:pw@example.com").unwrap_err(), "invalid_url");
         assert_eq!(site_origin("not a url").unwrap_err(), "invalid_url");
+    }
+
+    #[test]
+    fn lockfile_gives_port_and_password() {
+        assert_eq!(parse_lockfile("LeagueClient:1234:54321:s3cr3t:https\n"), Some((54321, "s3cr3t".into())));
+        assert_eq!(parse_lockfile("LeagueClient:1234:54321:s3cr3t:http"), None);
+        assert_eq!(parse_lockfile("garbage"), None);
+        assert_eq!(parse_lockfile("LeagueClient:1:notaport:pw:https"), None);
+    }
+
+    #[test]
+    fn install_dirs_come_from_the_riot_client_then_the_default() {
+        let json = r#"{"associated_client":{"D:/Games/Riot Games/League of Legends/":"D:/Games/Riot Games/Riot Client/RiotClientServices.exe","D:/Games/VALORANT/":"x"}}"#;
+        let dirs = install_dirs(Some(json));
+        assert_eq!(dirs[0], std::path::PathBuf::from("D:/Games/Riot Games/League of Legends/"));
+        assert_eq!(dirs.len(), 2);
+        assert_eq!(install_dirs(None).len(), 1);
+    }
+
+    #[test]
+    fn session_keeps_only_champions_and_own_position() {
+        let session = serde_json::json!({
+            "localPlayerCellId": 2,
+            "myTeam": [
+                { "cellId": 1, "championId": 103, "puuid": "ally-puuid", "gameName": "Ally", "assignedPosition": "top" },
+                { "cellId": 2, "championId": 0, "championPickIntent": 157, "puuid": "my-puuid", "assignedPosition": "middle" },
+                { "cellId": 3, "championId": 0, "championPickIntent": 64, "assignedPosition": "jungle" }
+            ],
+            "theirTeam": [{ "cellId": 5, "championId": 238, "puuid": "enemy-puuid" }, { "cellId": 6, "championId": 0 }]
+        });
+        let r = reduce_session(&session);
+        assert_eq!(r["me"]["championId"], 157);
+        assert_eq!(r["me"]["locked"], false);
+        assert_eq!(r["me"]["position"], "middle");
+        assert_eq!(r["allies"], serde_json::json!([103])); // an ally's hover isn't used
+        assert_eq!(r["enemies"], serde_json::json!([238]));
+        let text = r.to_string();
+        assert!(!text.contains("puuid") && !text.contains("Ally"));
     }
 
     /// With no game running, a read must fail fast (never block the Coach).

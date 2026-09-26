@@ -44,8 +44,10 @@ export function Privacy() {
 
       <h2>The desktop app</h2>
       <p>
-        During a game, the app only reads the data the game itself publishes on your computer (the Live Client Data API) and does not send it anywhere.
-        If you connect it to the website, it asks your KOI Master account for your opponents' list with its token; you can disconnect it from Settings at any time.
+        During a game, the app only reads the data the game itself publishes on your computer (the Live Client Data API). During champion select, it reads the
+        League client on your computer, read-only, and keeps only the champions and your own position; other players' names are never read into it.
+        If you connect it to the website, it sends your KOI Master account only the champions of your game, to build your game plan, and asks for your
+        opponents' list at the loading screen, always with its token. Nothing else leaves your computer, and you can disconnect it from Settings at any time.
       </p>
 
       <h2>Your rights</h2>

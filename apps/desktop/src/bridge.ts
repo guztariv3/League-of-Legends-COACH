@@ -108,3 +108,22 @@ export async function sendOverlay(state: OverlayState): Promise<void> {
   const { emitTo } = await import("@tauri-apps/api/event");
   await emitTo("overlay", OVERLAY_EVENT, state).catch(() => { /* overlay closed */ });
 }
+
+/** Champion select as the League Client reports it (read-only, champions and your own position only). */
+export interface ChampSelect {
+  phase: string;
+  me?: { championId: number; locked: boolean; position: string } | null;
+  allies?: number[];
+  enemies?: number[];
+}
+export type ChampSelectResult = { ok: true; data: ChampSelect } | { ok: false; reason: "no_client" | "unavailable" };
+
+/** One read of champion select from the League Client (D-13). */
+export async function readChampSelect(): Promise<ChampSelectResult> {
+  if (!inTauri) return { ok: false, reason: "unavailable" };
+  try {
+    return { ok: true, data: await invoke<ChampSelect>("lcu_champ_select") };
+  } catch {
+    return { ok: false, reason: "no_client" };
+  }
+}
