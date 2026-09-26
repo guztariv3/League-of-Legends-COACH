@@ -58,6 +58,6 @@ jobs:
           args: ${{ matrix.args }} --features updater --config src-tauri/tauri.updater.json
           tagName: ${{ github.ref_name }}
           releaseName: "KOI Master ${{ github.ref_name }}"
-          releaseBody: "Borrador: prueba los instaladores antes de publicar. Al publicar, las apps instaladas recibirán la actualización."
+          releaseBody: "Draft: test the installers before publishing. Once published, installed apps will receive the update."
           releaseDraft: true
           includeUpdaterJson: true
