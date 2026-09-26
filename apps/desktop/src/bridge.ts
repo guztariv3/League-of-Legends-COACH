@@ -25,10 +25,14 @@ export async function readLoad(): Promise<LoadSample | null> {
   }
 }
 
-export async function minimizeWindow(): Promise<void> {
+/** The borderless window's own controls (the app draws its title bar). */
+export async function windowControl(action: "minimize" | "maximize" | "close"): Promise<void> {
   if (!inTauri) return;
   const { getCurrentWindow } = await import("@tauri-apps/api/window");
-  await getCurrentWindow().minimize();
+  const w = getCurrentWindow();
+  if (action === "minimize") await w.minimize();
+  else if (action === "maximize") await w.toggleMaximize();
+  else await w.close();
 }
 
 export interface UpdateInfo {
@@ -79,6 +83,9 @@ export const fetchScout = <T>(baseUrl: string, token: string) => site<T>("deskto
 /** The player's own build with the champion they are playing (from their history on the site). */
 export const fetchBuild = <T>(baseUrl: string, token: string, champion: string, mode: "summoners_rift" | "aram") =>
   site<T>("desktop_build", { baseUrl, token, champion, mode });
+
+/** The player's home between games: the same profile as the website. */
+export const fetchHome = <T>(baseUrl: string, token: string) => site<T>("desktop_home", { baseUrl, token });
 
 /** The Coach's game plan for the champions of this game (champions only). */
 export const fetchPlan = <T>(baseUrl: string, token: string, c: { me: string; allies: string[]; enemies: string[]; opponent: string | null }) =>

@@ -48,8 +48,9 @@ test("desktop: connect with a code and see the rivals from the loading screen", 
 
   await page.getByLabel("Code").fill("ABCD-EFGH");
   await page.getByRole("button", { name: "Connect" }).click();
-  await page.getByText("Settings", { exact: true }).click();
+  await page.getByRole("tablist", { name: "Sections" }).getByRole("tab", { name: "Settings" }).click();
   await expect(page.getByText(/Connected to/)).toContainText("koi.example");
+  await page.getByRole("tablist", { name: "Sections" }).getByRole("tab", { name: "Home" }).click();
 
   const rivals = page.getByRole("region", { name: "Your opponents" });
   await expect(rivals).toBeVisible();
@@ -67,8 +68,9 @@ test("desktop: connect with a code and see the rivals from the loading screen", 
   await page.screenshot({ path: "test-results/rivals.png" });
 
   page.once("dialog", (d) => d.accept());
-  await page.getByText("Settings", { exact: true }).click();
+  await page.getByRole("tablist", { name: "Sections" }).getByRole("tab", { name: "Settings" }).click();
   await page.getByRole("button", { name: "Disconnect" }).click();
+  await page.getByRole("tablist", { name: "Sections" }).getByRole("tab", { name: "Home" }).click();
   await expect(page.getByRole("region", { name: "Your opponents" })).toHaveCount(0);
   await expect(page.getByRole("region", { name: "Connect to the website" }).getByRole("button", { name: "Connect" })).toBeVisible();
 });

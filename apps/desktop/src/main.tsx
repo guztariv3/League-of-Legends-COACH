@@ -2,8 +2,9 @@ import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { DEFAULT_CONTROLS, laneOpponent, LiveEngine, modeInfo, type Delivery, type EngineTick, type Intensity, type LiveControls } from "@coach/live";
 import { CoachAvatar } from "@coach/ui";
-import { checkUpdate, fetchBuild, fetchPlan, inTauri, installUpdate, minimizeWindow, readChampSelect, readLoad, readSnapshot, setOverlay, type ChampSelect, type UpdateInfo } from "./bridge";
-import { Board, ChampArt, PlanTab, useArt, useCatalog, type PersonalBuild, type PlanResponse } from "./board";
+import { checkUpdate, fetchBuild, fetchPlan, inTauri, installUpdate, readChampSelect, readLoad, readSnapshot, setOverlay, windowControl, type ChampSelect, type UpdateInfo } from "./bridge";
+import { Board, ChampArt, PlanTab, useArt, useCatalog, type BoardTab, type PersonalBuild, type PlanResponse } from "./board";
+import { Home } from "./home";
 import { ConnectForm, RivalsPanel, useRivals } from "./rivals";
 import "./live.css";
 
@@ -28,6 +29,15 @@ function loadControls(): LiveControls {
 }
 
 type Mode = "waiting" | "live" | "demo";
+/** The window's sections, in the top navigation. In-game sections only exist during a game. */
+type View = "home" | "draft" | BoardTab | "settings";
+const GAME_VIEWS: [BoardTab, string][] = [["plan", "Plan"], ["items", "Items"], ["skills", "Skills"], ["gold", "Gold"]];
+
+/** True once the game reports its end (the victory/defeat screen): the match is over. */
+function gameEnded(raw: unknown): boolean {
+  const events = (raw as { events?: { Events?: { EventName?: string }[] } } | null)?.events?.Events;
+  return Array.isArray(events) && events.some((e) => e.EventName === "GameEnd");
+}
 
 function LiveWindow() {
   const [controls, setControls] = useState<LiveControls>(loadControls);
@@ -35,10 +45,12 @@ function LiveWindow() {
   // The overlay is off unless the player turns it on (D-11).
   const [overlay, setOverlayOn] = useState(() => { try { return localStorage.getItem(OVERLAY_KEY) === "on"; } catch { return false; } });
   const [mode, setMode] = useState<Mode>("waiting");
+  const [view, setView] = useState<View>("home");
   const [tick, setTick] = useState<EngineTick | null>(null);
   const [message, setMessage] = useState<(Delivery & { shownAt: number }) | null>(null);
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const [updateState, setUpdateState] = useState<"idle" | "installing" | "failed">("idle");
+  const [homeKey, setHomeKey] = useState(0);
   const rivals = useRivals(mode);
   const art = useArt(rivals.scout?.assets ?? null);
   const catalog = useCatalog(art);
@@ -54,22 +66,44 @@ function LiveWindow() {
     try { localStorage.setItem(CONTROLS_KEY, JSON.stringify(controls)); } catch { /* per-viewer convenience only */ }
   }, [controls]);
 
+  /**
+   * A match is over (end screen, or the game closed): every piece of live state is dropped, not
+   * hidden, so nothing from it can leak into the next game, and the window goes back to Home.
+   */
+  const resetMatch = () => {
+    setTick(null);
+    setMessage(null);
+    setBuild(null);
+    setPlan(null);
+    itemNames.current = new Map();
+    setMode("waiting");
+    setView("home");
+    setHomeKey((k) => k + 1);
+  };
+
   useEffect(() => {
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
+    // One engine per match: created when a match is first read, discarded when it ends.
+    let engine: LiveEngine | null = null;
+    // After the end screen the game keeps answering until it closes; those reads are ignored.
+    let finished = false;
+    let live = false;
 
     const start = async () => {
       // The demo (synthetic generator) is loaded only when asked for, keeping the live window light.
       const speed = Number(new URLSearchParams(location.search).get("demoSpeed")) || 20;
       const demo = mode === "demo" ? (await import("./demo")).createDemo(speed) : null;
-      itemNames.current = new Map(demo?.itemNames ?? []);
-      const engine = new LiveEngine({
-        bigItemGold: demo?.bigItemGold ?? 2200,
-        spikeLevels: [6, 11, 16],
-        itemPrices: demo?.itemPrices,
-        itemNames: itemNames.current,
-        focus: focusCs ? "csPerMin" : null,
-      });
+      const newEngine = () => {
+        itemNames.current = new Map(demo?.itemNames ?? []);
+        return new LiveEngine({
+          bigItemGold: demo?.bigItemGold ?? 2200,
+          spikeLevels: [6, 11, 16],
+          itemPrices: demo?.itemPrices,
+          itemNames: itemNames.current,
+          focus: focusCs ? "csPerMin" : null,
+        });
+      };
 
       const loop = async () => {
         if (stopped) return;
@@ -79,17 +113,23 @@ function LiveWindow() {
         else {
           const snap = await readSnapshot();
           if (snap.ok) raw = snap.data;
-          else if (!stopped) setMode((m) => (m === "live" ? "waiting" : m));
         }
-        if (raw !== null && !stopped) {
-          if (!demo) setMode("live");
+        if (stopped) return;
+        if (raw === null) {
+          // No game (or it closed): a match that was running ends here too.
+          if (live) { live = false; engine = null; resetMatch(); }
+          finished = false;
+        } else if (!demo && gameEnded(raw)) {
+          if (!finished) { live = false; engine = null; finished = true; resetMatch(); }
+        } else if (!finished) {
+          if (!engine) { engine = newEngine(); live = true; if (!demo) { setMode("live"); setView("items"); } }
           const t = engine.tick(raw, controlsRef.current, load);
           setTick(t);
           const d = t.deliveries[0];
           if (d) setMessage({ ...d, shownAt: t.state.time });
         }
         // Waiting for a game: poll slowly. In game: the engine's pace (slower in Safe Mode).
-        if (!stopped) timer = setTimeout(loop, raw === null ? 5000 : demo ? 500 : engine.safeMode.pollMs);
+        if (!stopped) timer = setTimeout(loop, raw === null || finished ? 5000 : demo ? 500 : engine?.safeMode.pollMs ?? 1000);
       };
       await loop();
     };
@@ -154,8 +194,13 @@ function LiveWindow() {
     return () => { stopped = true; clearTimeout(timer); };
   }, [mode]);
 
-  const inSelect = champSelect?.phase === "ChampSelect";
-  const csMe = inSelect ? champSelect.me?.championId ?? 0 : 0;
+  const inSelect = mode === "waiting" && champSelect?.phase === "ChampSelect";
+  // Entering champion select opens the Draft section; leaving it without a game goes back Home.
+  useEffect(() => {
+    if (inSelect) setView("draft");
+    else setView((v) => (v === "draft" ? "home" : v));
+  }, [inSelect]);
+  const csMe = inSelect ? champSelect?.me?.championId ?? 0 : 0;
   const csKey = csMe ? [csMe, "|", ...(champSelect?.allies ?? []), "|", ...(champSelect?.enemies ?? [])].join(",") : null;
   useEffect(() => {
     const link = rivals.link;
@@ -175,23 +220,52 @@ function LiveWindow() {
 
   const set = (patch: Partial<LiveControls>) => setControls((c) => ({ ...c, ...patch }));
   const me = tick?.state.me;
+  const inGame = Boolean(me) && (mode === "live" || mode === "demo");
   const game = tick ? modeInfo(tick.state) : null;
   const minutes = tick ? tick.state.time / 60 : 0;
   const reduced = controls.focus || tick?.safeMode;
 
+  const nav: [View, string][] = [
+    ["home", "Home"],
+    ...(inSelect ? [["draft", "Draft"] as [View, string]] : []),
+    ...(inGame ? GAME_VIEWS : []),
+    ["settings", "Settings"],
+  ];
+  // A view that no longer exists (the game ended, champion select closed) falls back to Home.
+  const shown: View = nav.some(([k]) => k === view) ? view : "home";
+  const boardView = GAME_VIEWS.find(([k]) => k === shown)?.[0] ?? null;
+
   return (
     <main className={`live${reduced ? " reduced" : ""}`}>
-      <div className="bar" role="toolbar" aria-label="Live Coach controls">
+      <header className="titlebar" data-tauri-drag-region>
+        <span className="brand" data-tauri-drag-region>
+          <span className="brand-mark" aria-hidden="true"><CoachAvatar quiet /></span>
+          KOI Master
+        </span>
         {mode === "live" && <span className="chip chip-on">● In game</span>}
-        {mode === "waiting" && <span className="chip">Waiting for a game</span>}
+        {inSelect && <span className="chip chip-on">● Champion select</span>}
+        {mode === "waiting" && !inSelect && <span className="chip">Waiting for a game</span>}
         {mode === "demo" && <span className="chip chip-demo">◆ Demo</span>}
         {tick?.safeMode && <span className="chip chip-safe" title="Your computer is under load: the Coach saves resources">Safe mode</span>}
-        <span className="spacer" />
-        <button className="btn" aria-pressed={controls.paused} onClick={() => set({ paused: !controls.paused })}>{controls.paused ? "Resume" : "Pause"}</button>
-        <button className="btn" aria-pressed={controls.muted} onClick={() => set({ muted: !controls.muted })}>{controls.muted ? "Unmute" : "Mute"}</button>
-        <button className="btn" aria-pressed={controls.focus} onClick={() => set({ focus: !controls.focus })}>Focus</button>
-        {inTauri && <button className="btn" onClick={() => void minimizeWindow()} aria-label="Hide window">Hide</button>}
-      </div>
+        {controls.paused && <span className="chip">Paused</span>}
+        <span className="spacer" data-tauri-drag-region />
+        {inTauri && (
+          <span className="window-controls">
+            <button className="wc" onClick={() => void windowControl("minimize")} aria-label="Minimize">–</button>
+            <button className="wc" onClick={() => void windowControl("maximize")} aria-label="Maximize or restore">▢</button>
+            <button className="wc wc-close" onClick={() => void windowControl("close")} aria-label="Close">✕</button>
+          </span>
+        )}
+      </header>
+
+      <nav className="main-nav" role="tablist" aria-label="Sections">
+        {nav.map(([key, label]) => (
+          <button key={key} role="tab" aria-selected={shown === key} className={`nav-tab${key === "settings" ? " nav-tab-icon" : ""}`} onClick={() => setView(key)}
+            aria-label={key === "settings" ? label : undefined} title={key === "settings" ? label : undefined}>
+            {key === "settings" ? <span aria-hidden="true">⚙</span> : label}
+          </button>
+        ))}
+      </nav>
 
       {update && mode !== "live" && (
         <div className="message compact" role="status">
@@ -212,7 +286,29 @@ function LiveWindow() {
         </div>
       )}
 
-      {inSelect && mode === "waiting" && (
+      {shown !== "settings" && <RivalsPanel scout={rivals.scout} collapsed={mode === "live"} />}
+
+      {shown === "home" && (
+        <>
+          <Home link={rivals.link} art={art} refreshKey={homeKey} />
+          {!rivals.link && (
+            <section className="connect-card" aria-labelledby="connect-h">
+              <h2 id="connect-h">Connect to the website (optional)</h2>
+              {showConnect ? (
+                <ConnectForm link={rivals.link} problem={rivals.problem} onConnect={(l) => { rivals.connect(l); setShowConnect(false); }} onDisconnect={rivals.disconnect} />
+              ) : (
+                <>
+                  <p className="quiet">Optional, if you have a KOI Master website account: adds your profile here, your opponents at the loading screen and your history. Item suggestions and the game board work without connecting.</p>
+                  {rivals.problem && <p className="quiet" role="alert">{rivals.problem}</p>}
+                  <button className="btn btn-primary" onClick={() => setShowConnect(true)}>Connect</button>
+                </>
+              )}
+            </section>
+          )}
+        </>
+      )}
+
+      {shown === "draft" && (
         <section className="connect-card" aria-labelledby="cs-h">
           <h2 id="cs-h">Champion select</h2>
           {csMe === 0 ? (
@@ -233,52 +329,85 @@ function LiveWindow() {
         </section>
       )}
 
-      <RivalsPanel scout={rivals.scout} collapsed={mode === "live"} />
-
-      {tick?.state.me && (
-        <Board state={tick.state} names={itemNames.current} art={art} catalog={catalog} demo={mode === "demo"} build={mode === "demo" ? null : build} connected={Boolean(rivals.link) && mode !== "demo"} overlay={overlayVisible} plan={mode === "demo" ? null : plan} />
+      {/* The board stays mounted for the whole match (it feeds the overlay and remembers the Coach's
+          last recommendation); other sections only hide it. */}
+      {inGame && tick?.state.me && (
+        <div hidden={!boardView}>
+          <Board state={tick.state} art={art} catalog={catalog} demo={mode === "demo"} build={mode === "demo" ? null : build} connected={Boolean(rivals.link) && mode !== "demo"} overlay={overlayVisible} plan={mode === "demo" ? null : plan} tab={boardView ?? "items"} />
+        </div>
       )}
 
-      {!rivals.link && mode === "waiting" && (
-        <section className="connect-card" aria-labelledby="connect-h">
-          <h2 id="connect-h">Connect to the website (optional)</h2>
-          {showConnect ? (
-            <ConnectForm link={rivals.link} problem={rivals.problem} onConnect={(l) => { rivals.connect(l); setShowConnect(false); }} onDisconnect={rivals.disconnect} />
+      {shown === "settings" && (
+        <section className="settings" aria-label="Settings">
+          <h2 className="label">Coach</h2>
+          <div className="bar">
+            <button className="btn" aria-pressed={controls.paused} onClick={() => set({ paused: !controls.paused })}>{controls.paused ? "Resume" : "Pause"}</button>
+            <button className="btn" aria-pressed={controls.muted} onClick={() => set({ muted: !controls.muted })}>{controls.muted ? "Unmute" : "Mute"}</button>
+            <button className="btn" aria-pressed={controls.focus} onClick={() => set({ focus: !controls.focus })}>Focus mode</button>
+          </div>
+          <label>
+            Intensity
+            <select value={controls.intensity} onChange={(e) => set({ intensity: e.target.value as Intensity })}>
+              <option value="low">Low</option>
+              <option value="normal">Normal</option>
+              <option value="high">High</option>
+            </select>
+          </label>
+          <label><input type="checkbox" checked={focusCs} onChange={(e) => setFocusCs(e.target.checked)} /> I want to focus on CS</label>
+          <label>
+            <input type="checkbox" checked={overlay} onChange={(e) => setOverlayOn(e.target.checked)} /> Show the overlay over the game (gold difference and next items)
+          </label>
+          <p className="quiet small">Off by default. It is a separate transparent window that lets your clicks through; it doesn't touch the game. It needs the game in borderless or windowed mode.</p>
+          <fieldset style={{ border: 0, padding: 0, margin: "6px 0" }}>
+            <legend>What it can tell you about</legend>
+            {Object.entries(categoryLabel).map(([k, label]) => (
+              <label key={k}>
+                <input type="checkbox" checked={controls.categories[k] ?? false} onChange={(e) => set({ categories: { ...controls.categories, [k]: e.target.checked } })} />
+                {label}
+              </label>
+            ))}
+          </fieldset>
+          <p className="quiet">
+            The Coach only reads the data the game itself publishes and never gives you orders. It does not track enemy ultimates or summoner spells.
+          </p>
+          <h2 className="label">Website connection</h2>
+          {rivals.link
+            ? <ConnectForm link={rivals.link} problem={rivals.problem} onConnect={rivals.connect} onDisconnect={rivals.disconnect} />
+            : <p className="quiet">Not connected. Use the <strong>Connect</strong> button on Home.</p>}
+          <button className="btn" onClick={() => {
+            if (mode === "demo") resetMatch();
+            else { setMode("demo"); setView("items"); }
+          }}>{mode === "demo" ? "Exit demo" : "Try the demo"}</button>
+        </section>
+      )}
+
+      {shown !== "settings" && (
+        <section className={`stage${inGame ? " stage-compact" : ""}`} aria-live="polite">
+          {message && !controls.muted ? (
+            <div className="presence">
+              <CoachAvatar expression={message.signal.category.startsWith("enemy") ? "concerned" : "happy"} />
+              <div className={`message${message.compact ? " compact" : ""}`}>
+                <div>{message.signal.text}</div>
+                <div className="when">minute {Math.floor(message.shownAt / 60)}</div>
+              </div>
+            </div>
           ) : (
-            <>
-              <p className="quiet">Optional, if you have a KOI Master website account: adds your opponents at the loading screen and your history. Item suggestions and the game board work without connecting.</p>
-              {rivals.problem && <p className="quiet" role="alert">{rivals.problem}</p>}
-              <button className="btn btn-primary" onClick={() => setShowConnect(true)}>Connect</button>
-            </>
+            <div className="presence">
+              <CoachAvatar quiet expression={controls.paused ? "thinking" : "idle"} />
+              <span className="quiet">
+                {controls.paused ? "Paused." : controls.muted ? "Muted." : mode === "waiting" ? (inTauri ? "I will only speak up when something matters." : "Open the desktop app during a game, or try the demo.") : "Nothing important right now."}
+              </span>
+            </div>
           )}
         </section>
       )}
 
-      <section className={`stage${tick?.state.me ? " stage-compact" : ""}`} aria-live="polite">
-        {message && !controls.muted ? (
-          <div className="presence">
-            <CoachAvatar expression={message.signal.category.startsWith("enemy") ? "concerned" : "happy"} />
-            <div className={`message${message.compact ? " compact" : ""}`}>
-              <div>{message.signal.text}</div>
-              <div className="when">minute {Math.floor(message.shownAt / 60)}</div>
-            </div>
-          </div>
-        ) : (
-          <div className="presence">
-            <CoachAvatar quiet expression={controls.paused ? "thinking" : "idle"} />
-            <span className="quiet">
-              {controls.paused ? "Paused." : controls.muted ? "Muted." : mode === "waiting" ? (inTauri ? "I will only speak up when something matters." : "Open the desktop app during a game, or try the demo.") : "Nothing important right now."}
-            </span>
-          </div>
-        )}
-      </section>
-
-      {game && (
+      {inGame && game && (
         <div className="mode-line" title={game.lanes ? undefined : "No lanes: instead of your lane opponent, I tell you about the enemy with the most major items."}>
           {game.label}{game.lanes ? "" : " · no lanes"}
         </div>
       )}
-      {me && (
+      {inGame && me && (
         <div className="stats" aria-label="Your game">
           <span>{Math.floor(minutes)}:{String(Math.floor(tick!.state.time % 60)).padStart(2, "0")}</span>
           <span>Level {me.level}</span>
@@ -286,40 +415,6 @@ function LiveWindow() {
           {minutes >= 1 && <span>{(me.cs / minutes).toFixed(1)} CS/min</span>}
         </div>
       )}
-
-      <details>
-        <summary>Settings</summary>
-        <label>
-          Intensity
-          <select value={controls.intensity} onChange={(e) => set({ intensity: e.target.value as Intensity })}>
-            <option value="low">Low</option>
-            <option value="normal">Normal</option>
-            <option value="high">High</option>
-          </select>
-        </label>
-        <label><input type="checkbox" checked={focusCs} onChange={(e) => setFocusCs(e.target.checked)} /> I want to focus on CS</label>
-        <label>
-          <input type="checkbox" checked={overlay} onChange={(e) => setOverlayOn(e.target.checked)} /> Show the overlay over the game (gold difference and next items)
-        </label>
-        <p className="quiet small">Off by default. It is a separate transparent window that lets your clicks through; it doesn't touch the game. It needs the game in borderless or windowed mode.</p>
-        <fieldset style={{ border: 0, padding: 0, margin: "6px 0" }}>
-          <legend>What it can tell you about</legend>
-          {Object.entries(categoryLabel).map(([k, label]) => (
-            <label key={k}>
-              <input type="checkbox" checked={controls.categories[k] ?? false} onChange={(e) => set({ categories: { ...controls.categories, [k]: e.target.checked } })} />
-              {label}
-            </label>
-          ))}
-        </fieldset>
-        <p className="quiet">
-          The Coach only reads the data the game itself publishes and never gives you orders. It does not track enemy ultimates or summoner spells.
-        </p>
-        <h3>Website connection</h3>
-        {rivals.link
-          ? <ConnectForm link={rivals.link} problem={rivals.problem} onConnect={rivals.connect} onDisconnect={rivals.disconnect} />
-          : <p className="quiet">Not connected. Use the <strong>Connect</strong> button on the main screen (outside a game).</p>}
-        <button className="btn" onClick={() => setMode((m) => (m === "demo" ? "waiting" : "demo"))}>{mode === "demo" ? "Exit demo" : "Try the demo"}</button>
-      </details>
     </main>
   );
 }

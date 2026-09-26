@@ -42,10 +42,14 @@ test("desktop: game plan during champion select", async ({ page }) => {
   await expect(select).toBeVisible();
   await expect(select.getByText(/Connect the website/)).toBeVisible(); // no site link yet: says what's needed
 
+  // Champion select opens the Draft section on its own.
+  await expect(page.getByRole("tablist", { name: "Sections" }).getByRole("tab", { name: "Draft" })).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("tablist", { name: "Sections" }).getByRole("tab", { name: "Home" }).click();
   await page.getByRole("button", { name: "Connect" }).click();
   await page.getByLabel("Website address").fill("https://koi.example");
   await page.getByLabel("Code").fill("ABCD-EFGH");
   await page.getByRole("button", { name: "Connect" }).click();
+  await page.getByRole("tablist", { name: "Sections" }).getByRole("tab", { name: "Draft" }).click();
 
   await expect(select.getByText("Ahri", { exact: true })).toBeVisible();
   await expect(select.getByText(/hovering · middle/)).toBeVisible();

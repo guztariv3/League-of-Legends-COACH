@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { isAdjustment, liveCoach, pickNow, SLOT_KEY, usualMaxOrder, type CoachDecision, type LiveCoach, type Slot } from "@coach/coach";
 import { parseCatalog, type Catalog, type Suggestion } from "@coach/itemization";
-import type { GameState, PlayerState } from "@coach/live";
+import type { GameState } from "@coach/live";
 import { CoachCard } from "@coach/ui";
 import { sendOverlay } from "./bridge";
 
@@ -67,33 +67,6 @@ export function ItemArt({ id, name, size, art, owned }: { id: number; name: stri
   const cls = `item${owned ? " item-owned" : ""}`;
   if (!src || failed) return <span className={`${cls} item-letter`} style={{ width: size, height: size }} role="img" aria-label={name} title={name}>{name.slice(0, 1)}</span>;
   return <img className={cls} src={src} alt={name} title={name} width={size} height={size} onError={() => setFailed(true)} />;
-}
-
-function Items({ ids, names, art }: { ids: number[]; names: Map<number, string>; art: Art }) {
-  const slots = [...ids.slice(0, 7), ...Array<number | null>(Math.max(0, 7 - ids.length)).fill(null)];
-  return (
-    <span className="items">
-      {slots.map((id, i) => id === null
-        ? <span key={`e${i}`} className="item item-empty" aria-hidden="true" />
-        : <ItemArt key={`${id}-${i}`} id={id} name={names.get(id) ?? `Item ${id}`} size={20} art={art} />)}
-    </span>
-  );
-}
-
-function PlayerRow({ p, names, art, me }: { p: PlayerState; names: Map<number, string>; art: Art; me?: boolean }) {
-  return (
-    <li className={`player${me ? " player-me" : ""}${p.isDead ? " player-dead" : ""}`}>
-      <span className="player-art">
-        <ChampArt id={p.championId} name={p.champion} size={32} art={art} />
-        <span className="player-level" aria-label={`Level ${p.level}`}>{p.level}</span>
-      </span>
-      <span className="player-main">
-        <span className="player-name" title={p.name}>{me ? "You" : p.name.split("#")[0] || p.champion}</span>
-        <span className="player-kda">{p.champion} · {p.kills}/{p.deaths}/{p.assists} · {p.cs} CS</span>
-      </span>
-      <Items ids={p.items} names={names} art={art} />
-    </li>
-  );
 }
 
 export interface BuildItem { id: number; name: string; games: number; wins: number }
@@ -284,7 +257,8 @@ function GoldTab({ coach, art }: { coach: LiveCoach; art: Art }) {
   );
 }
 
-type Tab = "plan" | "items" | "skills" | "gold" | "rivals" | "team";
+/** The in-game sections, chosen from the window's top navigation. */
+export type BoardTab = "plan" | "items" | "skills" | "gold";
 
 const PLAN_ROWS: [keyof Omit<PlanResponse["plan"], "loadout">, string][] = [
   ["primaryObjective", "Primary objective"], ["secondaryObjective", "Secondary objective"], ["biggestThreat", "Biggest threat"],
@@ -321,14 +295,15 @@ function NowArt({ d, art, coach }: { d: CoachDecision; art: Art; coach: LiveCoac
 }
 
 /** The scoreboard the game already shows (Tab), in the side window, plus the Coach's read of it. */
-export function Board({ state, names, art, catalog, build, connected, demo = false, overlay = false, plan = null }: {
-  state: GameState; names: Map<number, string>; art: Art; catalog: Catalog | null; build: PersonalBuild | null | "loading"; connected: boolean; demo?: boolean;
+export function Board({ state, art, catalog, build, connected, tab, demo = false, overlay = false, plan = null }: {
+  state: GameState; art: Art; catalog: Catalog | null; build: PersonalBuild | null | "loading"; connected: boolean; demo?: boolean;
+  /** Which section to show (the navigation lives at the top of the window). */
+  tab: BoardTab;
   /** Also feed the optional overlay window (D-11). */
   overlay?: boolean;
   /** The Coach's game plan for this game, from the website. */
   plan?: PlanResponse | null;
 }) {
-  const [tab, setTab] = useState<Tab>("items");
   const [shownId, setShownId] = useState<string | null>(null);
   const [adjustedId, setAdjustedId] = useState<string | null>(null);
   const previousItem = useRef<number | null>(null);
@@ -375,23 +350,10 @@ export function Board({ state, names, art, catalog, build, connected, demo = fal
 
   if (!state.me || !coach) return null;
   const adjusted = now !== null && now.id === adjustedId;
-  const tabs: [Tab, string][] = [["plan", "Plan"], ["items", "Items"], ["skills", "Skills"], ["gold", "Gold"], ["rivals", "Enemies"], ["team", "Team"]];
   return (
     <section className="board" aria-label="Game">
       {now && <CoachCard label="Now" headline={now.headline} reasons={now.reasons} basis={now.basis} adjustment={adjusted} art={<NowArt d={now} art={art} coach={coach} />} />}
-      <div className="tabs" role="tablist">
-        {tabs.map(([key, label]) => (
-          <button key={key} role="tab" aria-selected={tab === key} className="tab" onClick={() => setTab(key)}>{label}</button>
-        ))}
-      </div>
-      <div role="tabpanel">
-        {tab === "rivals" && <ul className="players">{state.enemies.map((p) => <PlayerRow key={p.name || p.champion} p={p} names={names} art={art} />)}</ul>}
-        {tab === "team" && (
-          <ul className="players">
-            <PlayerRow p={state.me} names={names} art={art} me />
-            {state.allies.map((p) => <PlayerRow key={p.name || p.champion} p={p} names={names} art={art} />)}
-          </ul>
-        )}
+      <div role="tabpanel" aria-label={tab}>
         {tab === "items" && <ItemsTab state={state} coach={coach} build={build} art={art} connected={connected} demo={demo} hasCatalog={catalog !== null} />}
         {tab === "skills" && <SkillsTab state={state} coach={coach} history={history} connected={connected} />}
         {tab === "gold" && <GoldTab coach={coach} art={art} />}
