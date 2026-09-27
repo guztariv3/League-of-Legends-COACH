@@ -23,6 +23,26 @@ are last observed snapshots, not authoritative final statistics. Verified post-g
 Riot history/timeline ingestion; bounded delayed sync attempts run after the end signal. Match-stat
 aggregation now claims and increments each match inside one transaction to prevent duplicate counts.
 
+### PC clock differences (clock sync)
+
+A PC whose clock is minutes ahead or behind can still share. Before publishing, the companion asks
+the site for its time (`GET /api/desktop/time`, device token, `no-store`, rate limited) and measures
+the offset from the request's round trip (samples slower than 3 s are discarded). It re-measures every
+5 minutes and after any rejected frame. Each frame's `capturedAt` is the moment its data was
+*observed* (the game snapshot for live advice, the champion-select read for draft/pre-game), converted
+to server time; frames without advice describe the moment they are sent. The site still judges
+freshness by absolute server time (at most 15 s old, 5 s into the future), so data observed long ago
+stays old however late it is sent, and a replayed request never becomes current. Ordering guards
+(same stream: higher sequence only; a new stream after a restart must be captured later) are unchanged.
+
+Without a time measurement nothing is published. Desktop Settings shows the connection state:
+`connected` (and how far the PC clock is from the site's, when 10 s or more), `can't check the time
+with the website…`, `waiting for fresh game data…` (a frame was rejected as stale) or `can't reach the
+website…`. The web hides expired advice and says it is waiting for recent data from the companion.
+Covered by `packages/live/src/clock.test.ts`, `apps/api/src/desktop.test.ts` (skewed clocks, truly old
+captures, late answers, reconnection) and `apps/desktop/e2e/live-share.spec.ts` (10 min ahead/behind,
+time check failing, rejection, no publishing while off).
+
 ## Draft
 
 Polls every 400 ms during Champion Select; debounce 150 ms. Lightweight preview avoids history,

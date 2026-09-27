@@ -147,6 +147,7 @@ fn site_origin(raw: &str) -> Result<String, String> {
 async fn site_json(res: reqwest::Response) -> Result<serde_json::Value, String> {
     match res.status().as_u16() {
         200..=299 => res.json().await.map_err(|_| "unexpected_response".to_string()),
+        400 => Err("rejected".into()),
         401 => Err("unauthorized".into()),
         429 => Err("rate_limited".into()),
         _ => Err("server_error".into()),
@@ -204,6 +205,16 @@ async fn desktop_items(state: tauri::State<'_, AppState>, base_url: String, toke
     let res = state.site.get(format!("{origin}/api/desktop/items"))
         .query(&[("me", me.as_str()), ("mine", mine.as_str()), ("enemies", enemies.as_str()), ("opponent", opponent.as_str()), ("position", position.as_str()), ("opening", if opening { "1" } else { "0" }), ("economy", economy.as_deref().unwrap_or(""))])
         .bearer_auth(token)
+        .send().await.map_err(|_| "offline".to_string())?;
+    site_json(res).await
+}
+
+/// The site's clock, so Live frames can be stamped in server time (the PC clock may be off).
+#[tauri::command]
+async fn desktop_time(state: tauri::State<'_, AppState>, base_url: String, token: String) -> Result<serde_json::Value, String> {
+    let origin = site_origin(&base_url)?;
+    let res = state.site.get(format!("{origin}/api/desktop/time"))
+        .bearer_auth(token).timeout(Duration::from_secs(4))
         .send().await.map_err(|_| "offline".to_string())?;
     site_json(res).await
 }
@@ -389,7 +400,7 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     builder
         .manage(AppState { http: live_client(), lcu: lcu_client(), site: site_client(), sys: Mutex::new(sys) })
-        .invoke_handler(tauri::generate_handler![live_snapshot, system_load, check_update, install_update, desktop_claim, desktop_scout, desktop_build, desktop_plan, desktop_items, desktop_live, set_overlay, lcu_champ_select, desktop_home])
+        .invoke_handler(tauri::generate_handler![live_snapshot, system_load, check_update, install_update, desktop_claim, desktop_scout, desktop_build, desktop_plan, desktop_items, desktop_live, desktop_time, set_overlay, lcu_champ_select, desktop_home])
         .run(tauri::generate_context!())
         .expect("error while running KOI Master desktop");
 }

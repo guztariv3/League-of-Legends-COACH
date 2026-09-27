@@ -262,6 +262,70 @@ describe("private Live companion frames",()=>{
   expect((await send({...frame,sequence:3})).res.status).toBe(401);
   expect((await call("/live",{cookie})).body.frame).toBeNull();
  });
+
+ it("accepts a PC clock that is minutes off once frames use the site's time, but never old captures",async()=>{
+  const cookie=await player("LiveSkew");
+  const pair=await call("/desktop/pair",{method:"POST",cookie,body:"{}"});
+  const token=(await claim(pair.body.code,"10.0.0.78")).body.token;
+  const auth={Authorization:`Bearer ${token}`};
+  const send=(body:unknown)=>call("/desktop/live",{method:"POST",headers:auth,body:JSON.stringify(body)});
+  const base={version:1,streamId:"0b3f7d4e-8c1a-4f25-9d6e-2a7c5b1e9f30",phase:"live",champion:"Ahri",position:"MIDDLE",patch:"16.19.1",time:600,gold:1200,allies:[],enemies:[],headline:"Fresh advice",sections:[]};
+
+  // The time endpoint needs the device token and is not cached.
+  expect((await call("/desktop/time")).res.status).toBe(401);
+  const t=await call("/desktop/time",{headers:auth});
+  expect(t.res.status).toBe(200);
+  expect(t.res.headers.get("cache-control")).toBe("no-store");
+  expect(Math.abs(t.body.serverTime-Date.now())).toBeLessThan(2000);
+
+  // The companion measures offset = serverTime - midpoint of its own (wrong) clock.
+  const measure=async(skew:number)=>{
+   const t0=Date.now()+skew; const r=await call("/desktop/time",{headers:auth}); const t1=Date.now()+skew;
+   return Math.round(r.body.serverTime-(t0+t1)/2);
+  };
+  let sequence=0;
+  for(const skew of [10*60_000,-10*60_000]){ // PC clock 10 min ahead, then 10 min behind
+   const pcNow=()=>Date.now()+skew;
+   // Stamped with the PC's wrong clock, the site rejects it as future or stale data.
+   const raw=await send({...base,sequence:++sequence,capturedAt:pcNow()});
+   expect(raw.res.status).toBe(400);
+   expect(raw.body.error).toBe("stale_frame");
+   expect(Math.abs(raw.body.serverTime-Date.now())).toBeLessThan(2000);
+   // Converted with the measured offset, the same PC shares normally.
+   const offset=await measure(skew);
+   expect(Math.abs(offset+skew)).toBeLessThan(2000);
+   const ok=await send({...base,sequence:++sequence,capturedAt:pcNow()+offset,headline:`skew ${skew}`});
+   expect(ok.body).toMatchObject({ok:true,accepted:true});
+   expect((await call("/live",{cookie})).body.frame.headline).toBe(`skew ${skew}`);
+   // Data really observed 60 s ago stays 60 s old after conversion: rejected however it is sent.
+   const old=await send({...base,sequence:++sequence,capturedAt:pcNow()-60_000+offset});
+   expect(old.res.status).toBe(400);
+   expect(old.body.error).toBe("stale_frame");
+  }
+  expect((await call("/live",{cookie})).body.frame.headline).toBe(`skew ${-10*60_000}`);
+ });
+
+ it("keeps order across late answers and reconnections",async()=>{
+  const cookie=await player("LiveOrder");
+  const pair=await call("/desktop/pair",{method:"POST",cookie,body:"{}"});
+  const token=(await claim(pair.body.code,"10.0.0.79")).body.token;
+  const send=(body:unknown)=>call("/desktop/live",{method:"POST",headers:{Authorization:`Bearer ${token}`},body:JSON.stringify(body)});
+  const first="7c2e9a41-5b3d-4e8f-a1c6-9d0b2f4e6a18", second="e4a1c7b9-2d6f-4a3e-8b5c-1f9d7e3a2c60";
+  const frame={version:1,streamId:first,sequence:1,capturedAt:Date.now(),phase:"live",champion:"Ahri",position:"MIDDLE",patch:"16.19.1",time:600,gold:1200,allies:[],enemies:[],headline:"s1",sections:[]};
+  const now=Date.now();
+  expect((await send({...frame,sequence:5,capturedAt:now-2000,headline:"s5"})).body.accepted).toBe(true);
+  // An older answer of the same stream arriving late does not replace the newer one.
+  expect((await send({...frame,sequence:4,capturedAt:now-3000,headline:"s4"})).body.accepted).toBe(false);
+  // Same sequence replayed (a retried request) is not applied twice.
+  expect((await send({...frame,sequence:5,capturedAt:now-2000,headline:"s5 again"})).body.accepted).toBe(false);
+  expect((await call("/live",{cookie})).body.frame.headline).toBe("s5");
+  // Reconnection: the app restarts with a new stream whose sequence starts again at 1.
+  expect((await send({...frame,streamId:second,sequence:1,capturedAt:now-1000,headline:"new stream"})).body.accepted).toBe(true);
+  expect((await call("/live",{cookie})).body.frame.headline).toBe("new stream");
+  // A late frame from the old stream, captured before, is not accepted even with a higher sequence.
+  expect((await send({...frame,sequence:6,capturedAt:now-1500,headline:"old stream late"})).body.accepted).toBe(false);
+  expect((await call("/live",{cookie})).body.frame.headline).toBe("new stream");
+ });
 });
 
 it("does not double-count a completed game when ingestion retries",async()=>{

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import type { CoachDecision, LiveCoach } from "@coach/coach";
-import type { GameState } from "@coach/live";
+import { clockSample, describeOffset, NOTABLE_OFFSET_MS, ServerClock, type GameState } from "@coach/live";
 import type { LiveFrame, LiveSection } from "@coach/ui";
 import type { PlanResponse } from "./board";
-import { publishLive, type ChampSelect } from "./bridge";
+import { fetchServerTime, publishLive, type ChampSelect } from "./bridge";
 
 export interface Output { coach: LiveCoach | null; now: CoachDecision | null; time: number }
 export function liveSections(output: Output): LiveSection[] {
@@ -32,23 +32,40 @@ function planSections(plan:PlanResponse|null):LiveSection[] {
  ].map(s=>({...s,lines:s.lines.map(l=>l.slice(0,1600)).slice(0,24)})).filter(s=>s.lines.length);
 }
 interface RelayInput { enabled:boolean; link:{origin:string;token:string}|null; state:GameState|null; select:ChampSelect|null; draft:PlanResponse|null; plan:PlanResponse|null; patch:string|null; paused:boolean; reconnecting:boolean; ended:boolean; output:MutableRefObject<Output|null>; demo:boolean }
-/** One in-flight publication, latest-state sampling, no backlog; never blocks the game reader. */
+
+/** What the Settings line shows about private web Live sharing. */
+export interface RelayStatus { state:"off"|"syncing"|"connected"|"waiting"|"no-clock"|"offline"; text:string }
+const OFF:RelayStatus={state:"off",text:"off"};
+
+/**
+ * One in-flight publication, latest-state sampling, no backlog; never blocks the game reader.
+ * Frames are stamped in the site's time (measured with /desktop/time), with the moment their data
+ * was observed: a PC clock that is off still shares, and old data is never re-stamped as new.
+ */
 export function useLiveRelay(input:RelayInput) {
- const [status,setStatus]=useState<"off"|"connected"|"offline">("off");
+ const [status,setStatus]=useState<RelayStatus>(OFF);
  const latest=useRef(input); latest.current=input;
  const stream=useRef(crypto.randomUUID()); const sequence=useRef(0);
  const lastGame=useRef<GameState|null>(null);
  const wasEnabled=useRef(false);
+ // When the data behind the advice was read (client clock), keyed by the object that carried it.
+ const observed=useRef<{key:unknown;at:number}>({key:null,at:0});
  useEffect(()=>{
-  if(!input.link){setStatus("off");return;}
+  if(!input.link){setStatus(OFF);return;}
   let stopped=false; let timer:ReturnType<typeof setTimeout>;
   const link=input.link;
+  const clock=new ServerClock();
+  const sync=async()=>{
+   const t0=Date.now(); const r=await fetchServerTime(link.origin,link.token); const t1=Date.now();
+   return r.ok && clock.update(clockSample(t0,r.data.serverTime,t1));
+  };
+  const frameAt=(clientMs:number)=>clock.toServer(clientMs)!;
   if(!input.enabled){
    // Sharing is off: nothing is published. Only when it was just turned off, one empty frame
    // replaces what was shared, so the web page stops showing it.
-   setStatus("off");
-   if(wasEnabled.current)void publishLive(link.origin,link.token,{version:1,streamId:stream.current,sequence:++sequence.current,capturedAt:Date.now(),phase:"idle",
-    champion:null,position:null,patch:null,time:null,gold:null,allies:[],enemies:[],headline:"No active shared game",sections:[]});
+   setStatus(OFF);
+   if(wasEnabled.current)void sync().then(ok=>{ if(!ok)return; void publishLive(link.origin,link.token,{version:1,streamId:stream.current,sequence:++sequence.current,capturedAt:frameAt(Date.now()),phase:"idle",
+    champion:null,position:null,patch:null,time:null,gold:null,allies:[],enemies:[],headline:"No active shared game",sections:[]}); });
    wasEnabled.current=false;
    return;
   }
@@ -57,9 +74,17 @@ export function useLiveRelay(input:RelayInput) {
   const loop=async()=>{
    const v=latest.current;
    if(stopped)return;
+   if(clock.needsSync(Date.now())){
+    setStatus(st=>st.state==="connected" ? st : {state:"syncing",text:"checking the time with the website…"});
+    if(!(await sync())){
+     if(!stopped){setStatus({state:"no-clock",text:"can't check the time with the website, so nothing is shared yet. Retrying…"});timer=setTimeout(loop,5000);}
+     return;
+    }
+    if(stopped)return;
+   }
    const s=v.state;
    if(s?.me && !v.demo)lastGame.current=s;
-   let phase:LiveFrame["phase"]=!v.enabled||v.demo ? "idle" : v.reconnecting ? "reconnecting" : s?.me ? v.paused ? "paused":"live" : v.select?.phase==="ChampSelect" ? v.select.me?.locked ? "pregame":"draft" : ["GameStart","InProgress"].includes(v.select?.phase??"") ? "loading" : v.ended ? "ended":"idle";
+   let phase:LiveFrame["phase"]=v.demo ? "idle" : v.reconnecting ? "reconnecting" : s?.me ? v.paused ? "paused":"live" : v.select?.phase==="ChampSelect" ? v.select.me?.locked ? "pregame":"draft" : ["GameStart","InProgress"].includes(v.select?.phase??"") ? "loading" : v.ended ? "ended":"idle";
    if(phase !== "ended")terminalSent=false;
    if(phase === "ended" && terminalSent){timer=setTimeout(loop,1500);return;}
    const out=v.output.current;
@@ -77,7 +102,11 @@ export function useLiveRelay(input:RelayInput) {
    if(phase === "live") sections.push({title:"Equipped runes and summoner spells",lines:[s?.loadout?.runes.map(r=>r.name).join(" · ")||"Actual runes not reported.",s?.loadout?.spells.join(" + ")||"Actual summoner spells not reported."]});
    const ended=lastGame.current;
    if(phase==="ended" && ended?.me)sections=[{title:"Last observed match snapshot",lines:[`${ended.me.champion}: ${ended.me.kills}/${ended.me.deaths}/${ended.me.assists}; ${ended.me.cs} CS in ${(ended.time/60).toFixed(1)} minutes.`,"Open Matches for the verified post-game Coach after Riot match history finishes syncing."]}];
-   const frame:LiveFrame={version:1,streamId:stream.current,sequence:++sequence.current,capturedAt:Date.now(),phase,
+   // Advice carries the time its data was read; frames without advice (waiting, paused, ended)
+   // describe this moment. Either way the time is converted to the site's clock.
+   const source=phase==="live" ? s : phase==="draft"||phase==="pregame" ? v.select : null;
+   if(source!==observed.current.key)observed.current={key:source,at:Date.now()};
+   const frame:LiveFrame={version:1,streamId:stream.current,sequence:++sequence.current,capturedAt:frameAt(source ? observed.current.at : Date.now()),phase,
     champion:s?.me?.championId??v.draft?.champion??null,position:s?.me?.position??v.select?.me?.position??null,patch:v.patch,
     time:s?.time??null,gold:s?.gold??null,
     allies:s?.allies.map(p=>p.championId)??v.draft?.roster?.allies??[],enemies:s?.enemies.map(p=>p.championId)??v.draft?.roster?.enemies??[],
@@ -86,7 +115,12 @@ export function useLiveRelay(input:RelayInput) {
    if(phase==="idle"){frame.champion=null;frame.position=null;frame.allies=[];frame.enemies=[];frame.time=null;frame.gold=null;}
    const result=await publishLive(link.origin,link.token,frame);
    if(result.ok && phase === "ended")terminalSent=true;
-   if(!stopped)setStatus(!v.enabled ? "off" : result.ok ? "connected":"offline");
+   if(!result.ok && result.error==="rejected")clock.invalidate(); // re-measure before the next frame
+   const off=clock.offset;
+   if(!stopped)setStatus(result.ok
+    ? {state:"connected",text:`connected${off!==null && Math.abs(off)>=NOTABLE_OFFSET_MS ? ` · your PC clock is ${describeOffset(off)}; sharing uses the website's time` : ""}`}
+    : result.error==="rejected" ? {state:"waiting",text:"waiting for fresh game data (the website only accepts recent data)."}
+    : {state:"offline",text:"can't reach the website. Retrying…"});
    if(!stopped)timer=setTimeout(loop,phase==="idle"||phase==="ended" ? 10000:1500);
   };
   void loop();

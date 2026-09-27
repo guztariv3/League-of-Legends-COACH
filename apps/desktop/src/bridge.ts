@@ -61,7 +61,7 @@ export async function installUpdate(): Promise<{ ok: true } | { ok: false; error
 }
 
 /** Why a call to the player's KOI Master site failed (see desktop_claim / desktop_scout in lib.rs). */
-export type SiteError = "invalid_url" | "insecure_url" | "offline" | "unauthorized" | "rate_limited" | "server_error" | "unexpected_response" | "unavailable";
+export type SiteError = "invalid_url" | "insecure_url" | "offline" | "unauthorized" | "rate_limited" | "rejected" | "server_error" | "unexpected_response" | "unavailable";
 export type SiteResult<T> = { ok: true; data: T } | { ok: false; error: SiteError };
 
 async function site<T>(cmd: string, args: Record<string, unknown>): Promise<SiteResult<T>> {
@@ -152,4 +152,6 @@ export async function readChampSelect(): Promise<ChampSelectResult> {
   }
 }
 
+/** The site's clock (server time in ms), to stamp Live frames in server time. */
+export const fetchServerTime = (baseUrl: string, token: string) => site<{ serverTime: number }>("desktop_time", { baseUrl, token });
 export const publishLive = (baseUrl: string, token: string, frame: import("@coach/ui").LiveFrame) => site<{ok:boolean}>("desktop_live", {baseUrl,token,frame});

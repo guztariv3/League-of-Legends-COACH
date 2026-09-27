@@ -39,6 +39,7 @@ const errorText: Record<SiteError, string> = {
   offline: "Could not reach the website. Check your connection.",
   unauthorized: "Wrong or expired code. Generate a new one on the website.",
   rate_limited: "Too many attempts. Wait a minute.",
+  rejected: "The website did not accept that request. Check the code and try again.",
   server_error: "The website failed. Try again in a moment.",
   unexpected_response: "The website answered something unexpected. Is the address right?",
   unavailable: "Only available in the desktop app.",

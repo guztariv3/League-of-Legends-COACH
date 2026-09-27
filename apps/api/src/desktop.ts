@@ -134,6 +134,20 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
   };
   const disconnected = (c: Context) => c.json({ error: "unauthenticated", message: "This app is no longer connected. Connect it again from the website." }, 401);
 
+  /**
+   * The site's clock, for the companion to convert its capture times into server time (PCs with a
+   * wrong clock can still share). It changes nothing about freshness: frames are still judged by
+   * absolute server time, so an old capture or a replayed request never becomes current.
+   */
+  const timeRate = new AttemptLimiter(30, 60_000);
+  r.get("/desktop/time", async c => {
+    const device = await deviceFor(c);
+    if (!device) return disconnected(c);
+    if (!timeRate.allow(device.id)) return c.json({ error: "rate_limited" }, 429);
+    c.header("Cache-Control", "no-store");
+    return c.json({ serverTime: Date.now() });
+  });
+
   const endRate = new AttemptLimiter(1, 120_000);
   const liveRate = new AttemptLimiter(90, 60_000);
   r.post("/desktop/live", bodyLimit({ maxSize: 64 * 1024 }), async c => {
@@ -141,7 +155,9 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
     if (!device) return disconnected(c);
     if (!liveRate.allow(device.id)) return c.json({ error: "rate_limited" },429);
     const parsed = LiveFrameSchema.safeParse(await c.req.json().catch(()=>null));
-    if (!parsed.success || !freshFrame(parsed.data.capturedAt,Date.now())) return c.json({ error: "invalid_frame" },400);
+    if (!parsed.success) return c.json({ error: "invalid_frame" },400);
+    // capturedAt is in server time (the companion converts it with /desktop/time): absolute age check.
+    if (!freshFrame(parsed.data.capturedAt,Date.now())) return c.json({ error: "stale_frame", serverTime: Date.now() },400);
     const frame=parsed.data, now=new Date();
     const values={deviceId:device.id,userId:device.userId,streamId:frame.streamId,sequence:frame.sequence,capturedAt:new Date(frame.capturedAt),receivedAt:now,payload:frame};
     const saved=await db.insert(schema.liveFrames).values(values).onConflictDoUpdate({
@@ -149,7 +165,7 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
       setWhere: sql`${schema.liveFrames.capturedAt} <= ${values.capturedAt} AND (${schema.liveFrames.streamId} <> ${frame.streamId} OR ${schema.liveFrames.sequence} < ${frame.sequence})`,
     }).returning({id:schema.liveFrames.deviceId});
     if(saved.length && frame.phase === "ended" && endRate.allow(device.userId)) void deps.onMatchEnd?.(device.userId).catch(()=>{});
-    return c.json({ok:true,accepted:saved.length>0});
+    return c.json({ok:true,accepted:saved.length>0,serverTime:Date.now()});
   });
 
   r.get("/desktop/scout", async (c) => {

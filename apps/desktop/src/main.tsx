@@ -450,7 +450,8 @@ function LiveWindow() {
           </p>
           <h2 className="label">Website connection</h2>
           <label><input type="checkbox" checked={shareLive} onChange={e=>{setShareLive(e.target.checked);localStorage.setItem("live.share",e.target.checked ? "on":"off");}} /> Share this game with my private web Live page</label>
-          <p className="quiet small">Connection: {liveShareStatus}. Shares champion picks, visible match information and Coach recommendations with your linked account. Keep this app open. League credentials stay on this computer.</p>
+          <p className="quiet small" role="status">Connection: {liveShareStatus.text}</p>
+          <p className="quiet small">Shares champion picks, visible match information and Coach recommendations with your linked account. Keep this app open. League credentials stay on this computer.</p>
           {rivals.link
             ? <ConnectForm link={rivals.link} problem={rivals.problem} onConnect={rivals.connect} onDisconnect={rivals.disconnect} />
             : <p className="quiet">Not connected. Use the <strong>Connect</strong> button on Home.</p>}
