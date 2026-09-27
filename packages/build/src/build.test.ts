@@ -232,3 +232,52 @@ describe("no champion or item is named in the engine", () => {
     expect(names.filter((n) => new RegExp(`\\b${n.replace(/[.*+?^${}()|[\]\\']/g, "\\$&")}\\b`).test(source))).toEqual([]);
   });
 });
+
+describe("certainty, alternatives and the standard build (phase 3)", () => {
+  const CASES: [string, string[]][] = [
+    ["Ahri", ["Garen", "LeeSin", "Syndra", "Jinx", "Thresh"]],
+    ["Jinx", ["Malphite", "Sejuani", "Ornn", "Leona", "Braum"]],
+    ["Malphite", ["Syndra", "Brand", "Lux", "Veigar", "Annie"]],
+    ["Garen", ["Darius", "Zed", "Talon", "Jinx", "Pyke"]],
+    ["Ahri", ["Soraka", "Aatrox", "Vladimir", "DrMundo", "Yuumi"]],
+  ];
+
+  it("an alternative only on a close call, and it says what sets it apart", () => {
+    for (const [me, en] of CASES) {
+      const b = build(me, en);
+      expect(b.certainty, me).not.toBeNull();
+      if (b.certainty === "close") {
+        expect(b.alternative, me).not.toBeNull();
+        expect(b.alternative!.id, me).not.toBe(b.first!.id);
+        expect(b.alternative!.difference.length, me).toBeGreaterThan(10);
+      } else {
+        expect(b.alternative, me).toBeNull();
+      }
+    }
+  });
+
+  it("the standard core is the kit against a neutral enemy; a change names the standard item and a reason from this game", () => {
+    for (const [me, en] of CASES) {
+      const b = build(me, en);
+      const a = b.adaptation!;
+      expect(a.standardCore.length, me).toBeGreaterThan(0);
+      if (a.standard) {
+        expect(a.note, me).toMatch(/continue with it/);
+      } else if (a.standardCore[0]!.id !== b.first!.id) {
+        expect(a.note, me).toContain(`instead of the standard ${a.standardCore[0]!.name}`);
+        // The reason names an enemy champion or the enemy's damage: never a generic stat line.
+        expect(en.some((id) => a.note.includes(kit(id).name)) || /enemy damage/.test(a.note), `${me}: ${a.note}`).toBe(true);
+      }
+    }
+  });
+
+  it("the standard core doesn't depend on the enemies (same kit, same core)", () => {
+    const one = build("Ahri", CASES[0]![1]).adaptation!.standardCore.map((x) => x.id);
+    const two = build("Ahri", CASES[4]![1]).adaptation!.standardCore.map((x) => x.id);
+    expect(one).toEqual(two);
+  });
+
+  it("before any enemy is known there is nothing to adapt to", () => {
+    expect(build("Ahri", []).adaptation).toBeNull();
+  });
+});

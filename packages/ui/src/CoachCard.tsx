@@ -15,7 +15,19 @@ export interface CoachCardProps {
   art?: ReactNode;
   /** Visible heading; also names the region for assistive tech. */
   label?: string;
+  /** How sure the recommendation is, in words (no number). */
+  certainty?: "strong" | "preferred" | "uncertain";
+  /** A viable alternative and what sets it apart; only when there is a real one. */
+  alternative?: { label: string; reason?: string } | null;
+  /** The deeper reasoning (more reasons, the evidence), behind "Show reasoning". */
+  details?: string[];
 }
+
+const CERTAINTY: Record<NonNullable<CoachCardProps["certainty"]>, string> = {
+  strong: "Strong recommendation",
+  preferred: "Preferred option",
+  uncertain: "Uncertain: weigh the alternative",
+};
 
 const BASIS: Record<CoachCardProps["basis"], string> = {
   fact: "From this game's data",
@@ -23,7 +35,7 @@ const BASIS: Record<CoachCardProps["basis"], string> = {
   hypothesis: "Coach's read of this game",
 };
 
-export function CoachCard({ headline, reasons, basis, adjustment = false, art, label = "Coach" }: CoachCardProps) {
+export function CoachCard({ headline, reasons, basis, adjustment = false, art, label = "Coach", certainty, alternative, details = [] }: CoachCardProps) {
   return (
     <section className={`coach-card${adjustment ? " coach-card-adjust" : ""}`} aria-label={adjustment ? "Coach adjustment" : label}>
       <div className="coach-card-label">{adjustment ? "Coach adjustment" : label}</div>
@@ -32,7 +44,14 @@ export function CoachCard({ headline, reasons, basis, adjustment = false, art, l
         <div className="coach-card-headline">{headline}</div>
       </div>
       {reasons[0] && <p className="coach-card-why">{reasons[0]}</p>}
-      <div className="coach-card-basis">{BASIS[basis]}</div>
+      {alternative && <p className="coach-card-alt"><b>Alternative: {alternative.label}</b>{alternative.reason ? ` · ${alternative.reason}` : ""}</p>}
+      {details.length > 0 && (
+        <details className="coach-card-more">
+          <summary>Show reasoning</summary>
+          <ul>{details.map((d) => <li key={d}>{d}</li>)}</ul>
+        </details>
+      )}
+      <div className="coach-card-basis">{BASIS[basis]}{certainty ? ` · ${CERTAINTY[certainty]}` : ""}</div>
     </section>
   );
 }
