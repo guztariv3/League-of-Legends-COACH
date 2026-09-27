@@ -5,7 +5,8 @@
  * their own. A decision always says why: one with no reason is rejected.
  */
 
-export type DecisionKind = "warning" | "item" | "boots" | "skill" | "strategy" | "gameplan" | "review" | "focus";
+/** moment = a window the game just opened (an enemy died, a level edge) that closes by itself (phase 6). */
+export type DecisionKind = "warning" | "moment" | "item" | "boots" | "skill" | "strategy" | "gameplan" | "review" | "focus";
 /** fact = measured, observation = pattern in the data, hypothesis = an interpretation. */
 export type Basis = "fact" | "observation" | "hypothesis";
 export type DecisionPriority = "critical" | "important" | "info";
@@ -76,7 +77,8 @@ const PRIORITY_RANK: Record<DecisionPriority, number> = { critical: 0, important
  * decisions of this moment, then the short-term plan, then facts about the game, then the
  * long-term review and improvement focus.
  */
-const KIND_RANK: Record<DecisionKind, number> = { warning: 0, item: 1, skill: 2, boots: 3, gameplan: 4, strategy: 5, review: 6, focus: 7 };
+// Survival, then a window that closes by itself (objective / key moment), then item and skill, then the plan.
+const KIND_RANK: Record<DecisionKind, number> = { warning: 0, moment: 1, item: 2, skill: 3, boots: 4, gameplan: 5, strategy: 6, review: 7, focus: 8 };
 
 /** Most pressing first: priority, then what kind of decision it is, then confidence. Stable for ties. */
 export function rankDecisions(decisions: CoachDecision[]): CoachDecision[] {
