@@ -30,7 +30,7 @@ export function Privacy() {
 
       <h2>Who else is involved</h2>
       <ul>
-        <li><strong>Riot Games:</strong> match data comes from its API. Game images (champions, items, runes) are downloaded by your browser directly from Data Dragon, Riot's service, which therefore receives your IP address.</li>
+        <li><strong>Riot Games:</strong> match data comes from its API. Game images (champions, items, runes) are downloaded by your browser directly from Data Dragon, Riot's service, and the ranked emblems from CommunityDragon (a public mirror of the game client's files); both therefore receive your IP address.</li>
         <li><strong>Render</strong> hosts the website and the database in Frankfurt (European Union).</li>
         <li><strong>Anthropic</strong> (if AI explanations are turned on): receives only the text of an already computed conclusion and its figures, to phrase it better. It does not receive your Riot ID, your name or your full games.</li>
       </ul>

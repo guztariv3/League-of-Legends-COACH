@@ -551,6 +551,11 @@ td .loadout { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
 .pf-queue:disabled { cursor: default; }
 .pf-queue.is-on { border: 2px solid #4fc3f7; background: var(--surface-2); }
 .pf-crest { flex: none; }
+/* Riot's emblem images are 16:9 canvases with the emblem in the middle (measured on every tier:
+   x 37–63 %, y 30–65 %). The box shows that window only, the same for every tier, so higher tiers
+   look larger as in the client. */
+.pf-emblem { flex: none; position: relative; width: 64px; height: 48px; overflow: hidden; }
+.pf-emblem img { position: absolute; width: 246px; height: 138.5px; left: -91px; top: -41.5px; max-width: none; }
 .pf-queue-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .pf-queue-label { font-size: 12px; color: var(--text-muted); }
 .pf-queue-rank { font-size: 17px; }
