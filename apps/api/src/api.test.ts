@@ -93,6 +93,32 @@ describe("API (synthetic mode)", () => {
     // Incremental sync does not duplicate games
     await ctx.sync.start(created.body.account.id);
     expect((await call("/matches?limit=100", { cookie })).body.total).toBe(50);
+    // Profile overview: queue cards, and for the selected queue the radar, role table and performance.
+    const ov = (await call("/overview", { cookie })).body;
+    expect(ov.selected).toBe(420);
+    expect(ov.queues.find((q: { queueId: number }) => q.queueId === 420).rank.tier).toBeTruthy();
+    expect(ov.rows[0].kind).toBe("role");
+    expect(ov.rows[0].games).toBeGreaterThanOrEqual(ov.rows.slice(1).reduce((s: number, r: { games: number }) => s + r.games, 0));
+    expect(ov.rows[0].radar).toHaveLength(8);
+    for (const ax of ov.rows[0].radar) if (ax.score !== null) expect(ax.score).toBeGreaterThanOrEqual(0);
+    expect(ov.rows[0].performance.goldShare.games).toBeGreaterThan(0);
+    // Demo trail: one snapshot per game, so LP is known per game and shown per champion.
+    expect(ov.lpColumn).toBe(true);
+    expect(ov.rows[0].lp.games).toBeGreaterThan(0);
+    // Overview tab: activity, roles, last-10 summary and cards with the ten players and tags.
+    const og = (await call("/overview/games", { cookie })).body;
+    expect(og.cards.length).toBe(20);
+    expect(og.cards[0].players).toHaveLength(10);
+    expect(og.cards[0].players.filter((p: { isMe: boolean }) => p.isMe)).toHaveLength(1);
+    expect(og.summary.games).toHaveLength(10);
+    expect(og.activity.games).toBeGreaterThan(0);
+    expect(og.cards.some((c: { lpChange: number | null }) => c.lpChange !== null)).toBe(true);
+    const champ = og.cards[0].championName;
+    const onlyChamp = (await call(`/overview/games?champion=${encodeURIComponent(champ)}&queue=420`, { cookie })).body;
+    expect(onlyChamp.cards.every((c: { championName: string; queueId: number }) => c.championName === champ && c.queueId === 420)).toBe(true);
+    // A queue without games falls back to one with games.
+    expect((await call("/overview?queue=440", { cookie })).body.selected).toBe(420);
+
     const again = (await call("/rank", { cookie })).body.accounts[0].queues.find((q: { queueType: string }) => q.queueType === "RANKED_SOLO_5x5");
     expect(again.history).toHaveLength(solo.history.length);
   }, 60_000);

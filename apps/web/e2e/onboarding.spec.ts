@@ -18,6 +18,7 @@ test("onboarding → dashboard → matches → match detail → settings", async
   await expect(page.getByText(`Hi, ${player}`)).toBeVisible();
   // First sync (50 games) finishes and the dashboard fills in.
   await expect(page.getByText(/Based on \d+ analyzable games/)).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("tab", { name: "Coach" }).click();
   await expect(page.getByRole("heading", { name: "What matters most now" })).toBeVisible();
   await page.screenshot({ path: `test-results/dashboard-${info.project.name}.png`, fullPage: true });
 
