@@ -208,7 +208,7 @@ function Radar({ row }: { row: OverviewRow }) {
   );
 }
 
-function RoleIcon({ role }: { role: string }) {
+export function RoleIcon({ role }: { role: string }) {
   const p: Record<string, string> = {
     TOP: "M2 2h9l-3 3H5v3L2 11zM14 5v9H5l3-3h3V8z",
     JUNGLE: "M8 1c3 3 4 7 0 14C4 8 5 4 8 1zM3 5c2 1 3 3 3 6M13 5c-2 1-3 3-3 6",

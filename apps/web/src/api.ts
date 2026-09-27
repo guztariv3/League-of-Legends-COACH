@@ -154,6 +154,29 @@ export interface Overview {
   lastSyncedAt: string | null;
 }
 
+export interface GameCard {
+  matchId: string; queueId: number; queue: string; patch: string; startedAt: number; durationSec: number;
+  analyzable: boolean; win: boolean; championName: string; championId: number; role: string; level: number;
+  kills: number; deaths: number; assists: number; kda: number; cs: number; csPerMin: number | null; csDiff15: number | null;
+  killParticipation: number | null; visionScore: number | null; items: number[]; spells: number[];
+  runes: { keystone: number | null; primary: number | null; secondary: number | null };
+  lpChange: number | null; tags: string[];
+  players: { teamId: number; championName: string; championId: number; name: string | null; isMe: boolean }[];
+}
+export interface SummaryGroup { games: number; wins: number; kills: number; deaths: number; assists: number; kda: number }
+export interface OverviewGames {
+  activity: { days: number; games: number; hours: number; list: { t: number; win: boolean; analyzable: boolean; mode: Mode; durationSec: number }[] };
+  roles: { role: string; games: number; wins: number }[];
+  summary: SummaryGroup & {
+    role: (SummaryGroup & { role: string }) | null;
+    champions: (SummaryGroup & { name: string; championId: number })[];
+    games: { matchId: string; championName: string; championId: number; win: boolean; kills: number; deaths: number; assists: number; startedAt: number }[];
+  };
+  cards: GameCard[];
+  total: number;
+  champions: string[];
+}
+
 export interface MatchList {
   total: number;
   matches: MatchRow[];
@@ -566,6 +589,7 @@ export const api = {
   clearHistory: () => request<{ ok: true }>("/history", { method: "DELETE" }),
   improve: (champion?: string) => request<Improve>(`/improve${champion ? `?champion=${encodeURIComponent(champion)}` : ""}`),
   rank: () => request<RankResponse>("/rank"),
+  overviewGames: (params: Record<string, string>) => request<OverviewGames>(`/overview/games?${new URLSearchParams(params)}`),
   overview: (queue?: number) => request<Overview>(`/overview${queue ? `?queue=${queue}` : ""}`),
   challenges: () => request<ChallengesResponse>("/challenges"),
   acceptChallenge: (metric: string, kind: "next5" | "week") =>

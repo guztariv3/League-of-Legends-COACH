@@ -1,3 +1,5 @@
+import { gameAchievements } from "@coach/coach";
+import { normalizeMatch, type RawMatch } from "@coach/domain";
 import { inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import type { AuthVars } from "./auth.js";
@@ -158,6 +160,85 @@ export function overviewRoutes({ db, services }: { db: Db; services: Services })
       axes: AXES.map((a) => ({ id: a.id, label: a.label })),
       lpTrack: { queue: ranked ?? (solo.length ? "RANKED_SOLO_5x5" : null), history: ranked ? historyOf(ranked) : solo },
       lastSyncedAt: accounts.map((a) => a.lastSyncedAt?.toISOString() ?? null).filter(Boolean).sort().at(-1) ?? null,
+    });
+  });
+  /**
+   * The Overview tab: activity, roles, a summary of the last 10 games and the game cards, for
+   * the chosen queue, role and champion. Cards carry the ten players, scoreboard facts as tags
+   * and the LP change when it is known for that game.
+   */
+  r.get("/overview/games", async (c) => {
+    const { accounts, analyses } = await services.profileAnalyses(c.get("userId"));
+    const q = c.req.query();
+    const queue = Number(q.queue) || null;
+    const role = q.role && q.role !== "ALL" ? q.role : null;
+    const champion = q.champion?.slice(0, 40) || null;
+    const limit = Math.min(40, Number(q.limit) || 20);
+    const filtered = analyses.filter((a) => (queue === null || a.queueId === queue) && (role === null || a.role === role) && (champion === null || a.championName === champion));
+    const usable = filtered.filter((a) => a.analyzable);
+
+    const since = Date.now() - 120 * 86_400_000;
+    const recent120 = filtered.filter((a) => a.startedAt >= since);
+    const roles = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"].map((r) => {
+      const g = usable.filter((a) => a.role === r && a.mode === "summoners_rift");
+      return { role: r, games: g.length, wins: g.filter((a) => a.win).length };
+    });
+
+    const last10 = usable.slice(0, 10);
+    const group = (list: A[]) => {
+      const k = avg(list.map((a) => a.kills)) ?? 0, d = avg(list.map((a) => a.deaths)) ?? 0, as = avg(list.map((a) => a.assists)) ?? 0;
+      return { games: list.length, wins: list.filter((a) => a.win).length, kills: k, deaths: d, assists: as, kda: (k + as) / Math.max(1, d) };
+    };
+    const byKey = (key: (a: A) => string) => {
+      const m = new Map<string, A[]>();
+      for (const a of last10) m.set(key(a), [...(m.get(key(a)) ?? []), a]);
+      return [...m.entries()].sort((a, b) => b[1].length - a[1].length);
+    };
+    const topRole = byKey((a) => a.role).find(([r]) => r !== "NONE");
+    const summary = {
+      ...group(last10),
+      role: topRole ? { role: topRole[0], ...group(topRole[1]) } : null,
+      champions: byKey((a) => a.championName).slice(0, 2).map(([name, list]) => ({ name, championId: list[0]!.championId, ...group(list) })),
+      games: last10.map((a) => ({ matchId: a.matchId, championName: a.championName, championId: a.championId, win: a.win, kills: a.kills, deaths: a.deaths, assists: a.assists, startedAt: a.startedAt })),
+    };
+
+    // LP per game, when known.
+    const snaps = accounts.length ? await db.select().from(schema.rankSnapshots).where(inArray(schema.rankSnapshots.accountId, accounts.map((a) => a.id))) : [];
+    const lp = new Map<string, number>();
+    for (const pq of PROFILE_QUEUES.filter((x) => x.ranked)) {
+      const hist = accounts.flatMap((acc) => rankHistory(snaps.filter((s) => s.accountId === acc.id && s.queueType === pq.ranked)).map((p) => ({ ...p, accountId: acc.id })));
+      for (const [id, v] of lpByGame(hist, analyses.filter((a) => a.queueId === pq.id))) lp.set(id, v);
+    }
+
+    const page = filtered.slice(0, limit);
+    const raws = page.length ? await db.select().from(schema.rawMatches).where(inArray(schema.rawMatches.matchId, page.map((a) => a.matchId))) : [];
+    const rawById = new Map(raws.map((r) => [r.matchId, r.payload as RawMatch]));
+    const queueName = (id: number) => PROFILE_QUEUES.find((x) => x.id === id)?.label ?? (id === 450 ? "ARAM" : "Other");
+    const cards = page.map((a) => {
+      const raw = rawById.get(a.matchId);
+      const match = raw ? normalizeMatch(raw) : null;
+      const me = match?.participants.find((p) => p.puuid === a.puuid);
+      return {
+        matchId: a.matchId, queueId: a.queueId, queue: queueName(a.queueId), patch: a.patch, startedAt: a.startedAt, durationSec: a.durationSec,
+        analyzable: a.analyzable, win: a.win, championName: a.championName, championId: a.championId, role: a.role, level: a.level,
+        kills: a.kills, deaths: a.deaths, assists: a.assists, kda: a.kda, cs: a.cs, csPerMin: a.csPerMin, csDiff15: a.csDiff15,
+        killParticipation: a.killParticipation, visionScore: a.visionScore, items: a.items, spells: a.spells, runes: a.runes,
+        lpChange: lp.get(a.matchId) ?? null,
+        // Scoreboard-only facts (no timeline load here); the match page has the full list.
+        tags: match ? gameAchievements({ match, timeline: null, puuid: a.puuid, game: a, history: analyses }).slice(0, 4).map((t) => t.title) : [],
+        players: match ? match.participants.map((p) => ({ teamId: p.teamId, championName: p.championName, championId: p.championId, name: p.riotId?.split("#")[0] ?? null, isMe: p === me })) : [],
+      };
+    });
+
+    return c.json({
+      activity: {
+        days: 120,
+        games: recent120.length,
+        hours: Math.round(recent120.reduce((s, a) => s + a.durationSec, 0) / 3600),
+        list: recent120.map((a) => ({ t: a.startedAt, win: a.win, analyzable: a.analyzable, mode: a.mode, durationSec: a.durationSec })),
+      },
+      roles, summary, cards, total: filtered.length,
+      champions: [...new Set(analyses.map((a) => a.championName))].sort(),
     });
   });
   return r;

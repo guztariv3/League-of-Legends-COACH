@@ -1,20 +1,17 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation, useSearchParams } from "react-router";
-import { api, type Dashboard, type MatchRow, type RankResponse, type Stat } from "../api";
-import { ChampionIcon } from "../assets";
-import { ActivityCalendar } from "../components/ActivityCalendar";
-import { Goals } from "../components/Goals";
+import { useLocation, useSearchParams } from "react-router";
+import { api, type RankResponse } from "../api";
 import { LpGains } from "../components/LpGains";
 import { OverviewPanel, ProfileBanner, ProfileCard } from "../components/ProfileTop";
 import { PoolTable } from "../components/Pools";
-import { ago, ErrorNotice, InsightView, Loading, MatchItem, modeLabel, num, pct, roleLabel, SyntheticBadge } from "../components/ui";
+import { ErrorNotice, InsightView, Loading, modeLabel, roleLabel } from "../components/ui";
 import { useLoad, useSession } from "../session";
 import { CoachProfile } from "./Profile";
+import { ProfileOverview } from "../components/ProfileOverview";
 
 type Tab = "overview" | "champions" | "matchups" | "lp" | "coach";
 const TABS: [Tab, string][] = [["overview", "Overview"], ["champions", "Champion pool"], ["matchups", "Matchup pool"], ["lp", "LP gains"], ["coach", "Coach"]];
 const QUEUE = { RANKED_SOLO_5x5: "Ranked Solo/Duo", RANKED_FLEX_SR: "Ranked Flex" } as const;
-const ROLES = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"];
 
 /**
  * Your profile, which is also the home page: who you are in the game (rank, main
@@ -41,7 +38,6 @@ export function Home() {
   const rank = useLoad(() => api.rank(), [syncKey]);
   const queue = Number(params.get("queue")) || undefined;
   const overview = useLoad(() => api.overview(queue), [syncKey, queue]);
-  const goals = useLoad(() => api.goals(), [syncKey, version]);
 
   useEffect(() => {
     if (hash) document.getElementById(hash.slice(1))?.scrollIntoView({ block: "start" });
@@ -86,7 +82,7 @@ export function Home() {
         ))}
       </div>
 
-      {tab === "overview" && <Overview data={data} improve={improve.data} goals={goals.data} onChange={reload} />}
+      {tab === "overview" && <ProfileOverview />}
       {(tab === "champions" || tab === "matchups") && (improve.loading && !improve.data ? <Loading /> : improve.error ? <ErrorNotice error={improve.error} /> : improve.data && (
         tab === "champions" ? (
           <PoolTable title="Champion pool" entries={improve.data.champions} what="champion" empty="No analyzable Summoner's Rift games yet."
@@ -106,127 +102,26 @@ export function Home() {
         )
       ))}
       {tab === "lp" && <LpTab rank={rank.data} error={rank.error} />}
-      {tab === "coach" && <CoachProfile />}
-    </div>
-  );
-}
-
-function Overview({ data, improve, goals, onChange }: {
-  data: Dashboard;
-  improve: import("../api").Improve | undefined;
-  goals: import("../api").GoalsResponse | undefined;
-  onChange: () => void;
-}) {
-  const recent = data.recent.filter((m) => m.analyzable);
-  const wins = recent.filter((m) => m.win).length;
-  const k = recent.reduce((s, m) => s + m.kills, 0), d = recent.reduce((s, m) => s + m.deaths, 0), a = recent.reduce((s, m) => s + m.assists, 0);
-  const n = Math.max(1, recent.length);
-  const roles = ROLES.map((r) => data.performance.roles.find((x) => x.role === r) ?? { role: r, games: 0, wins: 0 });
-  const maxRole = Math.max(1, ...roles.map((r) => r.games));
-  const days = groupByDay(data.recent);
-
-  return (
-    <div className="pf-overview">
-      <aside className="stack" style={{ gap: 12 }}>
-        <section className="card stack" aria-labelledby="h-activity">
-          <h2 id="h-activity" style={{ margin: 0 }}>Recent activity <span className="quiet-num" style={{ textTransform: "none" }}>· last {Math.min(120, improve?.activityDays ?? 120)} days</span></h2>
-          {improve ? <ActivityCalendar activity={improve.activity} days={Math.min(120, improve.activityDays)} compact /> : <Loading />}
-        </section>
-        <section className="card stack" aria-labelledby="h-roles">
-          <h2 id="h-roles" style={{ margin: 0 }}>Top roles</h2>
-          <div className="pf-roles" role="list">
-            {roles.map((r) => (
-              <div key={r.role} className="pf-role" role="listitem" aria-label={`${roleLabel[r.role]}: ${r.games} games${r.games ? `, ${pct(r.wins / r.games)} wins` : ""}`}>
-                <span className="pf-role-bar"><span style={{ height: `${(100 * r.games) / maxRole}%` }} /></span>
-                <strong>{r.games}</strong>
-                <span className="tile-note">{r.games ? pct(r.wins / r.games) : "—"}</span>
-                <span className="pf-role-name">{roleLabel[r.role]}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-        {goals && (goals.goals.length > 0 || goals.suggestions.length > 0) && (
-          <section className="card stack" aria-labelledby="goals-h">
-            <div className="row">
-              <h2 id="goals-h" style={{ margin: 0 }}>Your goals</h2>
-              <span className="spacer" />
-              <Link to="/?tab=coach#goals">Manage</Link>
-            </div>
-            <Goals data={goals} onChange={onChange} compact />
+      {tab === "coach" && (
+        <>
+          <section className="card stack" aria-labelledby="insights-h">
+            <h2 id="insights-h" style={{ margin: 0 }}>What matters most now</h2>
+            {data.insufficientData ? (
+              <p className="page-sub" style={{ margin: 0 }}>I do not have enough reliable information to draw conclusions yet. With more analyzed games I will start spotting patterns.</p>
+            ) : (
+              data.insights.map((i) => (
+                <InsightView key={i.id} insight={i}>
+                  <button className="btn btn-ghost" style={{ padding: "4px 0", fontSize: "0.8rem", color: "var(--text-muted)" }}
+                    onClick={async () => { await api.feedback(i.id, i.title); reload(); }}>Not useful to me</button>
+                </InsightView>
+              ))
+            )}
           </section>
-        )}
-      </aside>
-
-      <div className="stack" style={{ gap: 12 }}>
-        <section className="card stack" aria-labelledby="h-summary">
-          <h2 id="h-summary" style={{ margin: 0 }}>Recent summary <span className="quiet-num" style={{ textTransform: "none" }}>· last {recent.length} games</span></h2>
-          {recent.length === 0 ? <p className="tile-note" style={{ margin: 0 }}>No games yet.</p> : (
-            <>
-              <div className="pf-summary">
-                <span><b>{wins}W {recent.length - wins}L</b> · <span className={wins / n >= 0.5 ? "num-good" : "num-bad"}>{pct(wins / n)}</span></span>
-                <span><b>{num(k / n)} / {num(d / n)} / {num(a / n)}</b> <span className="quiet-num">({num((k + a) / Math.max(1, d), 2)} KDA)</span></span>
-              </div>
-              <ul className="pf-recent">
-                {recent.map((m) => (
-                  <li key={m.matchId}>
-                    <Link to={`/matches/${encodeURIComponent(m.matchId)}`} className={`pf-recent-game ${m.win ? "is-win" : "is-loss"}`} title={`${m.championName}: ${m.win ? "win" : "loss"}`}>
-                      <ChampionIcon champion={m.championId ?? m.championName} size={40} />
-                      <span>{m.kills} / {m.deaths} / {m.assists}</span>
-                      <span className="tile-note">{ago(m.startedAt)}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </section>
-
-        <section className="card stack" aria-labelledby="insights-h">
-          <h2 id="insights-h" style={{ margin: 0 }}>What matters most now</h2>
-          {data.insufficientData ? (
-            <p className="page-sub" style={{ margin: 0 }}>I do not have enough reliable information to draw conclusions yet. With more analyzed games I will start spotting patterns.</p>
-          ) : (
-            data.insights.map((i) => (
-              <InsightView key={i.id} insight={i}>
-                <button className="btn btn-ghost" style={{ padding: "4px 0", fontSize: "0.8rem", color: "var(--text-muted)" }}
-                  onClick={async () => { await api.feedback(i.id, i.title); onChange(); }}>Not useful to me</button>
-              </InsightView>
-            ))
-          )}
-        </section>
-
-        <section className="stack" aria-labelledby="recent-h" style={{ gap: 8 }}>
-          <div className="row">
-            <h2 id="recent-h" className="section-title" style={{ margin: 0 }}>Recent games</h2>
-            <span className="spacer" />
-            <Link to="/matches">See all</Link>
-          </div>
-          {days.map((g) => (
-            <div key={g.label} className="stack" style={{ gap: 8 }}>
-              <p className="pf-day">{g.label} · {g.wins}W {g.losses}L{g.wins + g.losses ? ` · ${pct(g.wins / (g.wins + g.losses))}` : ""}</p>
-              <ul className="match-list">{g.games.map((m) => <MatchItem key={m.matchId} m={m} />)}</ul>
-            </div>
-          ))}
-          {days.length === 0 && <p className="page-sub" style={{ margin: 0 }}>No games yet.</p>}
-        </section>
-      </div>
+          <CoachProfile />
+        </>
+      )}
     </div>
   );
-}
-
-function groupByDay(games: MatchRow[]) {
-  const out: { label: string; games: MatchRow[]; wins: number; losses: number }[] = [];
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  for (const m of games) {
-    const d = new Date(m.startedAt); d.setHours(0, 0, 0, 0);
-    const diff = Math.round((today.getTime() - d.getTime()) / 86_400_000);
-    const label = diff <= 0 ? "Today" : diff === 1 ? "Yesterday" : `${diff} days ago`;
-    let g = out.find((x) => x.label === label);
-    if (!g) out.push(g = { label, games: [], wins: 0, losses: 0 });
-    g.games.push(m);
-    if (m.analyzable) { if (m.win) g.wins++; else g.losses++; }
-  }
-  return out;
 }
 
 function LpTab({ rank, error }: { rank: RankResponse | undefined; error: unknown }) {

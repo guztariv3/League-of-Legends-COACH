@@ -105,6 +105,17 @@ describe("API (synthetic mode)", () => {
     // Demo trail: one snapshot per game, so LP is known per game and shown per champion.
     expect(ov.lpColumn).toBe(true);
     expect(ov.rows[0].lp.games).toBeGreaterThan(0);
+    // Overview tab: activity, roles, last-10 summary and cards with the ten players and tags.
+    const og = (await call("/overview/games", { cookie })).body;
+    expect(og.cards.length).toBe(20);
+    expect(og.cards[0].players).toHaveLength(10);
+    expect(og.cards[0].players.filter((p: { isMe: boolean }) => p.isMe)).toHaveLength(1);
+    expect(og.summary.games).toHaveLength(10);
+    expect(og.activity.games).toBeGreaterThan(0);
+    expect(og.cards.some((c: { lpChange: number | null }) => c.lpChange !== null)).toBe(true);
+    const champ = og.cards[0].championName;
+    const onlyChamp = (await call(`/overview/games?champion=${encodeURIComponent(champ)}&queue=420`, { cookie })).body;
+    expect(onlyChamp.cards.every((c: { championName: string; queueId: number }) => c.championName === champ && c.queueId === 420)).toBe(true);
     // A queue without games falls back to one with games.
     expect((await call("/overview?queue=440", { cookie })).body.selected).toBe(420);
 

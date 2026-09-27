@@ -25,9 +25,20 @@ test("profile tabs (champion pool, matchups, LP gains, activity) and challenges"
   await expect(panel.getByRole("img", { name: new RegExp(`^Radar for ${champName}`) })).toBeVisible();
   await expect(page.getByRole("button", { name: "Refresh data" })).toBeVisible();
   await expect(page.getByRole("grid", { name: /Games per day/ })).toBeVisible();
+  // Hovering a day with games shows its date, time played, record and win rate.
+  await page.locator('.ov-day[tabindex="0"]').last().hover();
+  await expect(page.getByText("Time Played:")).toBeVisible();
+  await expect(page.getByText("Record:")).toBeVisible();
+  await page.screenshot({ path: `test-results/profile-overview-${info.project.name}.png`, fullPage: true });
+  // Game cards: the ten players and, in ranked, the LP change.
+  const cards = page.getByRole("region", { name: "Games" }).getByRole("article");
+  await expect(cards.first().locator(".gc-players li")).toHaveCount(10);
+  await expect(page.locator(".gc-lp").first()).toBeVisible();
+  // Filters: one role only.
+  await page.getByRole("radiogroup", { name: "Role" }).getByRole("radio", { name: "Mid" }).click();
+  await expect(page).toHaveURL(/grole=MIDDLE/);
   await expect(page.getByRole("heading", { name: "Top roles" })).toBeVisible();
   await expect(page.getByRole("heading", { name: /Recent summary/ })).toBeVisible();
-  await page.screenshot({ path: `test-results/profile-overview-${info.project.name}.png`, fullPage: true });
 
   // Champion pool: most played first, with an honest verdict.
   await page.getByRole("tab", { name: "Champion pool" }).click();
