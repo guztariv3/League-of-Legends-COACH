@@ -2,8 +2,9 @@ import { expect, test } from "@playwright/test";
 
 async function onboard(page: import("@playwright/test").Page, player: string) {
   await page.goto("/");
+  await page.getByText("Development sign-in (private prototype only)").click();
   await page.getByLabel("Your name").fill(player);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Sign in with a name" }).click();
   await page.getByLabel("Riot ID").fill(`${player}#EUW`);
   await page.getByRole("button", { name: "Link and analyze" }).click();
   await expect(page.getByText(/Based on \d+ analyzable games/)).toBeVisible({ timeout: 30_000 });

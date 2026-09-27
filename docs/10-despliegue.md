@@ -65,6 +65,24 @@ Antes de PR #4, cualquier fallo de Riot se mostraba como "Algo ha fallado en el 
 
 > Seguridad: el login de desarrollo reutiliza el usuario por nombre. Detrás del gate solo deben entrar personas de confianza. **No compartas la contraseña públicamente.**
 
+## Abrir la web al público (cuentas propias)
+Cada persona crea su cuenta con un nombre de usuario y una contraseña: `POST /api/auth/register` y `/api/auth/login`.
+- La contraseña se guarda solo como hash scrypt con sal; nunca se guarda en claro.
+- Los intentos están limitados:
+  - 5 altas por dirección y hora;
+  - 20 inicios de sesión por dirección y 15 minutos;
+  - 10 inicios de sesión por usuario y 15 minutos.
+- Un usuario inexistente y una contraseña incorrecta reciben la misma respuesta.
+
+El acceso por nombre (desarrollo) nunca abre una cuenta que tenga contraseña, y solo existe mientras el sitio tenga `PROTOTYPE_PASSWORD`.
+
+Para que el enlace abra directamente, sin la ventana de usuario y contraseña del navegador:
+1. **Con la contraseña del sitio aún puesta**, entra con tu nombre de siempre y ve a **Settings → Username and password**. Elige un usuario y una contraseña (10 caracteres o más). Así tu perfil actual conserva sus datos, y cualquier otra sesión abierta con ese nombre se cierra.
+2. En Render → Environment, **borra `PROTOTYPE_PASSWORD`** y guarda. El sitio se reinicia sin la contraseña general, y el acceso por nombre se apaga solo.
+3. Comparte `https://kairos-coach.onrender.com`. Quien lo abra verá "Sign in / Create account".
+
+Para volver a hacerlo privado, vuelve a poner `PROTOTYPE_PASSWORD` en Render.
+
 ## CI (`.github/workflows/ci.yml`)
 
 En cada PR y en cada push a `main` se ejecutan typecheck, tests, E2E web y de escritorio, la build de la imagen Docker, y `cargo test` de la app de escritorio.

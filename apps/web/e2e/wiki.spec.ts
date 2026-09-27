@@ -16,8 +16,9 @@ const wiki = {
 test("champion page shows League of Legends Wiki data with its credit", async ({ page }, info) => {
   const player = `Wiki${info.project.name}`;
   await page.goto("/");
+  await page.getByText("Development sign-in (private prototype only)").click();
   await page.getByLabel("Your name").fill(player);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Sign in with a name" }).click();
   await page.getByLabel("Riot ID").fill(`${player}#EUW`);
   await page.getByRole("button", { name: "Link and analyze" }).click();
   await expect(page.getByText(/Based on \d+ analyzable games/)).toBeVisible({ timeout: 30_000 });

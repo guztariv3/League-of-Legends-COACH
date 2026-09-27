@@ -70,7 +70,7 @@ export function Landing() {
       <section className="card stack" aria-labelledby="state-h">
         <h2 id="state-h">Project status</h2>
         <p style={{ margin: 0 }}>
-          KOI Master is an independent project in prototype stage. The website is in closed testing while Riot Games reviews the application: once approved, you will be able to sign in with your Riot account.
+          KOI Master is an independent project in prototype stage. Create a free account on the website with a username and password; signing in with your Riot account will be added once Riot Games approves it.
         </p>
       </section>
     </div>

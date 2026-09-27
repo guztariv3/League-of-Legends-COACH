@@ -8,6 +8,7 @@ import { and, asc, desc, eq, gt, inArray, isNull } from "drizzle-orm";
 import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { hashToken, type AuthVars } from "./auth.js";
+import { AttemptLimiter, clientIp } from "./limits.js";
 import { schema, type Db } from "./db/index.js";
 import { userAccounts } from "./queries.js";
 import { personalBuild } from "./build.js";
@@ -38,24 +39,6 @@ function newCode(): string {
   for (let i = 0; i < 8; i++) s += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
   return `${s.slice(0, 4)}-${s.slice(4)}`;
 }
-
-/** Small fixed-window limiter for code guessing (8 chars from 31 symbols ≈ 40 bits, 10-minute life). */
-class AttemptLimiter {
-  private hits = new Map<string, { windowStart: number; n: number }>();
-  constructor(private readonly max: number, private readonly windowMs: number) {}
-  allow(key: string, now = Date.now()): boolean {
-    const h = this.hits.get(key);
-    if (!h || now - h.windowStart > this.windowMs) {
-      this.hits.set(key, { windowStart: now, n: 1 });
-      return true;
-    }
-    h.n++;
-    return h.n <= this.max;
-  }
-}
-
-// The proxy appends the real client address last; earlier entries can be forged by the client.
-const clientIp = (c: Context) => c.req.header("x-forwarded-for")?.split(",").pop()?.trim() || "local";
 
 /** Routes that need a web session (mounted under the authenticated router). */
 export function desktopSessionRoutes({ db }: { db: Db }) {
