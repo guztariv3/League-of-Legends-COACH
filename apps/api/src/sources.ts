@@ -19,6 +19,36 @@ export interface ActiveGame {
   participants: { puuid: string | null; teamId: number; championId: number; riotId: string | null }[];
 }
 
+/** One step of a synthetic rank history. */
+export interface RankTrailPoint { at: Date; queueType: "RANKED_SOLO_5x5"; tier: string; rank: string; lp: number; wins: number; losses: number }
+
+const TRAIL_TIERS = ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM", "EMERALD", "DIAMOND"];
+const TRAIL_DIVISIONS = ["IV", "III", "II", "I"];
+
+/**
+ * Walks the fictional player's ranked games oldest-first on a 100-points-per-division
+ * ladder: a deterministic start and deterministic gains and losses per game.
+ */
+export function syntheticTrail(games: SyntheticGame[], puuid: string, seed: number): RankTrailPoint[] {
+  const rand = mulberry32(seed ^ 0x5eed);
+  let points = 800 + Math.floor(rand() * 500); // somewhere in Silver–Gold
+  let wins = 0, losses = 0;
+  const trail: RankTrailPoint[] = [];
+  const ranked = games.filter((g) => g.match.info.queueId === 420).sort((a, b) => a.match.info.gameCreation - b.match.info.gameCreation);
+  for (const g of ranked) {
+    const me = g.match.info.participants.find((p) => p.puuid === puuid);
+    if (!me) continue;
+    if (me.win) { wins++; points += 17 + Math.floor(rand() * 8); } else { losses++; points = Math.max(0, points - (15 + Math.floor(rand() * 8))); }
+    points = Math.min(points, TRAIL_TIERS.length * 400 - 1);
+    const t = Math.floor(points / 400), d = Math.floor((points % 400) / 100);
+    trail.push({
+      at: new Date((g.match.info.gameEndTimestamp ?? g.match.info.gameCreation + g.match.info.gameDuration * 1000) + 60_000),
+      queueType: "RANKED_SOLO_5x5", tier: TRAIL_TIERS[t]!, rank: TRAIL_DIVISIONS[d]!, lp: points % 100, wins, losses,
+    });
+  }
+  return trail;
+}
+
 /** Where match data comes from: the Riot API or the synthetic environment. */
 export interface MatchSource {
   readonly kind: DataSource;
@@ -31,6 +61,12 @@ export interface MatchSource {
   topMasteries?(platform: string, puuid: string, count: number): Promise<RiotMastery[]>;
   /** Ranked entries; absent in the synthetic environment. May fail: callers treat failure as unavailable. */
   leagueEntries?(platform: string, puuid: string): Promise<RiotLeagueEntry[]>;
+  /**
+   * Synthetic environment only: the rank after each of the fictional ranked games, so the
+   * demo can show an LP line. Riot has no such history; real accounts build theirs one sync
+   * at a time.
+   */
+  rankTrail?(platform: string, puuid: string): Promise<RankTrailPoint[]>;
   /** Only returns data once the game has started (spectator-v5), never during champion select. */
   activeGame(platform: string, puuid: string): Promise<ActiveGame | null>;
 }
@@ -114,6 +150,9 @@ export function syntheticSource(now: () => number = Date.now): MatchSource {
     },
     async timeline(_platform, id) {
       return byMatch.get(id)?.timeline ?? null;
+    },
+    async rankTrail(platform, puuid) {
+      return syntheticTrail(history(platform, puuid), puuid, hash(`${platform}:${puuid}`));
     },
     /** Simulated game in progress, stable for an hour, so scouting can be developed without Riot. */
     async activeGame(platform, puuid) {

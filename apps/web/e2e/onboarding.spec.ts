@@ -13,7 +13,9 @@ test("onboarding → dashboard → matches → match detail → settings", async
   await page.getByLabel("Region").selectOption("euw1");
   await page.getByRole("button", { name: "Link and analyze" }).click();
 
-  await expect(page.getByRole("heading", { name: `Hi, ${player}` })).toBeVisible();
+  // The home page is your profile: Riot ID, rank area, champions and performance.
+  await expect(page.getByRole("heading", { level: 1, name: `${player} #EUW` })).toBeVisible();
+  await expect(page.getByText(`Hi, ${player}`)).toBeVisible();
   // First sync (50 games) finishes and the dashboard fills in.
   await expect(page.getByText(/Based on \d+ analyzable games/)).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "What matters most now" })).toBeVisible();

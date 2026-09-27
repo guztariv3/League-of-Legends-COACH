@@ -10,7 +10,7 @@ const longDay = (d: Date) => d.toLocaleDateString("en-US", { weekday: "short", m
  * sequential hue from light to dark for "more games"; each cell names its day, games and
  * wins, and a list view carries the same data.
  */
-export function ActivityCalendar({ activity, days }: { activity: Improve["activity"]; days: number }) {
+export function ActivityCalendar({ activity, days, compact = false }: { activity: Improve["activity"]; days: number; compact?: boolean }) {
   const [active, setActive] = useState<string | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   // On narrow screens, start at the most recent weeks.
@@ -47,12 +47,14 @@ export function ActivityCalendar({ activity, days }: { activity: Improve["activi
 
   return (
     <div className="stack" style={{ gap: 12 }}>
-      <div className="tiles" aria-label="Activity summary">
+      {compact ? (
+        <p className="tile-note" style={{ margin: 0 }}><b>{summary.last30}</b> games in the last 30 days · <b>{summary.daysPlayed}</b> days played{summary.busiest ? ` · most on ${summary.busiest}` : ""}</p>
+      ) : <div className="tiles" aria-label="Activity summary">
         <div className="tile"><div className="tile-value">{summary.last30}</div><div className="tile-label">Games in the last 30 days</div></div>
         <div className="tile"><div className="tile-value">{summary.daysPlayed}</div><div className="tile-label">Days played (last {Math.round(days / 30)} months)</div></div>
         <div className="tile"><div className="tile-value">{summary.streak}</div><div className="tile-label">Days in a row, up to today</div></div>
         {summary.busiest && <div className="tile"><div className="tile-value">{summary.busiest}</div><div className="tile-label">Day you play most</div></div>}
-      </div>
+      </div>}
       <div className="calendar-wrap" ref={scroller}>
         <div className="calendar" role="grid" aria-label={`Games per day, last ${days} days`}>
           <div className="calendar-dows" aria-hidden="true">{DOW.map((d, i) => <span key={d}>{i % 2 ? d : ""}</span>)}</div>

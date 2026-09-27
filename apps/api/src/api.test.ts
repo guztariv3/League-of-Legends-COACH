@@ -75,13 +75,26 @@ describe("API (synthetic mode)", () => {
 
     const dash = await call("/dashboard", { cookie });
     expect(dash.body.dataSource).toBe("synthetic");
-    expect(dash.body.recent).toHaveLength(5);
+    expect(dash.body.recent).toHaveLength(10);
+    // Performance: averages over the last 20 games of the main mode, each with its own sample.
+    const perf = dash.body.performance;
+    expect(perf.games).toBe(20);
+    expect(perf.killParticipation.games).toBeGreaterThan(0);
+    expect(perf.roles.reduce((s: number, r: { games: number }) => s + r.games, 0)).toBeGreaterThan(0);
+
+    // Demo rank: the synthetic environment fills in one snapshot per fictional ranked game, once.
+    const rank = (await call("/rank", { cookie })).body;
+    const solo = rank.accounts[0].queues.find((q: { queueType: string }) => q.queueType === "RANKED_SOLO_5x5");
+    expect(solo.history.length).toBeGreaterThan(2);
+    expect(solo.history.slice(1).every((p: { lpChange: number | null }) => p.lpChange !== null && p.lpChange !== 0)).toBe(true);
     expect(dash.body.insights.length).toBeLessThanOrEqual(3);
     expect(dash.body.summary.analyzableGames).toBeGreaterThan(30);
 
     // Incremental sync does not duplicate games
     await ctx.sync.start(created.body.account.id);
     expect((await call("/matches?limit=100", { cookie })).body.total).toBe(50);
+    const again = (await call("/rank", { cookie })).body.accounts[0].queues.find((q: { queueType: string }) => q.queueType === "RANKED_SOLO_5x5");
+    expect(again.history).toHaveLength(solo.history.length);
   }, 60_000);
 
   it("filters matches and returns a detail view with timeline data", async () => {

@@ -1,18 +1,17 @@
 import { StrictMode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Link, NavLink, Navigate, Outlet, Route, Routes } from "react-router";
+import { BrowserRouter, Link, NavLink, Navigate, Outlet, Route, Routes, useLocation } from "react-router";
 import { api } from "./api";
 import { Coach } from "./components/Coach";
 import { CoachAvatar } from "@coach/ui";
 import { Loading } from "./components/ui";
 import { Champions } from "./pages/Champions";
 import { ChampionDetail } from "./pages/ChampionDetail";
-import { Profile } from "./pages/Profile";
 import { Improve } from "./pages/Improve";
 import { Game } from "./pages/Game";
 import { MatchReview } from "./pages/MatchReview";
 import { SearchBox } from "./components/SearchBox";
-import { Dashboard } from "./pages/Dashboard";
+import { Home } from "./pages/Home";
 import { MatchDetail } from "./pages/MatchDetail";
 import { Matches } from "./pages/Matches";
 import { Settings } from "./pages/Settings";
@@ -27,12 +26,11 @@ import "./styles.css";
 
 /** Main sections, as the left icon rail (a bottom bar on phones). Simple original line icons, 24×24. */
 const NAV: [string, string, string][] = [
-  ["/", "Home", "M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"],
+  ["/", "Profile", "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"],
   ["/matches", "Matches", "M4 6h16M4 12h16M4 18h16"],
   ["/champions", "Champions", "M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6z"],
   ["/game", "Pre-game", "M5 4h14v16H5zM10 9l5 3-5 3z"],
   ["/improve", "Improve", "M4 20V11M10 20V5M16 20v-6M2 20h20"],
-  ["/profile", "Profile", "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"],
 ];
 
 function Layout() {
@@ -93,6 +91,12 @@ function Layout() {
   );
 }
 
+/** The profile is the home page now; old links (with #goals and the like) land on its Coach tab. */
+function ProfileRedirect() {
+  const { hash } = useLocation();
+  return <Navigate to={`/?tab=coach${hash}`} replace />;
+}
+
 function App() {
   const { loading, me } = useSession();
   if (loading) return <main className="shell"><Loading /></main>;
@@ -107,7 +111,7 @@ function App() {
     <Routes>
       <Route path="/link" element={<Welcome />} />
       <Route element={<Layout />}>
-        <Route index element={<Dashboard />} />
+        <Route index element={<Home />} />
         <Route path="matches" element={<Matches />} />
         <Route path="matches/:matchId" element={<MatchDetail />} />
         <Route path="matches/:matchId/review" element={<MatchReview />} />
@@ -115,7 +119,7 @@ function App() {
         <Route path="champions" element={<Champions />} />
         <Route path="champions/:name" element={<ChampionDetail />} />
         <Route path="improve" element={<Improve />} />
-        <Route path="profile" element={<Profile />} />
+        <Route path="profile" element={<ProfileRedirect />} />
         <Route path="settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
