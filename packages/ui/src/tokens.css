@@ -1,50 +1,54 @@
-/* KOI Master design tokens — shared by web and desktop (brief §112). Dark-first Runeterra theme: hextech gold and blue. */
+/* KOI Master design tokens — shared by web and desktop. Dark indigo stats-app theme: flat panels,
+   dense tables, one yellow accent for what is active or important. Token names are kept from the
+   first theme so every component follows the new values. */
 :root {
   color-scheme: dark;
-  /* surfaces: deep Runeterra night, translucent so the map and splash art show through */
-  --bg: #010a13;
-  --surface-1: rgb(1 10 19 / 0.84);
-  --surface-2: rgb(10 20 40 / 0.86);
-  --surface-3: #1e2328;
-  --surface-solid: #0a1428;
-  --border: #3c3222;
-  --border-strong: #785a28;
+  /* surfaces, darkest to lightest */
+  --bg: #171233;
+  --surface-1: #251f47;       /* panels */
+  --surface-2: #2d2752;       /* rows, stat boxes, sections inside panels */
+  --surface-3: #36305c;       /* table headers, inputs, hover */
+  --surface-4: #413a6b;       /* pressed / selected */
+  --surface-solid: #251f47;
+  --border: #3a3464;
+  --border-strong: #4a4380;
   /* text */
-  --text-primary: #f0e6d2;
-  --text-secondary: #bcb4a0;
-  --text-muted: #948d7c;
-  /* brand: hextech blue for the Coach, gold for the frame */
-  --accent: #0ac8b9;
-  --accent-ink: #011a18;
-  --gold: #c8aa6e;
-  --gold-bright: #f0d49c;
-  --gold-dark: #785a28;
-  /* match results, as in the client's match history (always with a word, never colour alone) */
-  --win: #0acbe6;
-  --loss: #e84057;
-  /* data viz (validated with the dataviz skill against --surface-1) */
-  --series-1: #3987e5;
-  /* teams on the review map (validated pair, dataviz skill); always paired with shape */
-  --team-ally: #3987e5;
-  --team-enemy: #d95926;
-  --grid: #2b3440;
+  --text-primary: #ffffff;
+  --text-secondary: #b9b4d6;
+  --text-muted: #857fab;
+  /* accent: yellow for active tabs, primary buttons and highlighted values */
+  --accent: #f2bf43;
+  --accent-ink: #1b1535;
+  --gold: #f2bf43;
+  --gold-bright: #ffd46b;
+  --gold-dark: #8a6d2c;
+  --cta: #fc7c00;             /* call to action (orange) */
+  /* match results (always with a word, never colour alone) */
+  --win: #3ea0ff;
+  --loss: #ff4e78;
+  /* data viz */
+  --series-1: #3ea0ff;
+  --team-ally: #3ea0ff;
+  --team-enemy: #ff7a45;
+  --grid: #3a3464;
   /* status: always paired with icon + label */
-  --good: #4cc38a;
-  --bad: #f07178;
-  --warn: #e3b964;
+  --good: #3fd18a;
+  --bad: #ff4e78;
+  --warn: #f2bf43;
   /* type & space */
-  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-display: "Cinzel", Georgia, "Times New Roman", serif;
-  --radius-s: 6px;
-  --radius-m: 10px;
-  --radius-l: 16px;
+  --font: "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-numeric: "Roboto Condensed", "Roboto", system-ui, sans-serif;
+  --radius-s: 4px;
+  --radius-m: 6px;
+  --radius-l: 10px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
   --space-5: 24px;
   --space-6: 32px;
-  --shadow: 0 10px 34px rgb(0 0 0 / 0.55);
-  --glow-gold: 0 0 0 1px rgb(200 170 110 / 0.08) inset, 0 0 24px rgb(200 170 110 / 0.06);
+  --shadow: 0 8px 24px rgb(8 5 25 / 0.5);
+  --glow-gold: none;
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
 }

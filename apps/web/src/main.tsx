@@ -25,14 +25,14 @@ import { World } from "./components/World";
 import { LegalFooter } from "./components/LegalFooter";
 import "./styles.css";
 
-/** Main sections. The icons only show in the phone bottom bar (simple original glyphs, 24×24). */
+/** Main sections, as the left icon rail (a bottom bar on phones). Simple original line icons, 24×24. */
 const NAV: [string, string, string][] = [
-  ["/", "Home", "M4 11 12 4l8 7v9h-5v-6H9v6H4z"],
-  ["/matches", "Matches", "M5 5h14v3H5zm0 5.5h14v3H5zM5 16h14v3H5z"],
+  ["/", "Home", "M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"],
+  ["/matches", "Matches", "M4 6h16M4 12h16M4 18h16"],
   ["/champions", "Champions", "M12 3 5 6v5c0 4.5 3 8.3 7 10 4-1.7 7-5.5 7-10V6z"],
-  ["/game", "Pre-game", "M12 2 4 12l8 10 8-10zm0 5 4 5-4 5-4-5z"],
-  ["/improve", "Improve", "M3 20h18v2H3zM5 17l5-6 4 3 5-8 2 1.3-6.4 10.2L10.3 14 6.6 18.4z"],
-  ["/profile", "Profile", "M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9m-8 9c0-4.4 3.6-7 8-7s8 2.6 8 7z"],
+  ["/game", "Pre-game", "M5 4h14v16H5zM10 9l5 3-5 3z"],
+  ["/improve", "Improve", "M4 20V11M10 20V5M16 20v-6M2 20h20"],
+  ["/profile", "Profile", "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"],
 ];
 
 function Layout() {
@@ -54,33 +54,39 @@ function Layout() {
   return (
     <>
       <a href="#main" className="visually-hidden">Skip to content</a>
-      <div className="shell">
-        <header className="topbar">
-          <Link to="/" className="brand" aria-label="KOI Master, home">
-            <span style={{ width: 28, height: 28, display: "inline-flex" }}><CoachAvatar quiet /></span>
-            KOI MASTER
+      <div className="app-frame">
+        <nav className="rail" aria-label="Main">
+          <Link to="/" className="rail-brand" aria-label="KOI Master, home" tabIndex={-1}>
+            <span><CoachAvatar quiet /></span>
           </Link>
-          <nav className="nav nav-app" aria-label="Main">
+          <div className="rail-nav">
             {NAV.map(([to, label, icon]) => (
               <NavLink key={to} to={to} end={to === "/"}>
                 <svg className="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={icon} /></svg>
-                <span>{label}</span>
+                <span className="rail-label">{label}</span>
               </NavLink>
             ))}
-          </nav>
+          </div>
+          <span className="rail-spacer" />
+        </nav>
+        <header className="topbar">
+          <Link to="/" className="brand" aria-label="KOI Master, home">KOI MASTER</Link>
           <SearchBox />
+          <Link to="/champions" className="topbar-link">Champions</Link>
           <NavLink to="/settings" className="profile" aria-label="Settings and account">
-            {lastChampion ? <ChampionIcon champion={lastChampion} size={40} className="portrait" /> : <span className="profile-empty" aria-hidden="true" />}
+            {lastChampion ? <ChampionIcon champion={lastChampion} size={32} className="portrait" /> : <span className="profile-empty" aria-hidden="true" />}
             <span className="profile-text">
               <span className="profile-name">{me?.accounts[0]?.riotId.split("#")[0] ?? me?.user.displayName}</span>
               <span className="profile-sub">Settings</span>
             </span>
           </NavLink>
         </header>
-        <main id="main">
-          <Outlet />
-        </main>
-        <LegalFooter />
+        <div className="shell">
+          <main id="main">
+            <Outlet />
+          </main>
+          <LegalFooter />
+        </div>
       </div>
       <Coach />
     </>

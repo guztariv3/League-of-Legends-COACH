@@ -123,29 +123,44 @@ export function Champions() {
       {list.length === 0 ? (
         <div className="notice">No champion matches these filters.</div>
       ) : (
-        <ul className="grid grid-2" style={{ listStyle: "none", padding: 0, margin: 0 }}>
-          {list.map((c) => (
-            <li key={c.key}>
-              <Link to={`/champions/${encodeURIComponent(c.name)}`} className="tile row champ-tile" style={{ textDecoration: "none", color: "inherit" }}>
-                <ChampionIcon champion={c.key} size={48} />
-                <div className="champ-tile-text">
-                  <div className="match-title">{c.name}</div>
-                  <div className="tile-note">{c.title} · {c.tags.join(", ")}{c.info ? ` · difficulty ${c.info.difficulty}/10` : ""}</div>
-                </div>
-                <div style={{ textAlign: "right", flex: "none" }}>
-                  {c.personal.games ? (
-                    <>
-                      <div className="match-title">{c.personal.games} {c.personal.games === 1 ? "game" : "games"}</div>
-                      <div className="tile-note">{pct(c.personal.wins / c.personal.games)} win rate</div>
-                    </>
-                  ) : (
-                    <div className="tile-note">No games</div>
-                  )}
-                </div>
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <div className="table-scroll">
+          <table className="champ-table">
+            <thead>
+              <tr>
+                <th scope="col" className="num-col">#</th>
+                <th scope="col">Champion</th>
+                <th scope="col">Class</th>
+                {hasDifficulty && <th scope="col">Difficulty</th>}
+                <th scope="col" className="num-col">Your games</th>
+                <th scope="col" className="num-col">Your win rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((c, i) => (
+                <tr key={c.key}>
+                  <td className="num-col quiet-num">{i + 1}</td>
+                  <td>
+                    <Link to={`/champions/${encodeURIComponent(c.name)}`} className="champ-cell champ-link">
+                      <ChampionIcon champion={c.key} size={36} />
+                      <span>
+                        <span className="match-title">{c.name}</span>
+                        <small>{c.title}</small>
+                      </span>
+                    </Link>
+                  </td>
+                  <td>{c.tags.join(", ")}</td>
+                  {hasDifficulty && <td>{c.info ? `${c.info.difficulty}/10` : "—"}</td>}
+                  <td className="num-col">{c.personal.games || <span className="quiet-num">No games</span>}</td>
+                  <td className="num-col">
+                    {c.personal.games ? (
+                      <span className={c.personal.wins / c.personal.games >= 0.5 ? "num-good" : "num-bad"}>{pct(c.personal.wins / c.personal.games)}</span>
+                    ) : <span className="quiet-num">—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       {data.positionsSource && (
         <p className="tile-note" style={{ margin: 0 }}>
