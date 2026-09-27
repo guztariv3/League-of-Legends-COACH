@@ -94,7 +94,7 @@ export function ProfileCard({ gameName, tagLine, avatarChampion, chips, overview
             <button key={q.queueId} type="button" role="radio" aria-checked={selected === q.queueId} disabled={!can}
               title={can ? undefined : "No analyzed games in this queue yet"}
               className={`pf-queue${selected === q.queueId ? " is-on" : ""}`} onClick={() => onSelect(q.queueId)}>
-              <RankEmblem tier={q.rank?.tier ?? null} />
+              <RankEmblem key={q.rank?.tier ?? "unranked"} tier={q.rank?.tier ?? null} />
               <span className="pf-queue-text">
                 <span className="pf-queue-label">{q.label}</span>
                 {q.rank && (
