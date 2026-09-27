@@ -4,7 +4,9 @@ import { decide, type CoachDecision } from "./decision.js";
  * Skill advisor. It recommends the ultimate when a rank opens up (a rule of the
  * game) and otherwise follows the player's own levelling order with this
  * champion, taken from their timelines. Without enough of their own games it
- * stays silent about basic abilities instead of guessing a universal order.
+ * falls back to what Master+ players do with the champion on this patch (phase 4,
+ * measured from ranked games, labelled with its patch and sample), and without
+ * that it stays silent about basic abilities instead of guessing a universal order.
  */
 
 export type Slot = 1 | 2 | 3 | 4;
@@ -20,7 +22,23 @@ export interface SkillAdviceInput {
   skillPoints: number;
   /** The player's past levelling orders with this champion (newest first). */
   history: Slot[][];
+  /** What Master+ players do with this champion (used only without enough of the player's own games). */
+  reference?: SkillReference | null;
 }
+
+export interface SkillReference {
+  /** Most common order the basic abilities are maxed ("Q", "W", "E"). */
+  max: ("Q" | "W" | "E")[];
+  /** Most common first level-ups (1–4 = Q–R), when known. */
+  sequence: number[] | null;
+  /** Games with that max order, out of `total`. */
+  games: number;
+  total: number;
+  patch: string;
+  patchLabel: "current" | "previous";
+}
+
+const KEY_SLOT = { Q: 1, W: 2, E: 3 } as const;
 
 /** Games of the player's own needed before their order is suggested. */
 export const MIN_HISTORY = 3;
@@ -78,8 +96,44 @@ export function adviseSkill(input: SkillAdviceInput): CoachDecision | null {
     });
   }
 
-  if (history.length < MIN_HISTORY) return null;
   const spent = ranks.q + ranks.w + ranks.e + ranks.r;
+  return fromHistory(input, spent, can) ?? fromReference(input, spent, can);
+}
+
+function fromReference(input: SkillAdviceInput, spent: number, can: (s: Slot) => boolean): CoachDecision | null {
+  const ref = input.reference;
+  if (!ref || ref.max.length !== 3) return null;
+  const max = ref.max.map((k) => KEY_SLOT[k]) as Slot[];
+  const step = ref.sequence?.[spent];
+  const early = step !== undefined && step !== 4 && can(step as Slot);
+  const slot = early ? (step as Slot) : max.find(can);
+  if (!slot) return null;
+  const key = SLOT_KEY[slot];
+  const patch = `patch ${ref.patch}${ref.patchLabel === "previous" ? " (previous patch)" : ""}`;
+  return decide({
+    id: `skill:${key}:${input.level}`,
+    kind: "skill",
+    basis: "observation",
+    priority: "important",
+    // A common order, not a rule of the game and not the player's habit: never "strong".
+    confidence: Math.min(0.7, 0.4 + ref.games / ref.total / 2),
+    headline: `Level up: ${key}`,
+    ref: key,
+    reasons: [
+      early
+        ? `Master+ players on ${patch} most often take ${key} at this level with ${input.champion}.`
+        : `Master+ players on ${patch} most often max ${ref.max.join(" → ")} with ${input.champion}.`,
+      `Your own order replaces this once you have ${MIN_HISTORY} games with ${input.champion}.`,
+    ],
+    evidence: [
+      { label: "Master+ max order", value: `${ref.max.join(" → ")} (${Math.round((ref.games / ref.total) * 100)}%)`, source: "global_stats", sampleSize: ref.total },
+    ],
+  });
+}
+
+function fromHistory(input: SkillAdviceInput, spent: number, can: (s: Slot) => boolean): CoachDecision | null {
+  const { history, champion, level } = input;
+  if (history.length < MIN_HISTORY) return null;
   const tally = new Map<Slot, number>();
   let games = 0;
   for (const order of history) {

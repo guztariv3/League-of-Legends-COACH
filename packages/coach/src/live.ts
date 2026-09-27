@@ -2,7 +2,7 @@ import { planPurchases, purchasePath, suggestItems, type PurchasePlan, suggestSt
 import { goldDifference, laneOpponent, objectives, type GameState, type GoldDifference, type Objectives } from "@coach/live";
 import { fromItemSuggestions } from "./adapters.js";
 import { decide, type CoachDecision } from "./decision.js";
-import { adviseSkill, type Slot } from "./skills.js";
+import { adviseSkill, type SkillReference, type Slot } from "./skills.js";
 import { readSituation, situationDecisions, type Situation } from "./situation.js";
 import { strategyFacts } from "./strategy.js";
 
@@ -21,6 +21,8 @@ export interface LiveCoachInput {
   previousItem?: number | null;
   /** The player's past levelling orders with this champion. */
   skillHistory?: Slot[][];
+  /** What Master+ players level with this champion on this patch (only used without enough of the player's own games). */
+  skillReference?: SkillReference | null;
   /**
    * The site's build engine answer for this moment of the game (packages/build). When present it
    * replaces the local suggestions; without a connected site the local rules still run.
@@ -127,7 +129,7 @@ export function liveCoach(input: LiveCoachInput): LiveCoach {
     ? planPurchases({ targets, inventory: me.items, gold: state.gold, time: state.time, itemGold: me.itemGold, catalog })
     : null;
   const skill = state.abilities && state.skillPoints !== null
-    ? adviseSkill({ champion: me.champion, level: me.level, ranks: state.abilities, skillPoints: state.skillPoints, history: input.skillHistory ?? [] })
+    ? adviseSkill({ champion: me.champion, level: me.level, ranks: state.abilities, skillPoints: state.skillPoints, history: input.skillHistory ?? [], reference: input.skillReference ?? null })
     : null;
   const strategy = strategyFacts({ gold, objectives: obj, myName: me.name });
 

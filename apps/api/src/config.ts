@@ -1,3 +1,5 @@
+import { isPlatformId } from "@coach/domain";
+
 export interface Config {
   env: "development" | "test" | "production";
   port: number;
@@ -19,6 +21,15 @@ export interface Config {
   prototypePassword?: string;
   /** Built web app to serve from the same origin (production). */
   webDist?: string;
+  /**
+   * Phase 4: count Master+ solo-queue games through the Riot API into champion statistics.
+   * On by default with a Riot key (STATS_CRAWL=0 turns it off); never with synthetic data.
+   */
+  statsCrawl: boolean;
+  /** Platforms whose Master+ ladders are read (STATS_PLATFORMS=EUW1,KR,NA1). */
+  statsPlatforms: string[];
+  /** Milliseconds between two crawler steps; each step makes at most three Riot calls. */
+  statsIntervalMs: number;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -36,6 +47,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     devLogin: env.DEV_LOGIN === "1" || mode === "test",
     prototypePassword: env.PROTOTYPE_PASSWORD || undefined,
     webDist: env.WEB_DIST || undefined,
+    statsCrawl: Boolean(env.RIOT_API_KEY) && env.STATS_CRAWL !== "0" && mode !== "test",
+    statsPlatforms: (env.STATS_PLATFORMS || "EUW1,KR,NA1").split(",").map((p) => p.trim().toUpperCase()).filter(isPlatformId),
+    statsIntervalMs: Math.max(1000, Number(env.STATS_INTERVAL_MS) || 3000),
   };
 }
 

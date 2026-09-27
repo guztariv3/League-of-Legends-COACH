@@ -250,13 +250,13 @@ function SkillsTab({ state, coach, history, connected }: { state: GameState; coa
         </section>
       ) : state.skillPoints ? (
         <p className="quiet">{history.length < 3
-          ? `You have a point to spend. I only suggest basic abilities from your own games with ${me.champion}${connected ? "" : " (connect the website to use your history)"}: play a few more and I will follow your order.`
+          ? `You have a point to spend. I suggest basic abilities from your own games with ${me.champion}, or from Master+ games on this patch when there are enough${connected ? "" : " (connect the website to use them)"}.`
           : "You have a point to spend."}</p>
       ) : (
         <p className="quiet">No points to spend right now.</p>
       )}
       {max && <p className="quiet">You usually max {max.map((s) => SLOT_KEY[s]).join(" → ")} on {me.champion} ({history.length} games).</p>}
-      <p className="quiet small">Your ultimate is suggested as soon as a rank opens (levels 6, 11 and 16). Basic abilities follow your own history with this champion; there is no universal order.</p>
+      <p className="quiet small">Your ultimate is suggested as soon as a rank opens (levels 6, 11 and 16). Basic abilities follow your own history with this champion; until you have 3 games, the most common Master+ order on this patch, when there is enough data.</p>
     </div>
   );
 }
@@ -391,12 +391,18 @@ export function Board({ state, art, catalog, build, connected, tab, demo = false
   const lastItem = useRef<CoachDecision | null>(null);
   const personal = build && build !== "loading" ? build : null;
   const history = (personal?.skillOrders ?? []).filter((o) => o.every((s) => s >= 1 && s <= 4)) as Slot[][];
+  // Master+ levelling order for this champion (phase 4), used only until the player has their own games.
+  const master = plan?.build?.stats ?? null;
+  const skillReference = master?.skills
+    ? { max: master.skills.max, sequence: master.skills.sequence, games: master.skills.games, total: master.games, patch: master.patch, patchLabel: master.patchLabel }
+    : null;
   const coach = state.me ? liveCoach({
     state,
     catalog: demo ? null : catalog,
     usualItems: personal?.items.map((i) => i.id) ?? [],
     previousItem: previousItem.current,
     skillHistory: history,
+    skillReference,
     engine,
   }) : null;
   previousItem.current = coach?.items?.next?.item.id ?? null;

@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { parseChampionKits, parseItems, parseRunes, parseSummonerSpells, syntheticSource as syntheticKnowledge } from "@coach/knowledge";
 import { gameData } from "@coach/knowledge/test-data";
+import { patchFromVersion } from "@coach/domain";
+import { recordGame } from "./stats/store.js";
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { openDatabase, schema, type Database } from "./db/index.js";
@@ -157,6 +159,37 @@ describe("desktop pairing", () => {
     expect(tank.body.build.team).toEqual([]); // no allies known yet
     const withTeam = await call("/desktop/plan?me=Malphite&allies=Jinx,Lux,Xerath,Caitlyn&enemies=Syndra&position=top", { headers: auth });
     expect(withTeam.body.build.team.map((n: { id: string }) => n.id)).toContain("frontline-you");
+
+    // Master+ statistics (phase 4): nothing until the sample is large enough, then labelled evidence.
+    expect(tank.body.build.stats).toBeNull();
+    const patch = patchFromVersion(tank.body.build.version);
+    const common = tank.body.build.first.id === 3068 ? 3075 : 3068;
+    for (let i = 0; i < 40; i++) {
+      const win = i % 5 < 3;
+      await recordGame(database.db, { matchId: `EUW1_M${i}`, platform: "EUW1", patch, counted: true, rows: [
+        { champion: "Malphite", position: "TOP", kind: "games", key: "", win, minute: null },
+        { champion: "Malphite", position: "TOP", kind: "first_item", key: String(common), win, minute: 12 },
+        { champion: "Malphite", position: "TOP", kind: "keystone", key: "8437:8300", win, minute: null },
+        { champion: "Malphite", position: "TOP", kind: "spells", key: "4+12", win, minute: null },
+        { champion: "Malphite", position: "TOP", kind: "skill_max", key: "Q>E>W", win, minute: null },
+        { champion: "Malphite", position: "TOP", kind: "skill_seq", key: "1,3,2,1,1,4,1,3,1", win, minute: null },
+        ...(i < 12 ? [{ champion: "Malphite", position: "TOP", kind: "matchup" as const, key: "Syndra", win: i % 2 === 0, minute: null }] : []),
+      ] });
+    }
+    const withStats = (await call("/desktop/plan?me=Malphite&enemies=Syndra,Brand,Lux,Veigar,Annie&opponent=Syndra&position=top", { headers: auth })).body.build;
+    expect(withStats.first.id).toBe(tank.body.build.first.id); // the statistics never change the engine's pick
+    const st = withStats.stats;
+    expect(st).toMatchObject({ patch, patchLabel: "current", position: "TOP", games: 40 });
+    expect(st.firstItem).toMatchObject({ id: common, games: 40, avgMinute: 12 });
+    expect(st.keystone.name).toBe("Grasp of the Undying");
+    expect(st.spells.names).toEqual(["Flash", "Teleport"]);
+    expect(st.skills).toMatchObject({ max: ["Q", "E", "W"], sequence: [1, 3, 2, 1, 1, 4, 1, 3, 1] });
+    expect(st.matchup).toEqual({ opponent: "Syndra", games: 12, winRate: 0.5 });
+    // The coach says when it suggests something else, and why; a win rate never decides.
+    expect(st.notes.join(" ")).toMatch(new RegExp(`the coach suggests ${withStats.first.name}`));
+    expect(st.notes.join(" ")).toMatch(/doesn't decide your build/);
+    // Without a position: the champion's most played position that patch.
+    expect((await call("/desktop/plan?me=Malphite", { headers: auth })).body.build.stats.position).toBe("TOP");
 
     // During the game: the same engine with the items and scores the game shows.
     const mid = (enemies: string, mine = "3068") => call(`/desktop/items?me=Malphite&mine=${mine}&enemies=${enemies}&opponent=Syndra&position=top`, { headers: auth });

@@ -25,6 +25,9 @@ export async function purgeUnlinkedMatches(db: Db, now = new Date()): Promise<vo
     WHERE rm.fetched_at < ${cutoff}
       AND NOT EXISTS (SELECT 1 FROM account_matches am WHERE am.match_id = rm.match_id)
       AND NOT EXISTS (SELECT 1 FROM match_analyses ma WHERE ma.match_id = rm.match_id)`);
+  // Master+ statistics: the list of counted game ids is only needed while the crawler can still
+  // list those games (14 days back); the counters themselves hold nothing about players.
+  await db.execute(sql`DELETE FROM stats_matches WHERE processed_at < ${cutoff}`);
   // Pairing codes nobody used, and expired sessions.
   await db.execute(sql`DELETE FROM device_links WHERE claimed_at IS NULL AND code_expires_at < ${now.toISOString()}`);
   await db.execute(sql`DELETE FROM sessions WHERE expires_at < ${now.toISOString()}`);

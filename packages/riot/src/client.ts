@@ -75,7 +75,19 @@ export interface MatchIdQuery {
   count?: number;
   /** Epoch seconds. */
   startTime?: number;
+  /** Only games of this queue (e.g. 420 = ranked solo/duo). */
+  queue?: number;
 }
+
+/**
+ * league-v4 apex league (challengerleagues / grandmasterleagues / masterleagues by queue).
+ * Entries carry the player's PUUID; entries without one are ignored by callers.
+ */
+export const RiotApexLeague = z.looseObject({
+  tier: z.string(),
+  entries: z.array(z.looseObject({ puuid: z.string().optional(), leaguePoints: z.number().optional() })),
+});
+export type RiotApexLeague = z.infer<typeof RiotApexLeague>;
 
 /**
  * Minimal Riot API client. It only calls endpoints that are documented on the
@@ -119,6 +131,7 @@ export class RiotClient {
     params.set("start", String(q.start ?? 0));
     params.set("count", String(Math.min(100, q.count ?? 20)));
     if (q.startTime !== undefined) params.set("startTime", String(q.startTime));
+    if (q.queue !== undefined) params.set("queue", String(q.queue));
     const path = `/lol/match/v5/matches/by-puuid/${encodeURIComponent(puuid)}/ids?${params}`;
     return (await this.get(route, "match.ids", path, z.array(z.string()))) ?? [];
   }
@@ -144,6 +157,12 @@ export class RiotClient {
   async getLeagueEntries(platform: string, puuid: string): Promise<RiotLeagueEntry[]> {
     const route = this.platform(platform).id;
     return (await this.get(route, "league.entries", `/lol/league/v4/entries/by-puuid/${encodeURIComponent(puuid)}`, z.array(RiotLeagueEntry), { nullOn404: true })) ?? [];
+  }
+
+  /** The Challenger, Grandmaster or Master league of a ranked queue (league-v4, platform host). */
+  async getApexLeague(platform: string, tier: "challenger" | "grandmaster" | "master", queue = "RANKED_SOLO_5x5"): Promise<RiotApexLeague | null> {
+    const route = this.platform(platform).id;
+    return this.get(route, `league.${tier}`, `/lol/league/v4/${tier}leagues/by-queue/${encodeURIComponent(queue)}`, RiotApexLeague, { nullOn404: true });
   }
 
   /** Current game for a player; null when they are not in a game. */

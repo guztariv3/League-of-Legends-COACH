@@ -28,9 +28,55 @@ export interface PreGameBuild {
   adaptation?: { standard: boolean; standardCore: { id: number; name: string }[]; note: string } | null;
   /** What your team needs from you, from your allies' kits (packages/build/src/team.ts). */
   team?: { id: string; text: string; why: string }[];
+  /** What Master+ players do with this champion this patch (phase 4): evidence, never the decision. */
+  stats?: MasterStats | null;
   version: string;
   enemiesKnown: number;
   attribution: { text: string; license: string };
+}
+
+type Share = { games: number; share: number; winRate: number };
+export interface MasterStats {
+  patch: string;
+  patchLabel: "current" | "previous";
+  position: string;
+  games: number;
+  firstItem: ({ id: number; name: string; avgMinute: number | null } & Share) | null;
+  core: ({ items: { id: number; name: string }[] } & Share) | null;
+  keystone: ({ id: number; name: string; secondaryTree: string | null } & Share) | null;
+  spells: ({ names: string[] } & Share) | null;
+  skills: ({ max: ("Q" | "W" | "E")[]; sequence: number[] | null } & Share) | null;
+  matchup: { opponent: string; games: number; winRate: number } | null;
+  notes: string[];
+}
+
+const POSITION: Record<string, string> = { TOP: "top", JUNGLE: "jungle", MIDDLE: "mid", BOTTOM: "bot", UTILITY: "support" };
+
+/** Master+ statistics beside the coach's build: every figure with its sample and patch. */
+export function MasterStatsView({ stats, art }: { stats: MasterStats; art: Art }) {
+  const games = (o: Share) => `${pct(o.share)} of ${stats.games} games`;
+  return (
+    <details className="prebuild-block master" aria-label="Master+ this patch">
+      <summary className="bar">
+        <span className="prebuild-title">Master+ {stats.patchLabel === "current" ? "this patch" : "last patch"}</span>
+        <span className="quiet small">Patch {stats.patch}{stats.patchLabel === "previous" ? " (previous)" : ""} · {POSITION[stats.position] ?? stats.position} · {stats.games} ranked games</span>
+      </summary>
+      <ul className="reasons">
+        {stats.firstItem && (
+          <li className="bar">
+            <ItemArt id={stats.firstItem.id} name={stats.firstItem.name} size={20} art={art} />
+            <span>First item: <strong>{stats.firstItem.name}</strong>{stats.firstItem.avgMinute !== null ? `, done around minute ${Math.round(stats.firstItem.avgMinute)}` : ""} <span className="quiet">({games(stats.firstItem)})</span></span>
+          </li>
+        )}
+        {stats.core && <li>Core: <strong>{stats.core.items.map((i) => i.name).join(" → ")}</strong> <span className="quiet">({games(stats.core)})</span></li>}
+        {stats.keystone && <li>Keystone: <strong>{stats.keystone.name}</strong>{stats.keystone.secondaryTree ? ` + ${stats.keystone.secondaryTree}` : ""} <span className="quiet">({games(stats.keystone)})</span></li>}
+        {stats.spells && <li>Spells: <strong>{stats.spells.names.join(" + ")}</strong> <span className="quiet">({games(stats.spells)})</span></li>}
+        {stats.skills && <li>Max order: <strong>{stats.skills.max.join(" → ")}</strong> <span className="quiet">({games(stats.skills)})</span></li>}
+        {stats.notes.map((n) => <li key={n}>{n}</li>)}
+      </ul>
+      <p className="quiet small">What Master+ players did in ranked solo games, counted from the official Riot API. It shows what is common, not what is right for this game: the build above is worked out for your enemies.</p>
+    </details>
+  );
 }
 
 const THREAT_LABEL: Record<string, string> = {
@@ -187,6 +233,8 @@ export function PreGameBuildView({ build, art }: { build: PreGameBuild; art: Art
           <ul className="reasons">{build.ruledOut.map((x) => <li key={x.id}><strong>{x.name}</strong>: {x.why}</li>)}</ul>
         </details>
       )}
+
+      {build.stats && <MasterStatsView stats={build.stats} art={art} />}
 
       {build.enemiesKnown > 0 && (
         <details className="prebuild-block">
