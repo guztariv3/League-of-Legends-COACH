@@ -1,6 +1,6 @@
 import { randomBytes, randomInt } from "node:crypto";
 import { GAME_DATA_ATTRIBUTION, type GameFactsSource, type KnowledgeRegistry } from "@coach/knowledge";
-import { recommendBuild, recommendSetup } from "@coach/build";
+import { recommendBuild, recommendSetup, teamNeeds } from "@coach/build";
 import { championPool } from "@coach/coach";
 import { challengeTitle, evaluateChallenge, type ChallengeKind, type GoalMetric } from "@coach/insights";
 import { and, asc, desc, eq, gt, inArray, isNull } from "drizzle-orm";
@@ -190,6 +190,8 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
           ...recommendBuild({ me: myKit, enemies: enemyInput, items: facts.items, position: q.data.position ?? null }),
           // Runes and summoner spells, decided the same way (packages/build/src/setup.ts).
           setup: recommendSetup({ me: myKit, enemies: enemyInput, runes: facts.runes, spells: facts.spells, position: q.data.position ?? null }),
+          // What the team needs from you, from your allies' kits (packages/build/src/team.ts).
+          team: teamNeeds(myKit, known(q.data.allies).map((a) => kits.get(a)).filter((k) => k !== undefined)),
           version: facts.version,
           enemiesKnown: enemies.length,
           attribution: GAME_DATA_ATTRIBUTION,

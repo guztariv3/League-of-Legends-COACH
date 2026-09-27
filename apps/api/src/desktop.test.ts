@@ -153,6 +153,10 @@ describe("desktop pairing", () => {
     expect(tank.body.build.setup.spells).toHaveLength(2);
     expect(JSON.stringify([tank.body.build.first, ...tank.body.build.next, ...tank.body.build.situational])).not.toContain("Randuin");
     expect((await call("/desktop/plan?me=Malphite&position=mid", { headers: auth })).res.status).toBe(400);
+    // What the team needs: with only squishy allies, the frontline kit hears it is the frontline.
+    expect(tank.body.build.team).toEqual([]); // no allies known yet
+    const withTeam = await call("/desktop/plan?me=Malphite&allies=Jinx,Lux,Xerath,Caitlyn&enemies=Syndra&position=top", { headers: auth });
+    expect(withTeam.body.build.team.map((n: { id: string }) => n.id)).toContain("frontline-you");
 
     // During the game: the same engine with the items and scores the game shows.
     const mid = (enemies: string, mine = "3068") => call(`/desktop/items?me=Malphite&mine=${mine}&enemies=${enemies}&opponent=Syndra&position=top`, { headers: auth });

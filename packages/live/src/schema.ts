@@ -54,6 +54,14 @@ export const AllGameData = z.looseObject({
     summonerName: z.string().optional(),
     level: z.number().optional(),
     currentGold: z.number().optional(),
+    /** Health and resource right now (the Live Client Data API reports them for the active player only). */
+    championStats: z.looseObject({
+      currentHealth: z.number().optional(),
+      maxHealth: z.number().optional(),
+      resourceType: z.string().optional(),
+      resourceValue: z.number().optional(),
+      resourceMax: z.number().optional(),
+    }).optional(),
     /** The player's own ability ranks (Q, W, E, R); only ever reported for the active player. */
     abilities: z.looseObject({
       Q: AbilityRank.optional(),

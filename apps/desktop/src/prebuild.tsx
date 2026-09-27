@@ -22,6 +22,8 @@ export interface PreGameBuild {
     } | null;
     spells: { id: string; key: number; name: string; why: string }[];
   };
+  /** What your team needs from you, from your allies' kits (packages/build/src/team.ts). */
+  team?: { id: string; text: string; why: string }[];
   version: string;
   enemiesKnown: number;
   attribution: { text: string; license: string };
@@ -54,6 +56,13 @@ export function PreGameBuildView({ build, art }: { build: PreGameBuild; art: Art
             ? "Enemy champions aren't visible yet: this reads your champion's kit only and updates as they lock in."
             : `${build.enemiesKnown} of 5 enemy champions known: it updates as the rest lock in.`}
         </p>
+      )}
+
+      {build.team && build.team.length > 0 && (
+        <div className="prebuild-block" aria-label="Your team">
+          <span className="label">Your team</span>
+          <ul className="reasons">{build.team.map((n) => <li key={n.id}><strong>{n.text}.</strong> {n.why}</li>)}</ul>
+        </div>
       )}
 
       {build.setup && (build.setup.spells.length > 0 || build.setup.runes) && (

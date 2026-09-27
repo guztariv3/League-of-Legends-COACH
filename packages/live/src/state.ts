@@ -34,6 +34,8 @@ export interface GameState {
   me: PlayerState | null;
   /** The player's unspent gold (the game reports it only for the active player). */
   gold: number | null;
+  /** The player's health and resource right now; null when the game doesn't report them. */
+  vitals: Vitals | null;
   /** The player's ability ranks; null when the game doesn't report them. */
   abilities: AbilityRanks | null;
   /** Levels not yet spent on an ability (level − ranks); null without ability data. */
@@ -47,11 +49,23 @@ export interface GameState {
   complete: boolean;
 }
 
+export interface Vitals { health: number; maxHealth: number; resourceType: string | null; resource: number | null; resourceMax: number | null }
+
 export interface AbilityRanks { q: number; w: number; e: number; r: number }
 
 export interface StateContext {
   /** Item id → price, from the active knowledge bundle (fallback when the snapshot has none). */
   itemPrices?: Map<number, number>;
+}
+
+function vitalsOf(s: { currentHealth?: number | undefined; maxHealth?: number | undefined; resourceType?: string | undefined; resourceValue?: number | undefined; resourceMax?: number | undefined } | undefined): Vitals | null {
+  if (!s || s.currentHealth === undefined || !s.maxHealth) return null;
+  return {
+    health: s.currentHealth, maxHealth: s.maxHealth,
+    resourceType: s.resourceType ?? null,
+    resource: s.resourceValue ?? null,
+    resourceMax: s.resourceMax && s.resourceMax > 0 ? s.resourceMax : null,
+  };
 }
 
 function playerName(p: { riotId?: string | undefined; summonerName?: string | undefined }): string {
@@ -87,7 +101,7 @@ function toPlayer(p: LivePlayer, ctx: StateContext): PlayerState {
 }
 
 export function emptyState(): GameState {
-  return { time: 0, mode: null, map: null, me: null, gold: null, abilities: null, skillPoints: null, allies: [], enemies: [], events: [], lastEventId: -1, complete: false };
+  return { time: 0, mode: null, map: null, me: null, gold: null, vitals: null, abilities: null, skillPoints: null, allies: [], enemies: [], events: [], lastEventId: -1, complete: false };
 }
 
 export function reduceState(prev: GameState, data: AllGameData, ctx: StateContext = {}): GameState {
@@ -107,6 +121,7 @@ export function reduceState(prev: GameState, data: AllGameData, ctx: StateContex
     map: data.gameData.mapNumber ?? null,
     me,
     gold: data.activePlayer.currentGold ?? null,
+    vitals: vitalsOf(data.activePlayer.championStats),
     abilities,
     // Some champions get free ranks (Udyr, Aphelios…); never report a negative count.
     skillPoints: abilities && level !== null ? Math.max(0, level - (abilities.q + abilities.w + abilities.e + abilities.r)) : null,
