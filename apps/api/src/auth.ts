@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 import { and, eq, gt } from "drizzle-orm";
 import type { Context, MiddlewareHandler } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
@@ -64,3 +64,37 @@ export function csrfGuard(allowedOrigin: string): MiddlewareHandler {
     return next();
   };
 }
+
+// ------------------------------------------------------------ passwords (own accounts)
+
+/** scrypt cost: N=2^15, r=8, p=1 (about 32 MB and ~50 ms per hash on a small server). */
+const SCRYPT = { N: 1 << 15, r: 8, p: 1, maxmem: 64 * 1024 * 1024 } as const;
+const KEY_LEN = 64;
+
+const derive = (password: string, salt: Buffer, opts: { N: number; r: number; p: number }) =>
+  new Promise<Buffer>((resolve, reject) =>
+    scrypt(password.normalize("NFKC"), salt, KEY_LEN, { ...opts, maxmem: SCRYPT.maxmem }, (err, key) => (err ? reject(err) : resolve(key))));
+
+/** "scrypt$N$r$p$salt$hash" (base64url); the password itself is never stored. */
+export async function hashPassword(password: string): Promise<string> {
+  const salt = randomBytes(16);
+  const key = await derive(password, salt, SCRYPT);
+  return ["scrypt", SCRYPT.N, SCRYPT.r, SCRYPT.p, salt.toString("base64url"), key.toString("base64url")].join("$");
+}
+
+export async function verifyPassword(password: string, stored: string): Promise<boolean> {
+  const [alg, n, r, p, salt, hash] = stored.split("$");
+  if (alg !== "scrypt" || !salt || !hash) return false;
+  const expected = Buffer.from(hash, "base64url");
+  const key = await derive(password, Buffer.from(salt, "base64url"), { N: Number(n), r: Number(r), p: Number(p) });
+  return key.length === expected.length && timingSafeEqual(key, expected);
+}
+
+/** A fixed hash to verify against when the username doesn't exist, so both cases take as long. */
+let dummy: Promise<string> | null = null;
+export const dummyPasswordHash = () => (dummy ??= hashPassword(randomBytes(16).toString("hex")));
+
+/** Sign-in names: 3–24 characters, letters, digits, dot, dash and underscore; compared lower-case. */
+export const USERNAME = /^[a-z0-9._-]{3,24}$/;
+export const PASSWORD_MIN = 10;
+export const PASSWORD_MAX = 128;

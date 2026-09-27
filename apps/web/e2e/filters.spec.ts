@@ -4,8 +4,9 @@ import { expect, test } from "@playwright/test";
 test("match filters changed in the same tick are both kept", async ({ page }, info) => {
   const player = `Filters${info.project.name}`;
   await page.goto("/");
+  await page.getByText("Development sign-in (private prototype only)").click();
   await page.getByLabel("Your name").fill(player);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Sign in with a name" }).click();
   await page.getByLabel("Riot ID").fill(`${player}#EUW`);
   await page.getByLabel("Region").selectOption("euw1");
   await page.getByRole("button", { name: "Link and analyze" }).click();

@@ -5,10 +5,12 @@ import { gameAchievements, gameRanking, RANKING_EXPLANATION } from "@coach/coach
 import { MERAKI_ATTRIBUTION } from "@coach/knowledge";
 import { matchHeadline } from "@coach/insights";
 import type { GameFactsSource, KnowledgeRegistry, WikiSource } from "@coach/knowledge";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
+import { getCookie } from "hono/cookie";
 import { Hono } from "hono";
 import { z } from "zod";
-import { createSession, csrfGuard, destroySession, requireUser, type AuthVars } from "./auth.js";
+import { createSession, csrfGuard, hashToken, SESSION_COOKIE, destroySession, dummyPasswordHash, hashPassword, PASSWORD_MAX, PASSWORD_MIN, requireUser, USERNAME, verifyPassword, type AuthVars } from "./auth.js";
+import { AttemptLimiter, clientIp } from "./limits.js";
 import { devLoginAllowed, type Config } from "./config.js";
 import { schema, type Db } from "./db/index.js";
 import { analysesFor, applyFilters, userAccounts, type AccountAnalysis } from "./queries.js";
@@ -61,7 +63,7 @@ export function createApp(deps: AppDeps) {
   app.get("/config", (c) =>
     c.json({
       dataSource: source.kind,
-      auth: { rso: false, devLogin: devLoginAllowed(cfg) },
+      auth: { rso: false, devLogin: devLoginAllowed(cfg), accounts: true },
       aiEnabled: deps.aiProviders.length > 0,
       knowledgeVersion: knowledge.active()?.version ?? null,
       platforms: PLATFORMS.filter((p) => p.enabled).map((p) => ({ id: p.id, label: p.label })),
@@ -91,10 +93,53 @@ export function createApp(deps: AppDeps) {
     const body = z.object({ displayName: z.string().trim().min(1).max(40).default("Jugador") }).safeParse(await c.req.json().catch(() => ({})));
     if (!body.success) return c.json({ error: "invalid_body" }, 400);
     // Development identity: same display name → same local user, so data survives logout.
+    // Never for an account that has a password: that one only opens with it.
     const [existing] = await db.select().from(schema.users).where(eq(schema.users.displayName, body.data.displayName));
+    if (existing?.passwordHash) return c.json({ error: "account_has_password", message: "This name belongs to an account with a password: sign in with it." }, 409);
     const [user] = existing ? [existing] : await db.insert(schema.users).values({ displayName: body.data.displayName }).returning();
     await createSession(db, c, user!.id, secureCookies);
     return c.json({ user: { id: user!.id, displayName: user!.displayName } });
+  });
+
+  // Own accounts: a username and a password (scrypt hash). Attempts are limited per address and
+  // per username, and a wrong username or password get the same answer.
+  const signupPerIp = new AttemptLimiter(5, 3_600_000);
+  const loginPerIp = new AttemptLimiter(20, 15 * 60_000);
+  const loginPerName = new AttemptLimiter(10, 15 * 60_000);
+  const tooMany = { error: "rate_limited", message: "Too many attempts. Wait a few minutes and try again." };
+  const Credentials = z.object({
+    username: z.string().trim().toLowerCase().regex(USERNAME, "3–24 characters: letters, numbers, dot, dash or underscore"),
+    password: z.string().min(PASSWORD_MIN, `At least ${PASSWORD_MIN} characters`).max(PASSWORD_MAX),
+  });
+
+  app.post("/auth/register", async (c) => {
+    if (!signupPerIp.allow(clientIp(c))) return c.json(tooMany, 429);
+    const raw = await c.req.json().catch(() => null) as { username?: unknown } | null;
+    const body = Credentials.safeParse(raw);
+    if (!body.success) return c.json({ error: "invalid_body", message: body.error.issues.map((i) => i.message).join(". ") }, 400);
+    const { username, password } = body.data;
+    // The name shown in the app keeps the capitals as typed; sign-in compares lower-case.
+    const shown = String(raw?.username).trim();
+    const [taken] = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.username, username));
+    if (taken) return c.json({ error: "username_taken", message: "That username is taken." }, 409);
+    const [user] = await db.insert(schema.users).values({ displayName: shown, username, passwordHash: await hashPassword(password) })
+      .onConflictDoNothing().returning();
+    if (!user) return c.json({ error: "username_taken", message: "That username is taken." }, 409);
+    await createSession(db, c, user.id, secureCookies);
+    return c.json({ user: { id: user.id, displayName: user.displayName } }, 201);
+  });
+
+  app.post("/auth/login", async (c) => {
+    const raw = await c.req.json().catch(() => null) as { username?: unknown } | null;
+    const name = typeof raw?.username === "string" ? raw.username.trim().toLowerCase() : "";
+    if (!loginPerIp.allow(clientIp(c)) || !loginPerName.allow(name)) return c.json(tooMany, 429);
+    const body = z.object({ username: z.string().trim().toLowerCase().max(64), password: z.string().max(PASSWORD_MAX) }).safeParse(raw);
+    if (!body.success) return c.json({ error: "invalid_body" }, 400);
+    const [user] = await db.select().from(schema.users).where(eq(schema.users.username, body.data.username));
+    const ok = await verifyPassword(body.data.password, user?.passwordHash ?? (await dummyPasswordHash()));
+    if (!user?.passwordHash || !ok) return c.json({ error: "invalid_credentials", message: "Wrong username or password." }, 401);
+    await createSession(db, c, user.id, secureCookies);
+    return c.json({ user: { id: user.id, displayName: user.displayName } });
   });
 
   app.post("/auth/logout", async (c) => {
@@ -121,7 +166,31 @@ export function createApp(deps: AppDeps) {
     const userId = c.get("userId");
     const [user] = await db.select().from(schema.users).where(eq(schema.users.id, userId));
     const accounts = await userAccounts(db, userId);
-    return c.json({ user: { id: user!.id, displayName: user!.displayName }, accounts: accounts.map(accountView), preferences: await prefsFor(userId) });
+    return c.json({ user: { id: user!.id, displayName: user!.displayName, username: user!.username, hasPassword: Boolean(user!.passwordHash) }, accounts: accounts.map(accountView), preferences: await prefsFor(userId) });
+  });
+
+  /**
+   * Sets the username and password of the signed-in account (the way an account made with the
+   * development sign-in keeps its data once the site is public), or changes the password.
+   * Changing an existing password needs the current one.
+   */
+  const passwordPerUser = new AttemptLimiter(10, 15 * 60_000);
+  authed.put("/me/credentials", async (c) => {
+    const userId = c.get("userId");
+    if (!passwordPerUser.allow(userId)) return c.json(tooMany, 429);
+    const body = Credentials.extend({ currentPassword: z.string().max(PASSWORD_MAX).optional() }).safeParse(await c.req.json().catch(() => null));
+    if (!body.success) return c.json({ error: "invalid_body", message: body.error.issues.map((i) => i.message).join(". ") }, 400);
+    const [user] = await db.select().from(schema.users).where(eq(schema.users.id, userId));
+    if (user!.passwordHash && !(body.data.currentPassword && await verifyPassword(body.data.currentPassword, user!.passwordHash))) {
+      return c.json({ error: "invalid_credentials", message: "Your current password is wrong." }, 401);
+    }
+    const [taken] = await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.username, body.data.username));
+    if (taken && taken.id !== userId) return c.json({ error: "username_taken", message: "That username is taken." }, 409);
+    await db.update(schema.users).set({ username: body.data.username, passwordHash: await hashPassword(body.data.password) }).where(eq(schema.users.id, userId));
+    // Every other session of the account ends: from now on it only opens with the password.
+    const current = hashToken(getCookie(c, SESSION_COOKIE) ?? "");
+    await db.delete(schema.sessions).where(and(eq(schema.sessions.userId, userId), ne(schema.sessions.tokenHash, current)));
+    return c.json({ ok: true, username: body.data.username });
   });
 
   authed.delete("/me", async (c) => {

@@ -6,8 +6,11 @@ test("onboarding → dashboard → matches → match detail → settings", async
   await expect(page.getByRole("heading", { name: "KOI Master" })).toBeVisible();
   await expect(page.getByText("Synthetic data")).toBeVisible();
 
-  await page.getByLabel("Your name").fill(player);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  // A new account with its own username and password (the public site's sign-in).
+  await page.getByRole("tab", { name: "Create account" }).click();
+  await page.getByLabel("Username").fill(player);
+  await page.getByLabel("Password").fill("e2e-password-123");
+  await page.getByRole("button", { name: "Create account" }).click();
 
   await page.getByLabel("Riot ID").fill(`${player}#EUW`);
   await page.getByLabel("Region").selectOption("euw1");

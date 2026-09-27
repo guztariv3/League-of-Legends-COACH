@@ -21,6 +21,7 @@ export function Privacy() {
         <li><strong>What the coach produces:</strong> the analysis of your games, your goals and challenges, your rank snapshots, what the coach remembers (you can turn this off by category) and the recommendation history.</li>
         <li><strong>The connected desktop app:</strong> its name, when it was connected and when it was last used. For the code and the token we only store a fingerprint (hash), never the value.</li>
         <li><strong>Champion statistics:</strong> from recent ranked games of Master, Grandmaster and Challenger players, read through Riot's official API, we keep only totals per patch, champion and position (games, wins, items, runes, spells, ability order, lane matchups). Nothing about who played is kept; the list of game ids already counted is deleted after 30 days.</li>
+        <li><strong>Your KOI Master account:</strong> the username you choose and a one-way hash of your password (scrypt); the password itself is never stored.</li>
         <li><strong>A session cookie</strong> to keep you signed in (lasts 30 days). We use no advertising or analytics cookies, and no third-party trackers.</li>
       </ul>
 

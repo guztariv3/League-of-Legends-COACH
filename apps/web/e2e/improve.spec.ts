@@ -3,8 +3,9 @@ import { expect, test } from "@playwright/test";
 test("profile tabs (champion pool, matchups, LP gains, activity) and challenges", async ({ page }, info) => {
   const player = `Imp${info.project.name}`;
   await page.goto("/");
+  await page.getByText("Development sign-in (private prototype only)").click();
   await page.getByLabel("Your name").fill(player);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Sign in with a name" }).click();
   await page.getByLabel("Riot ID").fill(`${player}#EUW`);
   await page.getByRole("button", { name: "Link and analyze" }).click();
   await expect(page.getByText(/Based on \d+ analyzable games/)).toBeVisible({ timeout: 30_000 });

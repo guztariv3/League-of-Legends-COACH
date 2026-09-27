@@ -9,6 +9,10 @@ import { boolean, doublePrecision, integer, jsonb, pgTable, primaryKey, text, ti
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   displayName: text("display_name").notNull(),
+  /** Lower-case sign-in name; null for users of the development sign-in who haven't set one. */
+  username: text("username").unique(),
+  /** scrypt hash (see auth.ts); never the password. */
+  passwordHash: text("password_hash"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

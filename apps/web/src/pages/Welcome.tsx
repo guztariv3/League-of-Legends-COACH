@@ -14,6 +14,9 @@ export function Welcome() {
   const { config, me, refresh } = useSession();
   const navigate = useNavigate();
   const [name, setName] = useState("");
+  const [mode, setMode] = useState<"signin" | "register">("signin");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [riotId, setRiotId] = useState("");
   const [platform, setPlatform] = useState("euw1");
   const [error, setError] = useState<string | null>(null);
@@ -25,6 +28,22 @@ export function Welcome() {
     setError(null);
     try {
       await api.devLogin(name.trim() || "Player");
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not sign in.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const account = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      if (mode === "register") await api.register(username.trim(), password);
+      else await api.signIn(username.trim(), password);
+      setPassword("");
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not sign in.");
@@ -64,23 +83,36 @@ export function Welcome() {
 
         <div className="card stack">
           {!me ? (
-            config?.auth.devLogin ? (
-              <form className="stack" onSubmit={login}>
-                <div className="notice">
-                  <strong>Development sign-in.</strong> Riot sign-in (RSO) will be turned on once Riot approves the
-                  application. Until then, sign in with a local name.
+            <>
+              <div className="tabs-row" role="tablist" aria-label="Account" style={{ marginBottom: 0 }}>
+                <button type="button" role="tab" aria-selected={mode === "signin"} className={`tab-btn${mode === "signin" ? " tab-btn-on" : ""}`} onClick={() => { setMode("signin"); setError(null); }}>Sign in</button>
+                <button type="button" role="tab" aria-selected={mode === "register"} className={`tab-btn${mode === "register" ? " tab-btn-on" : ""}`} onClick={() => { setMode("register"); setError(null); }}>Create account</button>
+              </div>
+              <form className="stack" onSubmit={account} aria-label={mode === "signin" ? "Sign in" : "Create account"}>
+                <div className="field">
+                  <label htmlFor="username">Username</label>
+                  <input id="username" value={username} onChange={(e) => setUsername(e.target.value)} required minLength={3} maxLength={24} autoComplete="username" autoCapitalize="none" spellCheck={false} />
                 </div>
                 <div className="field">
-                  <label htmlFor="name">Your name</label>
-                  <input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Player" maxLength={40} autoComplete="nickname" />
+                  <label htmlFor="password">Password</label>
+                  <input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={mode === "register" ? 10 : 1} maxLength={128} autoComplete={mode === "register" ? "new-password" : "current-password"} />
                 </div>
-                <button className="btn btn-primary" disabled={busy}>Sign in</button>
+                {mode === "register" && <p className="tile-note" style={{ margin: 0 }}>At least 10 characters. Only you can open your profile with it; we store a one-way hash, never the password.</p>}
+                <button className="btn btn-primary" disabled={busy}>{busy ? "…" : mode === "signin" ? "Sign in" : "Create account"}</button>
               </form>
-            ) : (
-              <div className="notice" role="alert">
-                Riot sign-in is not available yet. Check back soon.
-              </div>
-            )
+              {config?.auth.devLogin && (
+                <details className="layer">
+                  <summary>Development sign-in (private prototype only)</summary>
+                  <form className="stack" onSubmit={login} style={{ marginTop: 8 }}>
+                    <div className="field">
+                      <label htmlFor="name">Your name</label>
+                      <input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Player" maxLength={40} autoComplete="nickname" />
+                    </div>
+                    <button className="btn" disabled={busy}>Sign in with a name</button>
+                  </form>
+                </details>
+              )}
+            </>
           ) : (
             <form className="stack" onSubmit={link}>
               <p style={{ margin: 0 }}>Link your Riot account. We will analyze your last 50 games.</p>

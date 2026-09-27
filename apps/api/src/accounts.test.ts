@@ -1,0 +1,91 @@
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { syntheticSource as syntheticKnowledge } from "@coach/knowledge";
+import { eq } from "drizzle-orm";
+import { createApp } from "./app.js";
+import { hashPassword, verifyPassword } from "./auth.js";
+import { loadConfig } from "./config.js";
+import { openDatabase, schema, type Database } from "./db/index.js";
+import { bootKnowledge } from "./knowledge.js";
+import { syntheticSource } from "./sources.js";
+
+let database: Database;
+let ctx: ReturnType<typeof createApp>;
+
+beforeAll(async () => {
+  database = await openDatabase(undefined, undefined);
+  const knowledge = await bootKnowledge(database.db, syntheticKnowledge());
+  ctx = createApp({ cfg: loadConfig({ NODE_ENV: "test" }), db: database.db, source: syntheticSource(() => Date.UTC(2026, 5, 1)), knowledge, aiProviders: [] });
+}, 30_000);
+afterAll(() => database.close());
+
+async function call(path: string, init: RequestInit & { cookie?: string; ip?: string } = {}) {
+  const headers = new Headers(init.headers);
+  if (init.body) headers.set("Content-Type", "application/json");
+  if (init.cookie) headers.set("Cookie", init.cookie);
+  headers.set("x-forwarded-for", init.ip ?? "10.0.0.1");
+  const res = await ctx.app.request(`/api${path}`, { ...init, headers });
+  return { res, body: (await res.json()) as any, cookie: res.headers.get("set-cookie")?.split(";")[0] ?? null };
+}
+const post = (path: string, body: unknown, extra: { cookie?: string; ip?: string } = {}) => call(path, { method: "POST", body: JSON.stringify(body), ...extra });
+
+describe("passwords", () => {
+  it("stores a salted scrypt hash, never the password, and verifies it", async () => {
+    const h = await hashPassword("correct horse battery");
+    expect(h).toMatch(/^scrypt\$32768\$8\$1\$/);
+    expect(h).not.toContain("correct");
+    expect(await hashPassword("correct horse battery")).not.toBe(h); // salted
+    expect(await verifyPassword("correct horse battery", h)).toBe(true);
+    expect(await verifyPassword("wrong horse battery", h)).toBe(false);
+  });
+});
+
+describe("own accounts", () => {
+  it("creates an account, signs in with it, and rejects a wrong password with the same answer as an unknown name", async () => {
+    const reg = await post("/auth/register", { username: "Ana.Main", password: "a-long-password" }, { ip: "10.0.0.2" });
+    expect(reg.res.status).toBe(201);
+    expect((await call("/me", { cookie: reg.cookie! })).body.user).toMatchObject({ username: "ana.main", hasPassword: true });
+    const [row] = await database.db.select().from(schema.users).where(eq(schema.users.username, "ana.main"));
+    expect(row!.passwordHash).not.toContain("a-long-password");
+
+    expect((await post("/auth/register", { username: "ana.main", password: "another-password" }, { ip: "10.0.0.3" })).res.status).toBe(409);
+    expect((await post("/auth/register", { username: "x", password: "short" }, { ip: "10.0.0.3" })).res.status).toBe(400);
+
+    const ok = await post("/auth/login", { username: "ANA.MAIN", password: "a-long-password" });
+    expect(ok.res.status).toBe(200);
+    expect(ok.cookie).toMatch(/^coach_session=/);
+    const wrong = await post("/auth/login", { username: "ana.main", password: "not-the-password" });
+    const unknown = await post("/auth/login", { username: "nobody-here", password: "not-the-password" });
+    expect(wrong.res.status).toBe(401);
+    expect(unknown.body).toEqual(wrong.body);
+  });
+
+  it("the development sign-in can't open an account that has a password", async () => {
+    await post("/auth/register", { username: "berto", password: "berto-password" }, { ip: "10.0.0.4" });
+    const dev = await post("/auth/dev-login", { displayName: "berto" });
+    expect(dev.res.status).toBe(409);
+    expect(dev.cookie).toBeNull();
+  });
+
+  it("an account made with the development sign-in keeps its data by setting a username and password; other sessions end", async () => {
+    const first = (await post("/auth/dev-login", { displayName: "Carla" })).cookie!;
+    const second = (await post("/auth/dev-login", { displayName: "Carla" })).cookie!;
+    const set = await call("/me/credentials", { method: "PUT", cookie: first, body: JSON.stringify({ username: "carla", password: "carla-password" }) });
+    expect(set.res.status).toBe(200);
+    expect((await call("/me", { cookie: first })).res.status).toBe(200);
+    expect((await call("/me", { cookie: second })).res.status).toBe(401); // the other session is gone
+    expect((await post("/auth/dev-login", { displayName: "Carla" })).res.status).toBe(409);
+    // Changing it later needs the current password.
+    expect((await call("/me/credentials", { method: "PUT", cookie: first, body: JSON.stringify({ username: "carla", password: "new-password-1" }) })).res.status).toBe(401);
+    expect((await call("/me/credentials", { method: "PUT", cookie: first, body: JSON.stringify({ username: "carla", password: "new-password-1", currentPassword: "carla-password" }) })).res.status).toBe(200);
+    expect((await post("/auth/login", { username: "carla", password: "new-password-1" })).res.status).toBe(200);
+  });
+
+  it("limits guessing", async () => {
+    await post("/auth/register", { username: "dani", password: "dani-password" }, { ip: "10.0.0.5" });
+    let last = 0;
+    for (let i = 0; i < 11; i++) last = (await post("/auth/login", { username: "dani", password: `guess-${i}-xxxx` }, { ip: `10.1.0.${i}` })).res.status;
+    expect(last).toBe(429); // per username, from any address
+    for (let i = 0; i < 6; i++) last = (await post("/auth/register", { username: `spam${i}`, password: "spam-password" }, { ip: "10.9.9.9" })).res.status;
+    expect(last).toBe(429); // sign-ups per address
+  });
+});

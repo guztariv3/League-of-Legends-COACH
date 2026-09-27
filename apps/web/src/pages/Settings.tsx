@@ -60,6 +60,8 @@ export function Settings() {
         </div>
       </section>
 
+      <SignInDetails />
+
       <DesktopLink />
 
       <section className="card stack" aria-labelledby="coach-h">
@@ -174,6 +176,59 @@ function DesktopLink() {
           ))}
         </div>
       )}
+    </section>
+  );
+}
+
+/** Username and password of this account: how it opens on the public site (and on any device). */
+function SignInDetails() {
+  const { me, refresh } = useSession();
+  const user = me!.user;
+  const [username, setUsername] = useState(user.username ?? "");
+  const [password, setPassword] = useState("");
+  const [current, setCurrent] = useState("");
+  const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setStatus(null);
+    try {
+      await api.setCredentials(username.trim(), password, user.hasPassword ? current : undefined);
+      setPassword("");
+      setCurrent("");
+      await refresh();
+      setStatus({ ok: true, text: "Saved. Sign in with this username and password from now on." });
+    } catch (err) {
+      setStatus({ ok: false, text: err instanceof Error ? err.message : "Could not save." });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="card stack" aria-labelledby="signin-h">
+      <h2 id="signin-h">Username and password</h2>
+      {!user.hasPassword && (
+        <div className="notice">This account doesn't have a password yet. Set one to keep your profile and to sign in once the site no longer asks for the prototype password.</div>
+      )}
+      <form className="stack" onSubmit={save} style={{ maxWidth: 360 }}>
+        <div className="field">
+          <label htmlFor="set-username">Username</label>
+          <input id="set-username" value={username} onChange={(e) => setUsername(e.target.value)} required minLength={3} maxLength={24} autoComplete="username" autoCapitalize="none" spellCheck={false} />
+        </div>
+        {user.hasPassword && (
+          <div className="field">
+            <label htmlFor="current-password">Current password</label>
+            <input id="current-password" type="password" value={current} onChange={(e) => setCurrent(e.target.value)} required autoComplete="current-password" />
+          </div>
+        )}
+        <div className="field">
+          <label htmlFor="new-password">{user.hasPassword ? "New password" : "Password"}</label>
+          <input id="new-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={10} maxLength={128} autoComplete="new-password" />
+        </div>
+        <button className="btn btn-primary" disabled={busy}>{user.hasPassword ? "Change password" : "Save"}</button>
+      </form>
+      {status && <p role={status.ok ? "status" : "alert"} style={{ margin: 0, color: status.ok ? undefined : "var(--bad)" }}>{status.text}</p>}
     </section>
   );
 }

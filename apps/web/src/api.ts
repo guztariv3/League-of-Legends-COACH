@@ -4,7 +4,7 @@ export type Mode = "summoners_rift" | "aram" | "unsupported";
 
 export interface AppConfig {
   dataSource: "riot" | "synthetic";
-  auth: { rso: boolean; devLogin: boolean };
+  auth: { rso: boolean; devLogin: boolean; accounts?: boolean };
   aiEnabled: boolean;
   knowledgeVersion: string | null;
   platforms: { id: string; label: string }[];
@@ -39,7 +39,7 @@ export interface Preferences {
 }
 
 export interface Me {
-  user: { id: string; displayName: string };
+  user: { id: string; displayName: string; username?: string | null; hasPassword?: boolean };
   accounts: Account[];
   preferences: Preferences;
 }
@@ -563,6 +563,10 @@ export const api = {
   assets: () => request<GameAssets>("/assets"),
   me: () => request<Me>("/me"),
   devLogin: (displayName: string) => request<{ user: Me["user"] }>("/auth/dev-login", { method: "POST", body: JSON.stringify({ displayName }) }),
+  register: (username: string, password: string) => request<{ user: Me["user"] }>("/auth/register", { method: "POST", body: JSON.stringify({ username, password }) }),
+  signIn: (username: string, password: string) => request<{ user: Me["user"] }>("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
+  setCredentials: (username: string, password: string, currentPassword?: string) =>
+    request<{ ok: true; username: string }>("/me/credentials", { method: "PUT", body: JSON.stringify({ username, password, ...(currentPassword ? { currentPassword } : {}) }) }),
   logout: () => request<{ ok: true }>("/auth/logout", { method: "POST", body: "{}" }),
   deleteMe: () => request<{ ok: true }>("/me", { method: "DELETE" }),
   linkAccount: (gameName: string, tagLine: string, platform: string) =>
