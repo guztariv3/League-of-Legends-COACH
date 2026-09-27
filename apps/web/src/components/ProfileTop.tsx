@@ -39,6 +39,23 @@ export function ProfileBanner({ champion, synthetic, lastSyncedAt }: { champion:
 
 // ------------------------------------------------------------------ left card
 
+/**
+ * Riot's ranked emblem for the tier (the art the game client shows), served by CommunityDragon's
+ * mirror of the client files. Unranked, or when the image can't load, the original outline crest.
+ */
+export const EMBLEM_BASE = "https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-emblem";
+export const emblemUrl = (tier: string) => `${EMBLEM_BASE}/emblem-${tier.toLowerCase()}.png`;
+
+function RankEmblem({ tier }: { tier: string | null }) {
+  const [failed, setFailed] = useState(false);
+  if (!tier || !TIERS.includes(tier) || failed) return <Crest tier={failed ? tier : null} />;
+  return (
+    <span className="pf-emblem" aria-hidden="true">
+      <img src={emblemUrl(tier)} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} />
+    </span>
+  );
+}
+
 /** Original crest (not Riot art): a winged shield in the tier's colour; outline only when unranked. */
 function Crest({ tier, size = 64 }: { tier: string | null; size?: number }) {
   const c = tier ? TIER_COLOR[tier] ?? "#8fa3bd" : "var(--text-muted)";
@@ -77,7 +94,7 @@ export function ProfileCard({ gameName, tagLine, avatarChampion, chips, overview
             <button key={q.queueId} type="button" role="radio" aria-checked={selected === q.queueId} disabled={!can}
               title={can ? undefined : "No analyzed games in this queue yet"}
               className={`pf-queue${selected === q.queueId ? " is-on" : ""}`} onClick={() => onSelect(q.queueId)}>
-              <Crest tier={q.rank?.tier ?? null} />
+              <RankEmblem key={q.rank?.tier ?? "unranked"} tier={q.rank?.tier ?? null} />
               <span className="pf-queue-text">
                 <span className="pf-queue-label">{q.label}</span>
                 {q.rank && (
