@@ -7,19 +7,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          B=https://raw.communitydragon.org/latest/plugins
-          for u in \
-            $B/rcp-fe-lol-static-assets/global/default/images/ranked-emblem/emblem-silver.png \
-            $B/rcp-fe-lol-static-assets/global/default/images/ranked-emblem/emblem-grandmaster.png \
-            $B/rcp-fe-lol-static-assets/global/default/images/ranked-emblem/emblem-emerald.png \
-            $B/rcp-fe-lol-static-assets/global/default/images/ranked-mini-crests/silver.svg \
-            $B/rcp-fe-lol-static-assets/global/default/images/ranked-mini-crests/emerald.svg \
-            $B/rcp-fe-lol-static-assets/global/default/images/ranked-mini-crests/unranked.svg \
-            $B/rcp-fe-lol-shared-components/global/default/silver.png \
-            $B/rcp-fe-lol-shared-components/global/default/emerald.png \
-            https://static.developer.riotgames.com/docs/lol/ranked-emblems-latest.zip ; do
-            echo "$(curl -s -o /tmp/f -w '%{http_code} %{size_download} %{content_type}' "$u") $u"
-            case "$u" in *.png) python3 -c "import struct;d=open('/tmp/f','rb').read(24);print('  size', struct.unpack('>II', d[16:24]))" || true;; esac
+          pip install -q pillow
+          B=https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-emblem
+          for t in iron bronze silver gold platinum emerald diamond master grandmaster challenger; do
+            curl -s -o /tmp/$t.png "$B/emblem-$t.png"
+            python3 -c "
+          from PIL import Image
+          im=Image.open('/tmp/$t.png'); w,h=im.size; a=im.getchannel('A').point(lambda v: 255 if v>24 else 0); b=a.getbbox()
+          print('$t', w, h, b, 'frac', [round(b[0]/w,4), round(b[1]/h,4), round(b[2]/w,4), round(b[3]/h,4)])"
           done
-          curl -s "$B/rcp-fe-lol-static-assets/global/default/images/ranked-mini-crests/" | grep -o 'href="[^"]*"' | head -40
-          curl -s "$B/rcp-fe-lol-static-assets/global/default/images/ranked-emblem/" | grep -o 'href="[^"]*"' | head -40
