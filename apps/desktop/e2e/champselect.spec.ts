@@ -51,6 +51,16 @@ test("desktop: game plan during champion select", async ({ page }) => {
                   },
                   spells: [{ id: "SummonerFlash", key: 4, name: "Flash", why: "Instantly repositions you a short distance." }, { id: "SummonerDot", key: 14, name: "Ignite", why: "Extra damage to win early fights." }],
                 },
+                stats: {
+                  patch: "16.19", patchLabel: "current", position: "MIDDLE", games: 1240,
+                  firstItem: { id: 6655, name: "Luden's Companion", avgMinute: 13.4, games: 820, share: 0.66, winRate: 0.51 },
+                  core: { items: [{ id: 6655, name: "Luden's Companion" }, { id: 4645, name: "Shadowflame" }, { id: 3089, name: "Rabadon's Deathcap" }], games: 300, share: 0.24, winRate: 0.53 },
+                  keystone: { id: 8112, name: "Electrocute", secondaryTree: "Sorcery", games: 900, share: 0.73, winRate: 0.5 },
+                  spells: { names: ["Flash", "Ignite"], games: 1000, share: 0.81, winRate: 0.5 },
+                  skills: { max: ["Q", "W", "E"], sequence: [1, 3, 2, 1, 1, 4, 1, 2, 1], games: 1100, share: 0.89, winRate: 0.5 },
+                  matchup: null,
+                  notes: ["Master+ players finish Luden's Companion first most often (66%); the coach suggests Zhonya's Hourglass for this game: It has a stasis active."],
+                },
                 version: "16.19.1",
                 enemiesKnown: 1,
                 attribution: { text: "Game data: Riot Data Dragon; League of Legends Wiki (CC BY-SA 3.0) via Meraki Analytics.", license: "https://creativecommons.org/licenses/by-sa/3.0/" },
@@ -106,6 +116,14 @@ test("desktop: game plan during champion select", async ({ page }) => {
   await expect(keystone).toContainText("Domination + Sorcery");
   await keystone.click();
   await expect(setup.getByText(/Fits: Ahri relies on abilities/)).toBeVisible();
+  // Master+ statistics: folded, labelled with patch, role and sample; the coach's pick stays first.
+  const master = build.getByLabel("Master+ this patch");
+  await expect(master.locator("summary")).toContainText("Patch 16.19 · mid · 1240 ranked games");
+  await master.locator("summary").click();
+  await expect(master.getByText(/done around minute 13/)).toBeVisible();
+  await expect(master.getByText("Q → W → E")).toBeVisible();
+  await expect(master.getByText(/the coach suggests Zhonya's Hourglass for this game/)).toBeVisible();
+  await expect(master.getByText(/not what is right for this game/)).toBeVisible();
 
   const plan = await page.evaluate(() => (window as unknown as { __calls: { cmd: string; args: Record<string, unknown> }[] }).__calls.find((c) => c.cmd === "desktop_plan")?.args);
   expect(plan).toMatchObject({ me: "103", allies: "64", enemies: "238", opponent: "", position: "middle" });

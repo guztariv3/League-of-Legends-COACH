@@ -176,3 +176,25 @@ export const rankSnapshots = pgTable("rank_snapshots", {
   losses: integer("losses").notNull(),
   takenAt: timestamp("taken_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** Phase 4: Master+ games already looked at (counted or skipped), so none is fetched twice. */
+export const statsMatches = pgTable("stats_matches", {
+  matchId: text("match_id").primaryKey(),
+  platform: text("platform").notNull(),
+  patch: text("patch").notNull(),
+  counted: boolean("counted").notNull(),
+  processedAt: timestamp("processed_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Phase 4: counters per patch, champion, position and what was counted (never the games or players). */
+export const statsCounts = pgTable("stats_counts", {
+  patch: text("patch").notNull(),
+  champion: text("champion").notNull(),
+  position: text("position").notNull(),
+  kind: text("kind").notNull(),
+  key: text("key").notNull(),
+  games: integer("games").notNull().default(0),
+  wins: integer("wins").notNull().default(0),
+  minuteSum: doublePrecision("minute_sum").notNull().default(0),
+  minuteN: integer("minute_n").notNull().default(0),
+}, (t) => [primaryKey({ columns: [t.patch, t.champion, t.position, t.kind, t.key] })]);

@@ -9,13 +9,15 @@ import { openDatabase } from "./db/index.js";
 import { bootKnowledge } from "./knowledge.js";
 import { riotSource, syntheticSource } from "./sources.js";
 import { scheduleRetention } from "./retention.js";
+import { patchInfoOf, StatsCrawler } from "./stats/crawler.js";
 
 const cfg = loadConfig();
 if (cfg.pgliteDir && !cfg.databaseUrl) mkdirSync(cfg.pgliteDir, { recursive: true });
 const { db } = await openDatabase(cfg.databaseUrl, cfg.pgliteDir);
 
 const mode = dataSource(cfg);
-const source = mode === "riot" ? riotSource(new RiotClient({ apiKey: cfg.riotApiKey! })) : syntheticSource();
+const riot = mode === "riot" ? new RiotClient({ apiKey: cfg.riotApiKey! }) : undefined;
+const source = riot ? riotSource(riot) : syntheticSource();
 const knowledge = await bootKnowledge(db, mode === "riot" ? dataDragonSource() : syntheticKnowledge());
 const aiProviders: AiProvider[] = cfg.anthropicApiKey
   ? [anthropicProvider({ apiKey: cfg.anthropicApiKey, model: cfg.aiModel })]
@@ -31,8 +33,13 @@ const { site, sync } = createSite({ cfg, db, source, knowledge, aiProviders, wik
 // After an ANALYSIS_VERSION bump, rebuild analyses from stored games in the background.
 void sync.reanalyzeAll().then((n) => n && console.log(`[sync] analyses up to date for ${n} account(s)`));
 scheduleRetention(db);
+// Phase 4: Master+ statistics from the official Riot API (counters only), slowly, in the background.
+if (cfg.statsCrawl && riot && gameFacts && cfg.statsPlatforms.length) {
+  new StatsCrawler({ db, riot, platforms: cfg.statsPlatforms, patch: async () => { const f = await gameFacts.get(0); return f ? patchInfoOf(f) : null; } })
+    .start(cfg.statsIntervalMs);
+}
 serve({ fetch: site.fetch, port: cfg.port });
 console.log(
   `[api] listening on :${cfg.port} · env=${cfg.env} · data=${mode} · ai=${aiProviders.length ? `on (${cfg.aiModel ?? "claude-opus-5"})` : "off"}` +
-    ` · web=${cfg.webDist ? "served" : "separate"} · gate=${cfg.prototypePassword ? "on" : "off"} · knowledge=${knowledge.active()?.version ?? "none"}`,
+    ` · web=${cfg.webDist ? "served" : "separate"} · gate=${cfg.prototypePassword ? "on" : "off"} · stats=${cfg.statsCrawl && riot ? cfg.statsPlatforms.join("+") : "off"} · knowledge=${knowledge.active()?.version ?? "none"}`,
 );

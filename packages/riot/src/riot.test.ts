@@ -134,3 +134,20 @@ describe("mastery and ranked", () => {
     expect(await client.getLeagueEntries("na1", "p")).toEqual([]);
   });
 });
+
+describe("Master+ ladders (phase 4 statistics)", () => {
+  it("reads an apex league from the platform host and lists ranked solo games only", async () => {
+    const urls: string[] = [];
+    const client = new RiotClient({
+      apiKey: "k",
+      fetch: async (url) => {
+        urls.push(String(url));
+        return String(url).includes("leagues") ? json({ tier: "CHALLENGER", entries: [{ puuid: "p", leaguePoints: 1500, wins: 200 }] }) : json(["EUW1_1"]);
+      },
+    });
+    expect((await client.getApexLeague("euw1", "challenger"))?.entries[0]).toMatchObject({ puuid: "p", leaguePoints: 1500 });
+    await client.getMatchIds("euw1", "p", { count: 20, queue: 420 });
+    expect(urls[0]).toBe("https://euw1.api.riotgames.com/lol/league/v4/challengerleagues/by-queue/RANKED_SOLO_5x5");
+    expect(new URL(urls[1]!).searchParams.get("queue")).toBe("420");
+  });
+});

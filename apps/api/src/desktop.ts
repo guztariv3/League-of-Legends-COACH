@@ -2,6 +2,7 @@ import { randomBytes, randomInt } from "node:crypto";
 import { GAME_DATA_ATTRIBUTION, type GameFactsSource, type KnowledgeRegistry } from "@coach/knowledge";
 import { recommendBuild, recommendSetup, teamNeeds } from "@coach/build";
 import { championPool } from "@coach/coach";
+import { patchFromVersion } from "@coach/domain";
 import { challengeTitle, evaluateChallenge, type ChallengeKind, type GoalMetric } from "@coach/insights";
 import { and, asc, desc, eq, gt, inArray, isNull } from "drizzle-orm";
 import { Hono, type Context } from "hono";
@@ -15,6 +16,8 @@ import { RANKED_QUEUES, rankHistory } from "./rank.js";
 import { scoutForUser } from "./scout.js";
 import type { Services } from "./services.js";
 import type { MatchSource } from "./sources.js";
+import { statsEvidence } from "./stats/evidence.js";
+import { championStats } from "./stats/store.js";
 
 /**
  * Desktop app pairing (security decision: one-time code → revocable device token).
@@ -185,11 +188,16 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
     const kits = new Map((facts?.kits ?? []).map((k) => [k.id, k]));
     const myKit = kits.get(me);
     const enemyInput = enemies.map((e) => kits.get(e)).filter((k) => k !== undefined).map((k) => ({ kit: k, laneOpponent: k.id === opponent }));
-    const build = facts && myKit
+    const engine = facts && myKit ? recommendBuild({ me: myKit, enemies: enemyInput, items: facts.items, position: q.data.position ?? null }) : null;
+    const setup = facts && myKit ? recommendSetup({ me: myKit, enemies: enemyInput, runes: facts.runes, spells: facts.spells, position: q.data.position ?? null }) : null;
+    // What Master+ players do with this champion this patch (phase 4): evidence beside the engine, never the decision.
+    const master = facts ? await championStats(db, me, q.data.position ?? null, patchFromVersion(facts.version)) : null;
+    const build = facts && myKit && engine
       ? {
-          ...recommendBuild({ me: myKit, enemies: enemyInput, items: facts.items, position: q.data.position ?? null }),
+          ...engine,
           // Runes and summoner spells, decided the same way (packages/build/src/setup.ts).
-          setup: recommendSetup({ me: myKit, enemies: enemyInput, runes: facts.runes, spells: facts.spells, position: q.data.position ?? null }),
+          setup,
+          stats: master ? statsEvidence(master, facts, { build: engine, setup, opponent }) : null,
           // What the team needs from you, from your allies' kits (packages/build/src/team.ts).
           team: teamNeeds(myKit, known(q.data.allies).map((a) => kits.get(a)).filter((k) => k !== undefined)),
           version: facts.version,

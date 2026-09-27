@@ -58,3 +58,35 @@ Ya existe la base: el contrato de decisión (`packages/coach/src/decision.ts`) l
 - **Alternativa solo si es real** (`alternative`): únicamente en un "Close call", con lo que la diferencia ("B da más de las estadísticas que usa tu kit; A responde más a lo que hace el enemigo", con la amenaza concreta). La tarjeta "Now" solo muestra alternativa cuando la decisión es incierta.
 - **Show reasoning:** en la tarjeta "Now" (resto de razones y datos) y en el primer ítem de la pestaña Draft; por defecto se ve solo lo esencial.
 - **Orden de habilidades:** se pasa a la fase 4. Con solo los números por rango del kit, Ahri saldría Q → E → W cuando lo habitual es Q → W → E (la E se sube última por su control, no por su daño): sería presentar una suposición como hecho. Irá con las estadísticas de partidas Master+ del parche, y los números del kit como explicación. Mientras, sigue tu propio historial y, sin él, no dice nada de las habilidades básicas.
+
+## Fase 4: detalles
+- **Recogida** (`apps/api/src/stats/crawler.ts`): con la clave de Riot, el servidor lee las ligas Challenger, Grandmaster y Master (league-v4, por LP) de las plataformas de `STATS_PLATFORMS` (por defecto EUW1, KR y NA1). Recorre sus partidas clasificatorias en solitario (cola 420) de los últimos 14 días, un paso cada `STATS_INTERVAL_MS` (3 s por defecto; cada paso hace como mucho tres llamadas) para no quitar presupuesto a las sincronizaciones de los jugadores. `STATS_CRAWL=0` lo apaga. Con datos sintéticos no se ejecuta nunca.
+- **Solo contadores** (`stats_counts`, migración 0007): por parche, campeón y posición se guardan:
+  - partidas y victorias;
+  - primer ítem terminado, con su minuto medio;
+  - los tres primeros ítems terminados, en orden;
+  - orden de subida al máximo de Q/W/E;
+  - las nueve primeras subidas;
+  - piedra angular + rama secundaria;
+  - hechizos;
+  - rival de línea.
+
+  No se guarda nada de los jugadores. `stats_matches` solo recuerda qué partidas se han contado, para no contarlas dos veces. Las partidas que no son del parche actual ni del anterior se marcan como vistas sin descargar su línea de tiempo.
+- **Parche y muestra** (`stats/store.ts`):
+  - Nada se muestra hasta tener 30 partidas del campeón en esa posición.
+  - Cada opción necesita al menos 8 partidas.
+  - Si el parche actual aún no llega al mínimo, se usa el anterior, marcado como "previous".
+  - Cada cifra va con su número de partidas.
+- **Evidencia, no decisión** (`stats/evidence.ts`): `/desktop/plan` añade `build.stats`. El motor sigue decidiendo el build para los enemigos de esta partida; la estadística no cambia su elección (test). Cuando el coach sugiere otra cosa que lo más común, lo dice y explica por qué con la razón de esta partida. El % de victorias contra el rival de línea se muestra con su muestra y con la nota de que no decide el build.
+- **Draft (escritorio)**: bloque plegado "Master+ this patch" con:
+  - parche, rol y partidas;
+  - primer ítem y minuto;
+  - core;
+  - piedra angular;
+  - hechizos;
+  - orden de máximo;
+  - las notas de comparación.
+- **Orden de habilidades** (`packages/coach/src/skills.ts`):
+  - Con al menos 3 partidas tuyas con el campeón, manda tu orden.
+  - Si no, sigue lo común en Master+ del parche: las primeras subidas y luego el orden de máximo, dentro de los límites de nivel. Lleva la etiqueta del parche y la muestra, con confianza como mucho "preferred", nunca "strong".
+  - Sin datos suficientes, sigue sin decir nada de las básicas.
