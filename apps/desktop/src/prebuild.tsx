@@ -30,6 +30,8 @@ export interface PreGameBuild {
   team?: { id: string; text: string; why: string }[];
   /** What Master+ players do with this champion this patch (phase 4): evidence, never the decision. */
   stats?: MasterStats | null;
+  /** On a close call, which option is nearer to how the player plays (phase 5); both are valid. */
+  styleNote?: string | null;
   version: string;
   enemiesKnown: number;
   attribution: { text: string; license: string };
@@ -184,6 +186,7 @@ export function PreGameBuildView({ build, art }: { build: PreGameBuild; art: Art
               <span><strong>{build.alternative.name}</strong> <span className="quiet">{build.alternative.difference}</span></span>
             </div>
           )}
+          {build.alternative && build.styleNote && <p className="quiet small style-note">{build.styleNote}</p>}
         </div>
       )}
 

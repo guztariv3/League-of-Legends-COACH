@@ -27,6 +27,10 @@ test("profile, goals, memory, search and champion page", async ({ page }, info) 
   await expect(page).toHaveURL(/tab=coach/);
   await expect(page.getByRole("heading", { name: "How you play" })).toBeVisible();
   await expect(page.getByText("Laning phase").first()).toBeVisible();
+  // Phase 5: playstyle and recurring patterns from the player's games, with their numbers.
+  const patterns = page.getByRole("region", { name: "What keeps happening in your games" });
+  await expect(patterns.getByText("Playstyle")).toBeVisible();
+  await expect(patterns.getByText(/kill participation and .* deaths before minute 14/)).toBeVisible();
   await expect(page.getByRole("heading", { name: "Your progress" })).toBeVisible();
   await page.getByText(/See timeline/).click().catch(() => {});
   await page.screenshot({ path: `test-results/profile-${info.project.name}.png`, fullPage: true });

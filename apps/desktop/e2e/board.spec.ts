@@ -50,8 +50,15 @@ async function inGame(page: Page, withEngine: boolean) {
                 biggestThreat: { text: "Zed", basis: "hypothesis", why: "Assassin with the highest damage rating on their team (9/10 in Riot's general ratings)." },
                 yourPowerSpike: { text: "Luden's Companion (around minute 14)", basis: "observation", why: "Your first major item in 9 of your 12 games with Ahri." },
                 enemyPowerSpike: { text: "Zed: level 6 and their first completed item", basis: "hypothesis", why: "A general tendency of the Assassin class." },
-                avoid: null, lookFor: null,
+                avoid: { text: "You often die twice before minute 14 with Ahri", basis: "observation", why: "5 of your last 12 games with Ahri." }, lookFor: null,
                 loadout: { games: 12, keystone: { name: "Electrocute" }, spells: { names: ["Flash", "Ignite"] }, maxOrder: ["Q", "W", "E"], firstItem: { name: "Luden's Companion" } },
+              },
+              memory: {
+                patterns: [
+                  { id: "early-deaths", kind: "mistake", scope: "champion", text: "You often die twice before minute 14 with Ahri", why: "5 of your last 12 games with Ahri.", games: 12, hits: 5 },
+                  { id: "lane-strong", kind: "strength", scope: "role", text: "You usually win your lane early as mid laner", why: "Ahead in gold at 10 in 14 of 20 games (median +320).", games: 20, hits: 14 },
+                ],
+                style: { style: "aggressive", why: "You look for fights: 61% kill participation and 1.4 deaths before minute 14 on average (20 games).", games: 20 },
               },
             };
           case "desktop_items":
@@ -114,6 +121,14 @@ test("in game: both teams with items, and your build from your history", async (
   // Above it, the live plan for this moment of the game (or a line saying nothing changes it).
   await expect(planTab.getByRole("region", { name: "Right now" }).or(planTab.getByText("Right now: nothing changes your game plan."))).toBeVisible();
   await expect(planTab).toContainText("From champion select");
+  // Phase 5: the recurring mistake is the "avoid" line; the rest of what the coach remembers is folded.
+  await expect(planTab).toContainText("What to avoidYou often die twice before minute 14 with Ahri");
+  const games = planTab.getByLabel("From your games");
+  await expect(games.locator("summary")).toContainText("You look for fights");
+  await games.locator("summary").click();
+  await expect(games.getByText(/Strength: You usually win your lane early/)).toBeVisible();
+  await expect(games.getByText(/die twice before minute 14/)).toHaveCount(0); // not repeated
+
   await page.screenshot({ path: "test-results/board-plan.png" });
 
   // Skills: ranks, and the next ability from the player's own order.

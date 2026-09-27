@@ -35,7 +35,7 @@ export type MemoryCategory = "focus" | "correction" | "note";
 export interface Preferences {
   level: "beginner" | "intermediate" | "advanced" | "expert";
   language: "es" | "en";
-  memory: Record<MemoryCategory, boolean>;
+  memory: Record<MemoryCategory, boolean> & { patterns: boolean };
 }
 
 export interface Me {
@@ -235,9 +235,25 @@ export interface StateBucket {
   lateDeathsPerMin: number | null;
 }
 
+export interface MemoryPattern {
+  id: string;
+  kind: "mistake" | "strength";
+  scope: "champion" | "role" | "all";
+  text: string;
+  why: string;
+  games: number;
+  hits: number;
+}
+export interface PlayerMemory {
+  patterns: MemoryPattern[];
+  style: { style: "aggressive" | "balanced" | "safe"; why: string; games: number } | null;
+}
+
 export interface Profile {
   profiles: { mode: Mode; mainRole: string | null; games: number; dimensions: Dimension[] }[];
   gameState: StateBucket[];
+  /** Recurring patterns and playstyle (phase 5); null when turned off. */
+  memory: PlayerMemory | null;
 }
 
 export interface Goal {

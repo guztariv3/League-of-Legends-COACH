@@ -1,6 +1,7 @@
 import {
   csDiffAt,
   findParticipant,
+  firstBackOf,
   goldDiffAt,
   laneOpponent,
   purchasesOf,
@@ -19,8 +20,10 @@ import {
  * v3: loadout (champion level, items, summoner spells, runes, gold) for the match-history view.
  * v4: skill order, purchases, full runes and shards, CS diff @15, gold share, damage per minute,
  *     damage taken and solo deaths.
+ * v5: vision score and damage per minute against the lane opponent.
+ * v6: the first back to base (when, and the gold held just before).
  */
-export const ANALYSIS_VERSION = 5;
+export const ANALYSIS_VERSION = 6;
 
 const EARLY_GAME_MS = 14 * 60_000;
 const MID_GAME_MS = 15 * 60_000;
@@ -89,6 +92,8 @@ export interface MatchAnalysis {
   visionScore: number | null;
   /** Your damage to champions per minute minus your lane opponent's. v5+ */
   damagePerMinDiff: number | null;
+  /** The first back to base after the starting items: when, and the gold held the minute before. v6+ */
+  firstBack: { atSec: number; gold: number } | null;
 }
 
 export function analyzeMatch(match: NormalizedMatch, timeline: RawTimeline | null, puuid: string): MatchAnalysis | null {
@@ -185,5 +190,6 @@ export function analyzeMatch(match: NormalizedMatch, timeline: RawTimeline | nul
     purchases: timeline ? purchasesOf(timeline, me.participantId) : null,
     visionScore: sr ? me.visionScore : null,
     damagePerMinDiff: opp ? (me.damageToChampions - opp.damageToChampions) / minutes : null,
+    firstBack: timeline && sr ? firstBackOf(timeline, me.participantId) : null,
   };
 }

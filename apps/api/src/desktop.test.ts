@@ -146,6 +146,7 @@ describe("desktop pairing", () => {
     const tank = await call("/desktop/plan?me=Malphite&enemies=Syndra,Brand,Lux,Veigar,Annie&opponent=Syndra&position=top", { headers: auth });
     expect(tank.res.status).toBe(200);
     expect(tank.body.build.champion).toBe("Malphite");
+    expect(tank.body).toHaveProperty("memory"); // phase 5: patterns from the player's games (or null)
     expect(tank.body.build.enemiesKnown).toBe(5);
     expect(tank.body.build.starter.items.length).toBeGreaterThan(0);
     expect(tank.body.build.first.why.length).toBeGreaterThan(0);

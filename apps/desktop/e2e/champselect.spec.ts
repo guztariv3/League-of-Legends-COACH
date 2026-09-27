@@ -28,6 +28,10 @@ test("desktop: game plan during champion select", async ({ page }) => {
                 yourPowerSpike: null, enemyPowerSpike: null, avoid: null, lookFor: null,
                 loadout: { games: 0, keystone: null, spells: null, maxOrder: null, firstItem: null },
               },
+              memory: {
+                patterns: [{ id: "late-back", kind: "mistake", scope: "champion", text: "Your first back comes late, with a lot of gold with Ahri", why: "You held 1,500+ gold the minute before your first back in 5 of 8 games.", games: 8, hits: 5 }],
+                style: { style: "safe", why: "You play for a safe game: 41% kill participation and 0.3 deaths before minute 14 on average (24 games).", games: 24 },
+              },
               build: {
                 champion: "Ahri",
                 kit: ["Ahri's Q, W, E and R scale with ability power"],
@@ -61,6 +65,7 @@ test("desktop: game plan during champion select", async ({ page }) => {
                   matchup: null,
                   notes: ["Master+ players finish Luden's Companion first most often (66%); the coach suggests Zhonya's Hourglass for this game: It has a stasis active."],
                 },
+                styleNote: "Both are valid here; Zhonya's Hourglass keeps you alive longer, which fits how you play (you usually play for a safe game).",
                 version: "16.19.1",
                 enemiesKnown: 1,
                 attribution: { text: "Game data: Riot Data Dragon; League of Legends Wiki (CC BY-SA 3.0) via Meraki Analytics.", license: "https://creativecommons.org/licenses/by-sa/3.0/" },
@@ -102,6 +107,8 @@ test("desktop: game plan during champion select", async ({ page }) => {
   await expect(first.getByText("Close call")).toBeVisible();
   await expect(first.getByText(/instead of the standard Luden's Companion/)).toBeVisible();
   await expect(first.getByLabel("Alternative")).toContainText("Void Staff gives more of the stats your kit uses");
+  // Phase 5: on a close call, which option fits how the player plays (both valid).
+  await expect(first.getByText(/Both are valid here; Zhonya's Hourglass keeps you alive longer/)).toBeVisible();
   await first.getByText("Show reasoning").click();
   await expect(first.getByRole("listitem").filter({ hasText: /^It has a stasis active .*Zed/ })).toBeVisible();
   await expect(build.getByText("Void Staff", { exact: true }).first()).toBeVisible();

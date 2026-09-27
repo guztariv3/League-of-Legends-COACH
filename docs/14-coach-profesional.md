@@ -90,3 +90,29 @@ Ya existe la base: el contrato de decisión (`packages/coach/src/decision.ts`) l
   - Con al menos 3 partidas tuyas con el campeón, manda tu orden.
   - Si no, sigue lo común en Master+ del parche: las primeras subidas y luego el orden de máximo, dentro de los límites de nivel. Lleva la etiqueta del parche y la muestra, con confianza como mucho "preferred", nunca "strong".
   - Sin datos suficientes, sigue sin decir nada de las básicas.
+
+## Fase 5: detalles
+- **Memoria del jugador** (`packages/coach/src/memory.ts`, `playerMemory`): se lee de tus partidas cada vez. No se guarda nada nuevo, más allá de un dato por partida: el primer regreso a base (análisis v6, `firstBack`), con el minuto y el oro que llevabas el minuto anterior.
+- **Patrones:** cada uno se mide en el ámbito más concreto que tenga al menos 5 partidas: este campeón, luego tu rol, luego todas tus partidas. Siempre lleva sus números.
+
+  Errores recurrentes (desde el 40 % de las partidas):
+  - dos muertes antes del minuto 14;
+  - ventajas de equipo de más de 1.500 de oro en el 15 que acaban en derrota;
+  - 15 o más súbditos por detrás de tu rival en el 15;
+  - primer regreso con 1.500 o más de oro sin gastar;
+  - primer ítem 2 o más minutos más tarde que los jugadores Master+ del parche con el mismo ítem (usa la fase 4).
+
+  Virtudes:
+  - ganas la línea (por delante en oro en el 10);
+  - casi nunca mueres pronto;
+  - cierras las partidas que llevas por delante.
+
+  Como mucho se muestran dos errores y una virtud, empezando por los de este campeón.
+- **Estilo** (`playstyle`): con al menos 10 partidas del rol principal, sale de la participación en asesinatos y las muertes antes del 14. Hay tres estilos: busca peleas, equilibrado o juego seguro. Jungla y apoyo necesitan más participación para contar como agresivos. Siempre se muestra con los números.
+- **Nunca cambia una decisión correcta:**
+  - Solo en una decisión ajustada entre dos ítems (fase 3), `styleNote` dice cuál encaja más con tu estilo (más vida y resistencias si juegas seguro, más daño si buscas peleas). Ambas son válidas, y la recomendación no cambia.
+  - Un error recurrente con este campeón pasa a ser la línea "What to avoid" del plan.
+- **Dónde se ve:**
+  - En la app de escritorio, el plan (Draft y pestaña Plan) añade el bloque plegado "From your games", sin repetir la línea de "avoid", y la nota de estilo junto a la alternativa.
+  - En la web, la pestaña Coach añade la tarjeta "What keeps happening in your games". No repite lo que ya dicen los insights sobre todas las partidas.
+- **Privacidad:** hay un interruptor nuevo en "Control what the Coach remembers": "Patterns from my games". Apagado, ni la web ni la app usan patrones ni estilo.
