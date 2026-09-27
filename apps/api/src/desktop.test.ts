@@ -241,3 +241,33 @@ describe("desktop pairing", () => {
     expect((await claim("AAAA-AAAA", "1.2.3.4, 10.9.9.9")).res.status).toBe(429);
   });
 });
+
+
+describe("private Live companion frames",()=>{
+ it("requires device authorization, orders updates, isolates users and revokes access",async()=>{
+  const cookie=await player("LiveOwner"), other=await player("LiveOther");
+  const pair=await call("/desktop/pair",{method:"POST",cookie,body:"{}"});
+  const linked=await claim(pair.body.code,"10.0.0.77"), token=linked.body.token;
+  const frame={version:1,streamId:"b17e6721-1325-4452-91ac-361f8a536bb8",sequence:1,capturedAt:Date.now(),phase:"draft",champion:"Ahri",position:"MIDDLE",patch:"16.19.1",time:null,gold:null,allies:[],enemies:[],headline:"Provisional pick",sections:[]};
+  const send=(body:unknown,auth=true)=>call("/desktop/live",{method:"POST",headers:auth?{Authorization:`Bearer ${token}`}:{},body:JSON.stringify(body)});
+  expect((await send(frame,false)).res.status).toBe(401);
+  expect((await send(frame)).body.accepted).toBe(true);
+  expect((await send({...frame,sequence:0})).body.accepted).toBe(false);
+  expect((await call("/live",{cookie:other})).body.frame).toBeNull();
+  expect((await call("/live",{cookie})).body.frame.champion).toBe("Ahri");
+  expect((await send({...frame,sequence:2,localToken:"must-not-pass"})).res.status).toBe(400);
+  expect((await send({...frame,sequence:2,capturedAt:Date.now()-60000})).res.status).toBe(400);
+  const devices=await call("/desktop/devices",{cookie});
+  await call(`/desktop/devices/${devices.body.devices[0].id}`,{method:"DELETE",cookie});
+  expect((await send({...frame,sequence:3})).res.status).toBe(401);
+  expect((await call("/live",{cookie})).body.frame).toBeNull();
+ });
+});
+
+it("does not double-count a completed game when ingestion retries",async()=>{
+ const game={matchId:"TEST_IDEMPOTENT",platform:"na1",patch:"16.19",counted:true,rows:[{champion:"Ahri",position:"MIDDLE",kind:"games" as const,key:"",win:true,minute:null}]};
+ await recordGame(database.db,game);
+ const first=await database.db.select().from(schema.statsCounts);
+ await recordGame(database.db,game);
+ expect(await database.db.select().from(schema.statsCounts)).toEqual(first);
+});

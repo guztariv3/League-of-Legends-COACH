@@ -74,6 +74,10 @@ export interface PlanLine { text: string; basis: "fact" | "observation" | "hypot
 export interface PlanResponse {
   /** Data Dragon id of your champion (the server maps champion-select keys to it). */
   champion?: string;
+  draftState?: { phase:string|null; allyBans:string[]; enemyBans:string[]; roles:string[] };
+  playerContext?: string[];
+  roster?: { allies: string[]; enemies: string[] };
+  draftRead?: import("@coach/ui").DraftReadView | null;
   /** The pre-game build (null until the server has the game data, or for unknown champions). */
   build?: import("./prebuild").PreGameBuild | null;
   plan: Record<"primaryObjective" | "secondaryObjective" | "biggestThreat" | "yourPowerSpike" | "enemyPowerSpike" | "avoid" | "lookFor", PlanLine | null> & {
@@ -166,7 +170,7 @@ function BuyNow({ p, time, art }: { p: PurchasePlan; time: number; art: Art }) {
       ) : <p className="quiet">Your gold doesn't buy a piece of your next item yet.</p>}
       {p.wait && (
         <p className="buynow-wait">
-          Worth waiting: {p.wait.extra} more gold{p.wait.seconds !== null ? ` (about ${p.wait.seconds} s at your pace)` : ""} buys {p.wait.buys.map((b) => b.name).join(" + ")} instead — more of the item's stats for the same trip to base.
+          Next budget threshold: {p.wait.extra} more gold{p.wait.seconds !== null ? ` (about ${p.wait.seconds} s at your pace)` : ""} buys {p.wait.buys.map((b) => b.name).join(" + ")} instead. This does not mean you should wait in base; consider the wave and travel time.
         </p>
       )}
       {p.milestones.length > 0 && (
@@ -402,8 +406,10 @@ function NowArt({ d, art, coach }: { d: CoachDecision; art: Art; coach: LiveCoac
 }
 
 /** The scoreboard the game already shows (Tab), in the side window, plus the Coach's read of it. */
-export function Board({ state, art, catalog, build, connected, tab, demo = false, overlay = false, plan = null, engine = null }: {
+export function Board({ state, art, catalog, build, connected, tab, demo = false, overlay = false, plan = null, engine = null, suspended = null, onOutput }: {
+  onOutput?: (coach: LiveCoach | null, now: CoachDecision | null, time: number) => void;
   state: GameState; art: Art; catalog: Catalog | null; build: PersonalBuild | null | "loading"; connected: boolean; demo?: boolean;
+  suspended?: "paused" | "reconnecting" | null;
   /** Which section to show (the navigation lives at the top of the window). */
   tab: BoardTab;
   /** Also feed the optional overlay window (D-11). */
@@ -424,7 +430,7 @@ export function Board({ state, art, catalog, build, connected, tab, demo = false
   const skillReference = master?.skills
     ? { max: master.skills.max, sequence: master.skills.sequence, games: master.skills.games, total: master.games, patch: master.patch, patchLabel: master.patchLabel }
     : null;
-  const coach = state.me ? liveCoach({
+  const coach = state.me && !suspended ? liveCoach({
     state,
     catalog: demo ? null : catalog,
     usualItems: personal?.items.map((i) => i.id) ?? [],
@@ -436,6 +442,7 @@ export function Board({ state, art, catalog, build, connected, tab, demo = false
   previousItem.current = coach?.items?.next?.item.id ?? null;
   const now = coach ? pickNow(coach.decisions, shownId) : null;
   const myItems = state.me?.items ?? [];
+  useEffect(() => { onOutput?.(coach, now, state.time); }, [state, engine, build, plan, suspended, now?.id]);
 
   // "Coach adjustment": the next-item recommendation changed although the player didn't buy the old
   // one, i.e. the game changed (an enemy bought something, a threat grew). Skills and the opening
@@ -464,6 +471,7 @@ export function Board({ state, art, catalog, build, connected, tab, demo = false
     });
   });
 
+  if (suspended) return <section className="board" aria-label="Game"><p role="status">{suspended === "paused" ? "Coach paused. Resume to see recommendations." : "Reconnecting to the game. Recommendations are hidden until fresh data returns."}</p></section>;
   if (!state.me || !coach) return null;
   const adjusted = now !== null && now.id === adjustedId;
   return (
@@ -473,7 +481,8 @@ export function Board({ state, art, catalog, build, connected, tab, demo = false
         details={[...now.reasons.slice(1), ...now.evidence.map((e) => `${e.label}: ${e.value}`)]} />}
       <div role="tabpanel" aria-label={tab}>
         {tab === "items" && <ItemsTab state={state} coach={coach} build={build} art={art} connected={connected} demo={demo} hasCatalog={catalog !== null} />}
-        {tab === "skills" && <SkillsTab state={state} coach={coach} history={history} connected={connected} />}
+        {tab === "skills" && <><SkillsTab state={state} coach={coach} history={history} connected={connected} />
+          <details><summary>Equipped runes and summoner spells</summary><p>{state.loadout?.runes.map(r=>r.name).join(" · ")||"Actual runes not reported."}</p><p>{state.loadout?.spells.join(" + ")||"Actual summoner spells not reported."}</p></details></>}
         {tab === "gold" && <GoldTab coach={coach} art={art} />}
         {tab === "plan" && <PlanTab plan={plan} connected={connected} live={coach.plan} />}
       </div>

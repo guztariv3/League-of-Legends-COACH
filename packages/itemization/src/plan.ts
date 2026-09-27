@@ -29,7 +29,7 @@ const INCOME_STARTS_SEC = 65;
 /**
  * Gold per minute so far: what you hold (unspent gold plus the value of your items) minus the
  * starting gold, over the minutes of income. It undercounts gold spent on things you no longer
- * hold (consumables, sold items), so it is a floor, not an exact figure.
+ * hold (consumables, sold items), and can overcount free upgrades, so it is only an approximation.
  */
 export function goldPace(time: number, gold: number | null, itemGold: number): number | null {
   if (gold === null || time < INCOME_STARTS_SEC + 120) return null;
@@ -91,26 +91,54 @@ function options(root: Node): { set: Node[]; spent: number }[] {
  * spend what is left on the next one. Within a target, the set of pieces that spends the most
  * (bigger pieces carry more of the item's stats); ties go to fewer, larger pieces.
  */
-function bestBuy(targets: CatalogItem[], inventory: number[], gold: number, catalog: Catalog) {
+/** Apply purchases in an order that frees component slots before buying loose pieces. */
+function fitPurchases(set: Node[], inventory: number[], catalog: Catalog): { ordered: Node[]; inventory: number[] } | null {
+  const held = (n: Node): number[] => n.owned ? [n.item.id] : n.children.flatMap(held);
+  const ordered = [...set].sort((a, b) => held(b).length - held(a).length);
+  const next = [...inventory];
+  const slots = () => next.filter((id) => !catalog.items.get(id)?.tags.includes("Trinket")).length;
+  for (const node of ordered) {
+    for (const id of held(node)) {
+      const at = next.indexOf(id);
+      if (at < 0) return null;
+      next.splice(at, 1);
+    }
+    next.push(node.item.id);
+    if (slots() > 6) return null;
+  }
+  return { ordered, inventory: next };
+}
+
+function bestBuy(targets: CatalogItem[], inventory: number[], gold: number, catalog: Catalog, utility?: Record<number, number>) {
   const buys: Buy[] = [], completes: string[] = [];
   let left = gold, toward = "";
-  const pool = [...inventory];
+  let actual = [...inventory];
   for (const t of targets) {
-    const root = tree(t, catalog, pool);
+    // Building the recipe consumes a temporary pool, never the actual inventory.
+    const root = tree(t, catalog, [...actual]);
     const full = cost(root);
     if (full === 0) continue;
     toward ||= t.name;
     if (full <= left) {
+      const fit = fitPurchases([root], actual, catalog);
+      if (!fit) break;
       buys.push({ id: t.id, name: t.name, gold: full });
       completes.push(t.name);
       left -= full;
-      pool.push(t.id);
+      actual = fit.inventory;
       continue;
     }
-    const best = options(root).filter((o) => o.spent <= left).sort((a, b) => b.spent - a.spent || a.set.length - b.set.length)[0];
-    if (best) {
-      for (const n of best.set) buys.push({ id: n.item.id, name: n.item.name, gold: cost(n) });
+    const best = options(root).filter((o) => o.spent <= left)
+      .map((o) => ({ ...o, fit: fitPurchases(o.set, actual, catalog) }))
+      .filter((o) => o.fit !== null)
+      .sort((a, b) => {
+        const worth = (o: typeof a) => o.set.reduce((s,n) => s + cost(n) * (utility?.[n.item.id] ?? 1), 0);
+        return worth(b)-worth(a) || b.spent-a.spent || a.set.length-b.set.length;
+      })[0];
+    if (best?.fit) {
+      for (const n of best.fit.ordered) buys.push({ id: n.item.id, name: n.item.name, gold: cost(n) });
       left -= best.spent;
+      actual = best.fit.inventory;
     }
     break; // later targets wait until this one is finished
   }
@@ -128,6 +156,7 @@ export function planPurchases(input: {
   time: number;
   itemGold: number;
   catalog: Catalog;
+  utility?: Record<number, number>;
 }): PurchasePlan {
   const { targets, inventory, gold, time, itemGold, catalog } = input;
   const pace = goldPace(time, gold, itemGold);
@@ -145,13 +174,14 @@ export function planPurchases(input: {
   }
 
   if (gold === null) return { now: null, wait: null, milestones, pace };
-  const now = bestBuy(targets, inventory, gold, catalog);
+  const now = bestBuy(targets, inventory, gold, catalog, input.utility);
 
   // Would a little more gold buy clearly more? Look for the smallest extra that gains enough.
   let wait: PurchasePlan["wait"] = null;
   for (let extra = 25; extra <= WAIT_MAX_EXTRA; extra += 25) {
-    const more = bestBuy(targets, inventory, gold + extra, catalog);
-    if (more.spent - now.spent >= WAIT_MIN_GAIN) {
+    const more = bestBuy(targets, inventory, gold + extra, catalog, input.utility);
+    const useful = (buys: Buy[]) => buys.reduce((s,b)=>s+b.gold*(input.utility?.[b.id]??1),0);
+    if (more.spent - now.spent >= WAIT_MIN_GAIN && useful(more.buys)>useful(now.buys)) {
       const need = Math.max(1, more.spent - gold);
       wait = { extra: need, buys: more.buys, seconds: pace ? Math.round((need / pace) * 60) : null };
       break;

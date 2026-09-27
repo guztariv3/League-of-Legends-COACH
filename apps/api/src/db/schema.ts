@@ -202,3 +202,14 @@ export const statsCounts = pgTable("stats_counts", {
   minuteSum: doublePrecision("minute_sum").notNull().default(0),
   minuteN: integer("minute_n").notNull().default(0),
 }, (t) => [primaryKey({ columns: [t.patch, t.champion, t.position, t.kind, t.key] })]);
+
+/** Latest private companion frame; never raw LCU credentials or player identifiers. */
+export const liveFrames = pgTable("live_frames", {
+  deviceId: uuid("device_id").primaryKey().references(() => deviceLinks.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  streamId: text("stream_id").notNull(),
+  sequence: integer("sequence").notNull(),
+  capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
+  receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
+  payload: jsonb("payload").notNull(),
+});

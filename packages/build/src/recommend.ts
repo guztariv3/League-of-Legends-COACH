@@ -1,3 +1,4 @@
+import { itemTiming, type EconomyContext, type ItemTiming } from "./economy.js";
 import type { ChampionKit, ItemFacts, ItemStat } from "@coach/knowledge";
 import { COUNTERS, THREAT_ONLY, itemProfile, statGoldValues, type Counter, type ItemProfile, type StatKey } from "./capabilities.js";
 import { championProfile, type ChampionProfile } from "./profile.js";
@@ -20,13 +21,15 @@ export interface BuildInput {
   starter?: boolean;
   /** Internal: this run computes the standard core (neutral enemy); it doesn't compute its own. */
   baseline?: boolean;
+  economy?: EconomyContext;
 }
 
-export interface ItemPick { id: number; name: string; gold: number; score: number; why: string[] }
+export interface ItemPick { id: number; name: string; gold: number; score: number; why: string[]; timing?: ItemTiming }
 export interface Situational extends ItemPick { when: string }
 
 export interface BuildRecommendation {
   champion: string;
+  componentUtility?: Record<number, number>;
   /** Facts about the champion's own kit that drive the build. */
   kit: string[];
   enemyDamage: EnemyPicture["damage"];
@@ -83,7 +86,7 @@ const STAT_NAMES: Partial<Record<ItemStat, string>> = {
   healAndShieldPower: "heal and shield power", adaptiveForce: "adaptive force",
 };
 
-interface State { threats: Record<ThreatKind, number>; manaNeed: number; effects: Set<string> }
+interface State { threats: Record<ThreatKind, number>; manaNeed: number; critChance: number; effects: Set<string> }
 
 /** How much this champion, in this game, values each stat (0 = not at all). */
 function statWeights(p: ChampionProfile, e: EnemyPicture, s: State): Record<ItemStat, number> {
@@ -120,6 +123,7 @@ interface Scored {
   ip: ItemProfile; score: number; why: string[]; counterValue: number; statValue: number;
   /** 0–1: the share of the item's stats (in gold) this champion makes use of. */
   fit: number;
+  timing?: ItemTiming;
 }
 
 function score(ip: ItemProfile, p: ChampionProfile, e: EnemyPicture, s: State): Scored {
@@ -151,7 +155,8 @@ function score(ip: ItemProfile, p: ChampionProfile, e: EnemyPicture, s: State): 
     why.push(`${ip.mana > 0 ? `Its ${ip.mana} mana` : "It restores mana, which"} ${ip.mana > 0 && ip.manaSustain ? "and mana restoration cover" : "covers"} ${p.name}'s mana use: one rotation of the basic abilities costs ${p.mana.rotation} of a ${p.mana.pool}-mana pool at level 1.`);
   }
   if (ip.critAmplify && p.scales.crit >= 0.4) {
-    bonus += p.scales.crit * p.offense * 0.5;
+    const ownCrit = ip.stats.filter(l=>l.key.split(":")[0] === "criticalStrikeChance").reduce((sum,l)=>sum+l.amount,0);
+    bonus += p.scales.crit * p.offense * .5 * clamp((s.critChance + ownCrit) / 100);
     why.push(`It increases critical strike damage, which multiplies ${p.name}'s critical strikes.`);
   }
   const armor = lines.find((l) => l.stat === "armor"), mr = lines.find((l) => l.stat === "magicResistance");
@@ -204,7 +209,7 @@ function difference(alt: Scored, first: Scored): string {
   return own ? `${a}: ${own}` : `${a} is almost as good for this game.`;
 }
 
-const pick = (x: Scored): ItemPick => ({ id: x.ip.item.id, name: x.ip.item.name, gold: x.ip.item.gold, score: Math.round(x.score * 100) / 100, why: x.why });
+const pick = (x: Scored): ItemPick => ({ id: x.ip.item.id, name: x.ip.item.name, gold: x.ip.item.gold, score: Math.round(x.score * 100) / 100, why: x.why, ...(x.timing ? { timing: x.timing } : {}) });
 
 function starter(input: BuildInput, p: ChampionProfile, e: EnemyPicture, s: State, gold: Map<StatKey, number>): BuildRecommendation["starter"] {
   const shop = input.items.filter((i) => i.purchasable);
@@ -272,15 +277,22 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
   const gold = statGoldValues(input.items);
   const owned = new Set(input.owned ?? []);
   const catalog = new Map(input.items.map((i) => [i.id, i]));
+  const equipped = (input.owned ?? []).map((id) => catalog.get(id)).filter((i): i is ItemFacts => !!i && !i.tags.includes("Trinket"));
+  if (equipped.length >= 6 && equipped.every((i) => i.rank.includes("LEGENDARY") || (i.rank.includes("BOOTS") && i.from.length > 0))) {
+    return { champion: p.name, kit: p.facts, enemyDamage: e.damage, threats: [], starter: null,
+      first: null, next: [], boots: null, situational: [], ruledOut: [], certainty: null, alternative: null, adaptation: null };
+  }
   const profiles = input.items.map((i) => itemProfile(i, gold, catalog))
     .filter((ip) => (ip.finished || ip.boots) && (ip.item.requiredChampion === null || ip.item.requiredChampion === p.id) && ip.item.requiredAlly === null);
 
   const state: State = {
     threats: Object.fromEntries(Object.entries(e.threats).map(([k, t]) => [k, t.weight])) as Record<ThreatKind, number>,
     manaNeed: p.manaNeed,
+    critChance: 0,
     effects: new Set(),
   };
   const take = (ip: ItemProfile) => {
+    state.critChance += ip.stats.filter(l=>l.key.split(":")[0] === "criticalStrikeChance").reduce((sum,l)=>sum+l.amount,0);
     // What an item already answers no longer needs answering; its unique effects can't stack.
     for (const c of ip.counters) for (const k of COUNTERS[c].answers) state.threats[k] *= 0.15;
     state.manaNeed *= clamp(1 - ip.mana / 600);
@@ -288,11 +300,24 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
   };
   for (const id of owned) { const it = catalog.get(id); if (it) take(itemProfile(it, gold, catalog)); }
 
+  const componentState = { ...state, threats: { ...state.threats }, effects: new Set(state.effects) };
   const ruledOut = new Map<number, { id: number; name: string; why: string; score: number }>();
   const candidates = (boots: boolean) => profiles
     .filter((ip) => ip.boots === boots && !owned.has(ip.item.id) && !picked.has(ip.item.id) && !ip.item.effects.some((ef) => ef.unique && ef.name && state.effects.has(ef.name)))
     .map((ip) => {
       const sc = score(ip, p, e, state);
+      if (!boots) {
+        const timing = itemTiming(ip.item, input.items, input.owned ?? [], input.economy,
+          component => score(itemProfile(component, gold, catalog), p, e, state).score);
+        // Value still dominates. Time discounts value, without a price cap or a cheapest-item rule.
+        const delay = timing.seconds === null ? 0 : timing.seconds / 60;
+        const urgency = input.economy?.opponentCompleted ? .10 : .055;
+        sc.score = sc.score / (1 + delay * urgency) + timing.componentFit * .12;
+        // Credit committed components even before a reliable income estimate exists.
+        sc.score += (1 - timing.remaining / Math.max(1, ip.item.gold)) * .2;
+        sc.timing = timing;
+        sc.why.push(timing.reason);
+      }
       const useless = counterWithoutThreat(ip, e);
       if (useless) {
         const kind = COUNTERS[useless].answers[0]!;
@@ -398,8 +423,9 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
     champion: p.name,
     kit: p.facts,
     enemyDamage: e.damage,
+    componentUtility: Object.fromEntries(input.items.filter(i => i.purchasable && i.gold > 0).map(i => [i.id, score(itemProfile(i, gold, catalog), p, e, componentState).score])),
     threats: Object.values(e.threats).filter((t) => t.weight >= RELEVANT).sort((a, b) => b.weight - a.weight),
-    starter: !(input.starter ?? owned.size === 0) ? null : starter(input, p, e, { ...state, threats: Object.fromEntries(Object.entries(e.threats).map(([k, t]) => [k, t.weight])) as Record<ThreatKind, number>, manaNeed: p.manaNeed }, gold),
+    starter: !(input.starter ?? owned.size === 0) ? null : starter(input, p, e, { ...state, threats: Object.fromEntries(Object.entries(e.threats).map(([k, t]) => [k, t.weight])) as Record<ThreatKind, number>, manaNeed: p.manaNeed, critChance: componentState.critChance }, gold),
     first: first ? pick(first) : null,
     next: core.slice(1).map(pick),
     boots: boots ? pick(boots) : null,

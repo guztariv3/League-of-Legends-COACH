@@ -35,11 +35,13 @@ describe("gameplay by phase (phase 6)", () => {
     expect(st.me!.respawn).toBeNull();
   });
 
-  it("your lane opponent is dead: push, then plates before 14:00, with the timer", () => {
+  it("a dead lane opponent opens a conditional opportunity, not a guarantee", () => {
     const d = run(game({ opp: { respawn: 17 } })).find((x) => x.id.startsWith("phase:opp-dead"))!;
     expect(d.kind).toBe("moment");
-    expect(d.headline).toBe("Syndra is dead for 17s: push your wave, then hit the turret");
-    expect(d.reasons[1]).toMatch(/turret plate gives gold/);
+    expect(d.headline).toBe("Syndra is dead for 17s: check for a safe push");
+    expect(d.reasons.join(" ")).toMatch(/other enemies/i);
+    expect(d.reasons.join(" ")).not.toMatch(/Nobody can contest|without losing a wave/);
+    expect(d.basis).toBe("hypothesis");
     expect(d.evidence[0]).toMatchObject({ value: "17s", source: "this_game" });
   });
 
@@ -47,10 +49,11 @@ describe("gameplay by phase (phase 6)", () => {
     expect(run(game({ opp: { respawn: 5 } }))).toEqual([]);
   });
 
-  it("their jungler is dead: no gank can come", () => {
+  it("their jungler is dead: other enemies may still rotate", () => {
     const d = run(game({ jungler: { respawn: 30 } }));
     expect(d.map((x) => x.id)).toContain("phase:jungler-dead:1");
     expect(d[0]!.headline).toMatch(/Their jungler \(Vi\) is dead for 30s/);
+    expect(d[0]!.reasons.join(" ")).toMatch(/other enemies can still rotate/);
   });
 
   it("level 6 first is a window; theirs first is a warning; no ultimate timers of theirs are tracked", () => {
@@ -58,7 +61,8 @@ describe("gameplay by phase (phase 6)", () => {
     expect(mine.map((x) => x.id)).toEqual(["phase:level6-first"]);
     const theirs = run(game({ me: { level: 5 }, opp: { level: 6 } }));
     expect(theirs[0]).toMatchObject({ kind: "warning", id: "warning:level6-behind" });
-    expect(JSON.stringify(theirs)).not.toMatch(/cooldown/i);
+    expect(JSON.stringify(theirs)).not.toMatch(/ultimate is available/i);
+    expect(theirs[0]!.reasons.join(" ")).toMatch(/not confirmed/);
     expect(run(game({ time: 150, me: { level: 2 }, opp: { level: 1 } }))[0]!.headline).toMatch(/level 2 first/);
   });
 

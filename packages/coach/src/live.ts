@@ -31,9 +31,10 @@ export interface LiveCoachInput {
   engine?: EngineItems | null;
 }
 
-interface EnginePick { id: number; name: string; score: number; why: string[] }
+interface EnginePick { id: number; name: string; score: number; why: string[]; timing?: { remaining: number; seconds: number | null; reason: string } }
 /** The part of the build engine's answer (BuildRecommendation) the live window uses. */
 export interface EngineItems {
+  componentUtility?: Record<number, number>;
   first: EnginePick | null;
   next: EnginePick[];
   boots: EnginePick | null;
@@ -127,7 +128,7 @@ export function liveCoach(input: LiveCoachInput): LiveCoach {
     ? (engine ? [engine.first, ...engine.next] : [local?.next ?? null]).map((p) => (p ? catalog.items.get("item" in p ? p.item.id : p.id) : undefined)).filter((i): i is CatalogItem => i !== undefined)
     : [];
   const purchase = catalog && targets.length && !opening
-    ? planPurchases({ targets, inventory: me.items, gold: state.gold, time: state.time, itemGold: me.itemGold, catalog })
+    ? planPurchases({ targets, inventory: me.items, gold: state.gold, time: state.time, itemGold: me.itemGold, catalog, ...(engine?.componentUtility ? { utility: engine.componentUtility } : {}) })
     : null;
   const skill = state.abilities && state.skillPoints !== null
     ? adviseSkill({ champion: me.champion, level: me.level, ranks: state.abilities, skillPoints: state.skillPoints, history: input.skillHistory ?? [], reference: input.skillReference ?? null })

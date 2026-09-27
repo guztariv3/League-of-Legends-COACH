@@ -23,6 +23,9 @@ const Item = z.looseObject({
   count: z.number().optional(),
 });
 
+const Rune = z.looseObject({ id: z.number().int(), displayName: z.string().optional() });
+const Spell = z.looseObject({ displayName: z.string() });
+
 const AbilityRank = z.looseObject({ abilityLevel: z.number().optional(), displayName: z.string().optional() });
 
 export const LivePlayer = z.looseObject({
@@ -40,6 +43,7 @@ export const LivePlayer = z.looseObject({
   isBot: z.boolean().optional(),
   items: z.array(Item).default([]),
   scores: Scores.optional(),
+  summonerSpells: z.looseObject({ summonerSpellOne: Spell.optional(), summonerSpellTwo: Spell.optional() }).optional().catch(undefined),
 });
 export type LivePlayer = z.infer<typeof LivePlayer>;
 
@@ -56,6 +60,7 @@ export const AllGameData = z.looseObject({
     summonerName: z.string().optional(),
     level: z.number().optional(),
     currentGold: z.number().optional(),
+    fullRunes: z.looseObject({ keystone: Rune.optional(), generalRunes: z.array(Rune).optional(), statRunes: z.array(Rune).optional() }).optional().catch(undefined),
     /** Health and resource right now (the Live Client Data API reports them for the active player only). */
     championStats: z.looseObject({
       currentHealth: z.number().optional(),

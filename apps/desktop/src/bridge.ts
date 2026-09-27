@@ -88,8 +88,8 @@ export const fetchBuild = <T>(baseUrl: string, token: string, champion: string, 
 export const fetchHome = <T>(baseUrl: string, token: string) => site<T>("desktop_home", { baseUrl, token });
 
 /** The Coach's game plan for the champions of this game (champions only). */
-export const fetchPlan = <T>(baseUrl: string, token: string, c: { me: string; allies: string[]; enemies: string[]; opponent: string | null; position?: string | null }) =>
-  site<T>("desktop_plan", { baseUrl, token, me: c.me, allies: c.allies.join(","), enemies: c.enemies.join(","), opponent: c.opponent ?? "", position: c.position ?? "" });
+export const fetchPlan = <T>(baseUrl: string, token: string, c: { me: string; allies: string[]; enemies: string[]; opponent: string | null; position?: string | null; preview?: boolean; draftContext?: Pick<ChampSelect,"bans"|"timerPhase"|"alliedPositions"> }) =>
+  site<T>("desktop_plan", { baseUrl, token, me: c.me, allies: c.allies.join(","), enemies: c.enemies.join(","), opponent: c.opponent ?? "", position: c.position ?? "", preview: c.preview ?? false, draftContext:c.draftContext ? JSON.stringify(c.draftContext):null });
 
 /**
  * What to buy next during a game, from the site's build engine. Only champion ids, item ids and
@@ -98,10 +98,11 @@ export const fetchPlan = <T>(baseUrl: string, token: string, c: { me: string; al
 export const fetchItems = <T>(baseUrl: string, token: string, c: {
   me: string; mine: number[]; enemies: { championId: string; items: number[]; kills: number; deaths: number }[];
   opponent: string | null; position: string | null; opening: boolean;
+  economy?: { gold: number | null; time: number; income: number | null; opponentCompleted: boolean };
 }) => site<T>("desktop_items", {
   baseUrl, token, me: c.me, mine: c.mine.join("."),
   enemies: c.enemies.map((e) => `${e.championId}~${e.items.join(".")}~${Math.min(999, e.kills)}~${Math.min(999, e.deaths)}`).join(","),
-  opponent: c.opponent ?? "", position: c.position ?? "", opening: c.opening,
+  opponent: c.opponent ?? "", position: c.position ?? "", opening: c.opening, economy: c.economy ? JSON.stringify(c.economy) : null,
 });
 
 /** What the optional overlay shows (D-11): the gold difference and the next items. */
@@ -135,6 +136,9 @@ export interface ChampSelect {
   me?: { championId: number; locked: boolean; position: string } | null;
   allies?: number[];
   enemies?: number[];
+  bans?: {allies:number[]|null;enemies:number[]|null} | null;
+  timerPhase?: string | null;
+  alliedPositions?: {championId:number;position:string}[];
 }
 export type ChampSelectResult = { ok: true; data: ChampSelect } | { ok: false; reason: "no_client" | "unavailable" };
 
@@ -147,3 +151,5 @@ export async function readChampSelect(): Promise<ChampSelectResult> {
     return { ok: false, reason: "no_client" };
   }
 }
+
+export const publishLive = (baseUrl: string, token: string, frame: import("@coach/ui").LiveFrame) => site<{ok:boolean}>("desktop_live", {baseUrl,token,frame});

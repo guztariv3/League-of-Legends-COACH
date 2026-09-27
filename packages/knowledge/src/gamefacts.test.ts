@@ -34,10 +34,11 @@ describe("game facts source", () => {
     expect(a!.spells.some((s) => s.name === "Flash")).toBe(true);
     await src.get();
     expect(f.calls).toHaveLength(7);
+    expect(f.calls.filter(u=>u.includes("communitydragon")).every(u=>u.includes(`/${version.split(".").slice(0,2).join(".")}/`))).toBe(true);
     expect(f.calls.filter((u) => u.includes(`/cdn/${version}/data/en_US/`))).toHaveLength(3);
   });
 
-  it("refetches when the patch changes, and keeps the last good copy when a download fails", async () => {
+  it("withholds the previous patch when a new-patch download fails", async () => {
     let v = version;
     let fail = false;
     const ok = fakeFetch();
@@ -48,7 +49,7 @@ describe("game facts source", () => {
     v = "99.1.1";
     fail = true;
     t += 1000;
-    expect((await src.get())?.version).toBe(version); // failed: the previous patch's copy stays
+    expect(await src.get()).toBeNull(); // do not label a previous patch as current
     expect(bad.calls.length).toBeGreaterThan(0);
   });
 

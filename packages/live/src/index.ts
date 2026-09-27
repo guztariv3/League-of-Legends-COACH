@@ -7,3 +7,5 @@ export * from "./safe-mode.js";
 export * from "./engine.js";
 export * from "./simulator.js";
 export * from "./board.js";
+
+export * from "./connection.js";

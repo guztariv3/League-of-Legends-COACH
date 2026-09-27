@@ -23,7 +23,7 @@ export interface GameFactsSource {
 
 const MERAKI_BASE = "https://cdn.merakianalytics.com/riot/lol/resources/latest/en-US";
 const DDRAGON = "https://ddragon.leagueoflegends.com/cdn";
-const CDRAGON = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1";
+const CDRAGON = "https://raw.communitydragon.org";
 
 export function gameFactsSource(opts: {
   /** The active Data Dragon version (from the knowledge registry). */
@@ -52,8 +52,8 @@ export function gameFactsSource(opts: {
       json(`${MERAKI_BASE}/items.json`),
       json(`${MERAKI_BASE}/champions.json`),
       json(`${DDRAGON}/${version}/data/en_US/summoner.json`),
-      json(`${CDRAGON}/perks.json`),
-      json(`${CDRAGON}/perkstyles.json`),
+      json(`${CDRAGON}/${version.split(".").slice(0,2).join(".")}/plugins/rcp-be-lol-game-data/global/default/v1/perks.json`),
+      json(`${CDRAGON}/${version.split(".").slice(0,2).join(".")}/plugins/rcp-be-lol-game-data/global/default/v1/perkstyles.json`),
     ])
       .then(([ddItems, ddChamps, mItems, mChamps, ddSpells, perks, perkStyles]) => {
         const items = parseItems(ddItems, mItems);
@@ -75,7 +75,7 @@ export function gameFactsSource(opts: {
   return {
     async get(waitMs = Infinity) {
       const version = opts.version();
-      if (!version) return data;
+      if (!version) return null;
       const stale = !data || data.version !== version || now() - fetchedAt > ttl;
       if (stale && now() - failedAt > retry) {
         const p = refresh(version);
@@ -83,7 +83,7 @@ export function gameFactsSource(opts: {
           await (Number.isFinite(waitMs) ? Promise.race([p, new Promise((r) => { const t = setTimeout(r, waitMs); (t as { unref?: () => void }).unref?.(); })]) : p);
         }
       }
-      return data;
+      return data?.version === version ? data : null;
     },
   };
 }

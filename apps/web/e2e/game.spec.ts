@@ -36,7 +36,8 @@ test("match review, manual draft and scouting", async ({ page }, info) => {
   await expect(page.getByRole("img", { name: /Impact map/ })).toBeVisible();
 
   // Pre-game area
-  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Pre-game" }).click();
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Live", exact: true }).click();
+  await page.getByRole("link", { name: "Prepare a draft manually" }).click();
   await page.getByLabel("Your champion").selectOption({ label: "Aurelith" });
   await page.getByLabel("Enemy 1").selectOption({ label: "Veyl" });
   await page.getByLabel("Enemy 2").selectOption({ label: "Myrr" });

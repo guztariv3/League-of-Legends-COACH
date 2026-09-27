@@ -526,7 +526,14 @@ export function createApp(deps: AppDeps) {
   authed.route("/", overviewRoutes({ db, services }));
   authed.route("/", desktopSessionRoutes({ db }));
   // Device routes authenticate with a pairing code or a device token, not the session cookie.
-  app.route("/", desktopDeviceRoutes({ db, source, knowledge, services, gameFacts }));
+  app.route("/", desktopDeviceRoutes({ db, source, knowledge, services, gameFacts, onMatchEnd: async userId => {
+    const accounts=(await userAccounts(db,userId)).filter(a=>a.includeInProfile);
+    // Riot's match history can lag the final game event; reuse the existing ingestion pipeline.
+    for(const delay of [15000,60000]) {
+      const timer=setTimeout(()=>{for(const a of accounts)void sync.start(a.id);},delay);
+      timer.unref?.();
+    }
+  } }));
   app.route("/", authed);
   return { app, sync };
 }

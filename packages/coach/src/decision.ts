@@ -99,7 +99,7 @@ export function pickNow(decisions: CoachDecision[], previousId?: string | null):
   const top = ranked[0];
   if (!top) return null;
   const kept = previousId ? ranked.find((d) => d.id === previousId) : undefined;
-  return kept && PRIORITY_RANK[kept.priority] <= PRIORITY_RANK[top.priority] ? kept : top;
+  return kept && kept.priority === top.priority && kept.kind === top.kind ? kept : top;
 }
 
 /** True when a recommendation of the same kind now points somewhere else: shown as a "Coach adjustment". */

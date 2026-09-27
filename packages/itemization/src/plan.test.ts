@@ -39,6 +39,40 @@ describe("what to buy now", () => {
     expect(withWand.now!.buys[0]!.gold).toBe(item(MORELLO).gold - item(WAND).gold);
   });
 
+  it("does not buy another item into six occupied slots", () => {
+    const occupied = Array.from({ length: 6 }, (_, i) => 900_000 + i);
+    const p = plan([MORELLO], 6000, occupied);
+    expect(p.now).toBeNull();
+    expect(p.wait).toBeNull();
+  });
+
+  it("can finish an item in a full inventory by consuming its component", () => {
+    const occupied = [WAND, ...Array.from({ length: 5 }, (_, i) => 900_000 + i)];
+    const p = plan([MORELLO], 6000, occupied);
+    expect(p.now!.completes).toEqual([item(MORELLO).name]);
+    expect(p.now!.spent).toBe(item(MORELLO).gold - item(WAND).gold);
+  });
+
+  it("does not count the separate trinket slot against purchase capacity", () => {
+    const trinket = [...catalog.items.values()].find((i) => i.tags.includes("Trinket"))!;
+    expect(trinket).toBeDefined();
+    const occupied = [...Array.from({ length: 5 }, (_, i) => 900_000 + i), trinket.id];
+    expect(plan([MORELLO], 6000, occupied).now!.completes).toEqual([item(MORELLO).name]);
+  });
+
+  it("combines held components before buying a piece into the freed slot", () => {
+    const make = (id: number, gold: number, from: number[] = []) => ({
+      id, name: String(id), gold, from, tags: [], stats: {}, maps: [11], completed: false, boots: false, antiHeal: false,
+    });
+    const local = { ...catalog, items: new Map([
+      make(1, 100), make(2, 100), make(3, 300, [1, 2]), make(4, 100), make(5, 600, [3, 4]),
+    ].map((i) => [i.id, i])) };
+    const p = planPurchases({ targets: [local.items.get(5)!], inventory: [1, 2, 91, 92, 93, 94],
+      gold: 200, time: 900, itemGold: 2000, catalog: local });
+    expect(p.now!.buys.map((b) => b.id)).toEqual([3, 4]);
+    expect(p.now!.spent).toBe(200);
+  });
+
   it("finishes the first item and spends the rest on the next one", () => {
     const p = plan([MORELLO, ZHONYA], item(MORELLO).gold + 1300);
     expect(p.now!.completes).toEqual([item(MORELLO).name]);

@@ -18,20 +18,25 @@ export async function recordGame(db: Db, g: { matchId: string; platform: string;
     if (r.minute !== null) { a.minuteSum += r.minute; a.minuteN++; }
     acc.set(id, a);
   }
-  const c = schema.statsCounts;
-  for (const a of acc.values()) {
-    await db.insert(c).values({ patch: g.patch, ...a })
-      .onConflictDoUpdate({
-        target: [c.patch, c.champion, c.position, c.kind, c.key],
-        set: {
-          games: sql`${c.games} + ${a.games}`,
-          wins: sql`${c.wins} + ${a.wins}`,
-          minuteSum: sql`${c.minuteSum} + ${a.minuteSum}`,
-          minuteN: sql`${c.minuteN} + ${a.minuteN}`,
-        },
-      });
-  }
-  await db.insert(schema.statsMatches).values({ matchId: g.matchId, platform: g.platform, patch: g.patch, counted: g.counted }).onConflictDoNothing();
+  await db.transaction(async tx => {
+    // Claim the immutable match in the same transaction as every counter increment.
+    const claimed = await tx.insert(schema.statsMatches).values({matchId:g.matchId,platform:g.platform,patch:g.patch,counted:g.counted})
+      .onConflictDoNothing().returning({id:schema.statsMatches.matchId});
+    if (!claimed.length) return;
+    const c = schema.statsCounts;
+    for (const a of acc.values()) {
+      await tx.insert(c).values({ patch: g.patch, ...a })
+        .onConflictDoUpdate({
+          target: [c.patch, c.champion, c.position, c.kind, c.key],
+          set: {
+            games: sql`${c.games} + ${a.games}`,
+            wins: sql`${c.wins} + ${a.wins}`,
+            minuteSum: sql`${c.minuteSum} + ${a.minuteSum}`,
+            minuteN: sql`${c.minuteN} + ${a.minuteN}`,
+          },
+        });
+    }
+  });
 }
 
 export async function seen(db: Db, matchIds: string[]): Promise<Set<string>> {

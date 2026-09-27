@@ -150,6 +150,11 @@ export function suggestItems(input: SuggestInput): Suggestions {
 
   if (!catalog.items.size) return { next: null, alternatives: [], boots: null, enemy, note: "No item catalog, so no suggestions." };
 
+  const equipped = myItems.filter((i) => !i.tags.includes("Trinket"));
+  if (equipped.length >= 6 && equipped.every((i) => i.completed || i.boots)) {
+    return { next: null, alternatives: [], boots: null, enemy, note: "Your inventory is full. No automatic item replacement is suggested." };
+  }
+
   // ---- What the player needs.
   const offenseWeight = { Mage: 1, Marksman: 1, Assassin: 1, Fighter: 0.7, Support: 0.5, Tank: 0.25 }[archetype];
   const struggling = Math.min(0.6, Math.max(0, (me.deaths - me.kills) * 0.1));
