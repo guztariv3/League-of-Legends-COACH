@@ -52,6 +52,19 @@ describe("live coach", () => {
     expect(c.items?.alternatives[1]?.reasons).toContain("Against the shields from Lux.");
     expect(c.items?.boots?.item.name).toBe("Mercury's Treads");
     expect(c.decisions.find((d) => d.kind === "item")?.headline).toBe("Next: Morellonomicon");
+    // When the items arrive: Morellonomicon first (the Blasting Wand you hold lowers what's left), then Rabadon's.
+    expect(c.purchase?.milestones.map((m) => m.name)).toEqual(["Morellonomicon", "Rabadon's Deathcap"]);
+    expect(c.purchase?.milestones[0]?.remaining).toBe(2950 - 850);
+    expect(c.purchase?.pace).toBeGreaterThan(0);
+    expect(c.purchase?.milestones[1]!.at!).toBeGreaterThan(c.purchase!.milestones[0]!.at!);
+  });
+
+  it("with enough gold, the item decision says what to buy now", () => {
+    const engine = { first: { id: 3165, name: "Morellonomicon", score: 1.4, why: ["x"] }, next: [], boots: null, situational: [], starter: null };
+    const base = state(600, [{ itemID: 1026, price: 850 }], undefined, 7);
+    const c = liveCoach({ state: { ...base, gold: 900 }, catalog, engine });
+    expect(c.purchase?.now?.buys.map((b) => b.name)).toEqual(["Oblivion Orb"]);
+    expect(c.decisions.find((d) => d.kind === "item")?.evidence.find((e) => e.label === "Buy now")?.value).toBe("Oblivion Orb (800 gold)");
   });
 
   it("opens with the engine's starting items when it gives them", () => {

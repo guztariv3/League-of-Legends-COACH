@@ -1,4 +1,4 @@
-import { purchasePath, suggestItems, suggestStarter, type Catalog, type CatalogItem, type StarterSuggestion, type Suggestion, type Suggestions } from "@coach/itemization";
+import { planPurchases, purchasePath, suggestItems, type PurchasePlan, suggestStarter, type Catalog, type CatalogItem, type StarterSuggestion, type Suggestion, type Suggestions } from "@coach/itemization";
 import { goldDifference, laneOpponent, objectives, type GameState, type GoldDifference, type Objectives } from "@coach/live";
 import { fromItemSuggestions } from "./adapters.js";
 import { decide, type CoachDecision } from "./decision.js";
@@ -65,6 +65,8 @@ export interface LiveCoach {
   strategy: CoachDecision[];
   gold: GoldDifference | null;
   objectives: Objectives | null;
+  /** What to buy with the gold you have now, and when the next items arrive at your pace. */
+  purchase: PurchasePlan | null;
 }
 
 /** The starting shop visit: the first minutes, before anything but trinkets was bought. */
@@ -89,7 +91,7 @@ export function liveCoach(input: LiveCoachInput): LiveCoach {
   const me = state.me;
   const gold = goldDifference(state);
   const obj = objectives(state);
-  if (!me) return { decisions: [], items: null, starter: null, skill: null, strategy: [], gold, objectives: obj };
+  if (!me) return { decisions: [], items: null, starter: null, skill: null, strategy: [], gold, objectives: obj, purchase: null };
 
   const opening = catalog && state.time < STARTER_WINDOW_SEC && me.itemGold < 300;
   const engine = input.engine ?? null;
@@ -105,15 +107,26 @@ export function liveCoach(input: LiveCoachInput): LiveCoach {
     ? suggestItems({ catalog, map: state.map, gold: state.gold, me, enemies: state.enemies, usual: input.usualItems ?? [], previous: input.previousItem ?? null })
     : null;
   const items = catalog && engine ? fromEngine(engine, local, catalog, me.items, state.gold) : local;
+  // The build in order (the engine's core when the site is connected, else the local suggestion).
+  const targets = catalog
+    ? (engine ? [engine.first, ...engine.next] : [local?.next ?? null]).map((p) => (p ? catalog.items.get("item" in p ? p.item.id : p.id) : undefined)).filter((i): i is CatalogItem => i !== undefined)
+    : [];
+  const purchase = catalog && targets.length && !opening
+    ? planPurchases({ targets, inventory: me.items, gold: state.gold, time: state.time, itemGold: me.itemGold, catalog })
+    : null;
   const skill = state.abilities && state.skillPoints !== null
     ? adviseSkill({ champion: me.champion, level: me.level, ranks: state.abilities, skillPoints: state.skillPoints, history: input.skillHistory ?? [] })
     : null;
   const strategy = strategyFacts({ gold, objectives: obj, myName: me.name });
 
+  // The next-item decision carries what the gold in your pocket buys toward it right now.
+  const itemDecisions = (items ? fromItemSuggestions(items) : []).map((d) => d.kind === "item" && purchase?.now
+    ? { ...d, evidence: [...d.evidence.filter((e) => e.label !== "You can buy now"), { label: "Buy now", value: `${purchase.now.buys.map((b) => b.name).join(" + ")} (${purchase.now.spent} gold)`, source: "this_game" as const }] }
+    : d);
   const decisions = [
-    ...(starter ? [starterDecision(starter)] : items ? fromItemSuggestions(items) : []),
+    ...(starter ? [starterDecision(starter)] : itemDecisions),
     ...(skill ? [skill] : []),
     ...strategy,
   ];
-  return { decisions, items, starter, skill, strategy, gold, objectives: obj };
+  return { decisions, items, starter, skill, strategy, gold, objectives: obj, purchase };
 }
