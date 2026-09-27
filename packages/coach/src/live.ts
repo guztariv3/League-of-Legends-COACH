@@ -3,6 +3,7 @@ import { goldDifference, laneOpponent, objectives, type GameState, type GoldDiff
 import { fromItemSuggestions } from "./adapters.js";
 import { decide, type CoachDecision } from "./decision.js";
 import { adviseSkill, type Slot } from "./skills.js";
+import { readSituation, situationDecisions, type Situation } from "./situation.js";
 import { strategyFacts } from "./strategy.js";
 
 /**
@@ -67,6 +68,10 @@ export interface LiveCoach {
   objectives: Objectives | null;
   /** What to buy with the gold you have now, and when the next items arrive at your pace. */
   purchase: PurchasePlan | null;
+  /** Where you stand (lane, team, health, next spike): the live game plan is built from it. */
+  situation: Situation | null;
+  /** The live plan and warnings (also among `decisions`), most important first. */
+  plan: CoachDecision[];
 }
 
 /** The starting shop visit: the first minutes, before anything but trinkets was bought. */
@@ -91,7 +96,7 @@ export function liveCoach(input: LiveCoachInput): LiveCoach {
   const me = state.me;
   const gold = goldDifference(state);
   const obj = objectives(state);
-  if (!me) return { decisions: [], items: null, starter: null, skill: null, strategy: [], gold, objectives: obj, purchase: null };
+  if (!me) return { decisions: [], items: null, starter: null, skill: null, strategy: [], gold, objectives: obj, purchase: null, situation: null, plan: [] };
 
   const opening = catalog && state.time < STARTER_WINDOW_SEC && me.itemGold < 300;
   const engine = input.engine ?? null;
@@ -123,10 +128,13 @@ export function liveCoach(input: LiveCoachInput): LiveCoach {
   const itemDecisions = (items ? fromItemSuggestions(items) : []).map((d) => d.kind === "item" && purchase?.now
     ? { ...d, evidence: [...d.evidence.filter((e) => e.label !== "You can buy now"), { label: "Buy now", value: `${purchase.now.buys.map((b) => b.name).join(" + ")} (${purchase.now.spent} gold)`, source: "this_game" as const }] }
     : d);
+  const situation = readSituation(state, gold, obj, purchase, catalog);
+  const plan = situation && !opening ? situationDecisions(situation, { time: state.time, isDead: me.isDead, purchase }) : [];
   const decisions = [
+    ...plan,
     ...(starter ? [starterDecision(starter)] : itemDecisions),
     ...(skill ? [skill] : []),
     ...strategy,
   ];
-  return { decisions, items, starter, skill, strategy, gold, objectives: obj, purchase };
+  return { decisions, items, starter, skill, strategy, gold, objectives: obj, purchase, situation, plan };
 }

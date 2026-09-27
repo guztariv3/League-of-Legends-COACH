@@ -311,12 +311,45 @@ const PLAN_ROWS: [keyof Omit<PlanResponse["plan"], "loadout">, string][] = [
   ["yourPowerSpike", "Your power spike"], ["enemyPowerSpike", "Enemy power spike"], ["avoid", "What to avoid"], ["lookFor", "What to look for"],
 ];
 
-export function PlanTab({ plan, connected }: { plan: PlanResponse | null; connected: boolean }) {
-  if (!connected) return <p className="quiet">Connect the website (Settings) to get the Coach's game plan: it uses your own games with this champion.</p>;
-  if (!plan) return <p className="quiet">Preparing your game plan…</p>;
+/**
+ * The live plan: recomputed from every snapshot, so it changes with the game. The warnings
+ * (what to avoid) come first; each line opens to show its reasoning.
+ */
+function RightNow({ decisions }: { decisions: CoachDecision[] }) {
+  if (!decisions.length) return <p className="quiet small">Right now: nothing changes your game plan.</p>;
+  return (
+    <section className="rightnow" aria-label="Right now">
+      <div className="label">Right now</div>
+      <ul>
+        {decisions.map((d) => (
+          <li key={d.id} className={d.kind === "warning" ? "rn-warning" : "rn-plan"}>
+            <strong>{d.kind === "warning" ? "Avoid: " : ""}{d.headline}</strong>
+            <span className="quiet"> {d.reasons[0]}</span>
+            {(d.reasons.length > 1 || d.evidence.length > 0) && (
+              <details className="rn-why">
+                <summary>Show reasoning</summary>
+                <ul>
+                  {d.reasons.slice(1).map((r) => <li key={r}>{r}</li>)}
+                  {d.evidence.map((e) => <li key={e.label} className="quiet">{e.label}: {e.value}</li>)}
+                </ul>
+              </details>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+export function PlanTab({ plan, connected, live = null }: { plan: PlanResponse | null; connected: boolean; live?: CoachDecision[] | null }) {
+  const now = live ? <RightNow decisions={live} /> : null;
+  if (!connected) return <div className="suggest">{now}<p className="quiet">Connect the website (Settings) to get the Coach's game plan: it uses your own games with this champion.</p></div>;
+  if (!plan) return <div className="suggest">{now}<p className="quiet">Preparing your game plan…</p></div>;
   const l = plan.plan.loadout;
   return (
     <section className="suggest" aria-label="Coach game plan">
+      {now}
+      {live && <div className="label">From champion select</div>}
       <dl className="plan-rows">
         {PLAN_ROWS.flatMap(([key, label]) => {
           const line = plan.plan[key];
@@ -406,7 +439,7 @@ export function Board({ state, art, catalog, build, connected, tab, demo = false
         {tab === "items" && <ItemsTab state={state} coach={coach} build={build} art={art} connected={connected} demo={demo} hasCatalog={catalog !== null} />}
         {tab === "skills" && <SkillsTab state={state} coach={coach} history={history} connected={connected} />}
         {tab === "gold" && <GoldTab coach={coach} art={art} />}
-        {tab === "plan" && <PlanTab plan={plan} connected={connected} />}
+        {tab === "plan" && <PlanTab plan={plan} connected={connected} live={coach.plan} />}
       </div>
     </section>
   );

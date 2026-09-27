@@ -111,6 +111,9 @@ test("in game: both teams with items, and your build from your history", async (
   await expect(planTab).toContainText("Biggest threat");
   await expect(planTab).toContainText("Zed");
   await expect(planTab).toContainText("Your usual setup (12 games): Electrocute · Flash + Ignite · max Q → W → E · first item Luden's Companion");
+  // Above it, the live plan for this moment of the game (or a line saying nothing changes it).
+  await expect(planTab.getByRole("region", { name: "Right now" }).or(planTab.getByText("Right now: nothing changes your game plan."))).toBeVisible();
+  await expect(planTab).toContainText("From champion select");
   await page.screenshot({ path: "test-results/board-plan.png" });
 
   // Skills: ranks, and the next ability from the player's own order.
