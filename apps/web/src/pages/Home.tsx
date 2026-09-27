@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useSearchParams } from "react-router";
 import { api, type Dashboard, type MatchRow, type RankResponse, type Stat } from "../api";
-import { ChampionIcon, useSplash } from "../assets";
+import { ChampionIcon } from "../assets";
 import { ActivityCalendar } from "../components/ActivityCalendar";
 import { Goals } from "../components/Goals";
-import { LpGains, LpSpark, TIER_COLOR, tierTitle } from "../components/LpGains";
+import { LpGains } from "../components/LpGains";
+import { OverviewPanel, ProfileBanner, ProfileCard } from "../components/ProfileTop";
 import { PoolTable } from "../components/Pools";
 import { ago, ErrorNotice, InsightView, Loading, MatchItem, modeLabel, num, pct, roleLabel, SyntheticBadge } from "../components/ui";
 import { useLoad, useSession } from "../session";
@@ -38,6 +39,8 @@ export function Home() {
   const dash = useLoad(() => api.dashboard(), [syncKey, version]);
   const improve = useLoad(() => api.improve(vs || undefined), [syncKey, vs]);
   const rank = useLoad(() => api.rank(), [syncKey]);
+  const queue = Number(params.get("queue")) || undefined;
+  const overview = useLoad(() => api.overview(queue), [syncKey, queue]);
   const goals = useLoad(() => api.goals(), [syncKey, version]);
 
   useEffect(() => {
@@ -55,42 +58,25 @@ export function Home() {
 
   return (
     <div className="stack pf" style={{ gap: 24 }}>
-      <Banner champion={topChampion} synthetic={data.dataSource === "synthetic"} />
-
-      <div className="pf-top">
-        <aside className="pf-side stack" style={{ gap: 12 }}>
-          <section className="card pf-id" aria-label="Player">
-            <span className="pf-avatar">{topChampion ? <ChampionIcon champion={topChampion} size={96} /> : <span className="pf-avatar-empty" />}</span>
-            <h1 className="pf-name">{gameName}{tagLine && <span className="pf-tag"> #{tagLine}</span>}</h1>
-            <p className="tile-note" style={{ margin: 0 }}>Hi, {me?.user.displayName}</p>
-            <div className="pf-tags">
-              {main?.mainRole && <span className="pf-chip">Main role: {roleLabel[main.mainRole]}</span>}
-              {main && <span className="pf-chip">{modeLabel[main.mode]} · {main.games} games</span>}
-              <span className="pf-chip">Based on {data.summary.analyzableGames} analyzable games.</span>
-            </div>
-          </section>
-          <RankCards rank={rank.data} loading={rank.loading && !rank.data} onLp={() => set("tab", "lp")} />
-        </aside>
-
-        <div className="pf-main stack" style={{ gap: 12 }}>
-          {syncing && (
-            <div className="card stack" aria-live="polite">
-              <h2>Analyzing your games</h2>
-              <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={syncing.sync.progress?.total ?? 50} aria-valuenow={syncing.sync.progress?.done ?? 0}>
-                <span style={{ width: `${syncing.sync.progress?.total ? (100 * syncing.sync.progress.done) / syncing.sync.progress.total : 5}%` }} />
+      <div className="pf-hero">
+        <ProfileBanner champion={topChampion} synthetic={data.dataSource === "synthetic"} lastSyncedAt={overview.data?.lastSyncedAt ?? null} />
+        <div className="pf-top">
+          <ProfileCard gameName={gameName ?? ""} tagLine={tagLine} avatarChampion={topChampion}
+            chips={[main?.mainRole ? `Main role: ${roleLabel[main.mainRole]}` : "", main ? `${main.games} games in ${modeLabel[main.mode]}` : ""].filter(Boolean)}
+            overview={overview.data} selected={overview.data?.selected ?? null} onSelect={(q) => set("queue", String(q))} />
+          <div className="pf-main stack" style={{ gap: 12 }}>
+            {syncing && (
+              <div className="card stack" aria-live="polite">
+                <h2>Analyzing your games</h2>
+                <div className="progress" role="progressbar" aria-valuemin={0} aria-valuemax={syncing.sync.progress?.total ?? 50} aria-valuenow={syncing.sync.progress?.done ?? 0}>
+                  <span style={{ width: `${syncing.sync.progress?.total ? (100 * syncing.sync.progress.done) / syncing.sync.progress.total : 5}%` }} />
+                </div>
+                <p className="tile-note" style={{ margin: 0 }}>Keep browsing; this page will update on its own.</p>
               </div>
-              <p className="tile-note" style={{ margin: 0 }}>Keep browsing; this page will update on its own.</p>
-            </div>
-          )}
-          <section className="card stack" aria-labelledby="h-main-champs">
-            <div className="row">
-              <h2 id="h-main-champs" style={{ margin: 0 }}>{main ? `Most played champions · ${modeLabel[main.mode]}` : "Most played champions"}</h2>
-              <span className="spacer" />
-              <button type="button" className="link-btn" onClick={() => set("tab", "champions")}>See all champions</button>
-            </div>
-            <ChampionSummary entries={improve.data?.champions.slice(0, 5) ?? []} fallback={main?.champions.slice(0, 5) ?? []} />
-          </section>
-          <Performance p={data.performance} />
+            )}
+            <OverviewPanel key={overview.data?.selected ?? 0} overview={overview.data} onAllChampions={() => set("tab", "champions")} />
+            <p className="tile-note pf-basis">Hi, {me?.user.displayName}. Based on {data.summary.analyzableGames} analyzable games.</p>
+          </div>
         </div>
       </div>
 
@@ -122,102 +108,6 @@ export function Home() {
       {tab === "lp" && <LpTab rank={rank.data} error={rank.error} />}
       {tab === "coach" && <CoachProfile />}
     </div>
-  );
-}
-
-function Banner({ champion, synthetic }: { champion: string | undefined; synthetic: boolean }) {
-  const splash = useSplash(champion);
-  return (
-    <div className="pf-banner" style={splash ? { backgroundImage: `linear-gradient(90deg, var(--bg) 0%, rgb(23 18 51 / 0.2) 45%, var(--bg) 100%), url(${splash})` } : undefined}>
-      {synthetic && <SyntheticBadge />}
-    </div>
-  );
-}
-
-function RankCards({ rank, loading, onLp }: { rank: RankResponse | undefined; loading: boolean; onLp: () => void }) {
-  if (loading) return <section className="card"><Loading /></section>;
-  const queues = (rank?.accounts ?? []).flatMap((a) => a.queues.map((q) => ({ ...q, riotId: a.riotId })));
-  const solo = queues.find((q) => q.queueType === "RANKED_SOLO_5x5") ?? queues[0];
-  return (
-    <section className="card pf-ranks" aria-label="Rank">
-      {queues.length === 0 && <p className="tile-note" style={{ margin: 0 }}>No ranked games recorded yet. Your rank is saved each time your games sync.</p>}
-      {queues.map((q) => {
-        const c = q.current;
-        const total = c.wins + c.losses;
-        return (
-          <div key={`${q.riotId}-${q.queueType}`} className="pf-rank">
-            <span className="pf-emblem" style={{ color: TIER_COLOR[c.tier] }} aria-hidden="true">{c.tier.charAt(0)}</span>
-            <div className="pf-rank-text">
-              <span className="tile-note">{QUEUE[q.queueType]}</span>
-              <strong><span style={{ color: TIER_COLOR[c.tier] }}>{tierTitle(c.tier)}{["MASTER", "GRANDMASTER", "CHALLENGER"].includes(c.tier) ? "" : ` ${c.rank}`}</span> <span className="quiet-num">· {c.lp} LP</span></strong>
-              <span className="pf-wl">{c.wins}W {c.losses}L · <b>{total ? pct(c.wins / total) : "—"}</b></span>
-              {total > 0 && <span className="pf-wl-bar" aria-hidden="true"><span style={{ width: `${(100 * c.wins) / total}%` }} /></span>}
-            </div>
-          </div>
-        );
-      })}
-      {solo && (
-        <div className="pf-lp-mini">
-          <div className="row">
-            <h2 style={{ margin: 0 }}>LP progress</h2>
-            <span className="spacer" />
-            <button type="button" className="link-btn" onClick={onLp}>Open</button>
-          </div>
-          <LpSpark history={solo.history} />
-        </div>
-      )}
-    </section>
-  );
-}
-
-function ChampionSummary({ entries, fallback }: { entries: { name: string; games: number; wins: number; kda: number; csPerMin: number | null }[]; fallback: { championName: string; games: number; wins: number }[] }) {
-  const rows = entries.length ? entries.map((e) => ({ ...e, kda: e.kda as number | null })) : fallback.map((c) => ({ name: c.championName, games: c.games, wins: c.wins, kda: null, csPerMin: null }));
-  if (!rows.length) return <p className="tile-note" style={{ margin: 0 }}>No games yet.</p>;
-  return (
-    <div className="table-scroll">
-      <table className="champ-table pf-champs">
-        <thead><tr><th>Champion</th><th className="num-col">Games</th><th className="num-col">Win rate</th><th className="num-col">KDA</th><th className="num-col">CS/min</th></tr></thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.name}>
-              <td><Link to={`/champions/${encodeURIComponent(r.name)}`} className="champ-cell champ-link"><ChampionIcon champion={r.name} size={30} /><span className="match-title">{r.name}</span></Link></td>
-              <td className="num-col">{r.games}</td>
-              <td className={`num-col ${r.wins / r.games >= 0.5 ? "num-good" : "num-bad"}`}>{pct(r.wins / r.games)}</td>
-              <td className="num-col">{num(r.kda, 2)}</td>
-              <td className="num-col">{num(r.csPerMin)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function Performance({ p }: { p: Dashboard["performance"] }) {
-  const tile = (label: string, stat: Stat, fmt: (v: number) => string, help: string) => ({ label, stat, fmt, help });
-  const signedNum = (v: number) => `${v > 0 ? "+" : ""}${Math.round(v)}`;
-  const tiles = [
-    ...[
-      tile("Gold diff @15", p.goldDiff15, signedNum, "Gold compared with your lane opponent at 15:00"),
-      tile("Gold share", p.goldShare, pct, "Your share of your team's gold"),
-      tile("Damage share", p.damageShare, pct, "Your share of your team's damage to champions"),
-      tile("Kill participation", p.killParticipation, pct, "Kills and assists over your team's kills"),
-      tile("Solo deaths", p.soloDeaths, (v) => num(v), "Deaths with no enemy assisting, per game"),
-      tile("Vision / min", p.visionPerMin, (v) => num(v), "Vision score per minute"),
-    ].filter((t) => t.stat).map((t) => ({ label: t.label, value: t.fmt(t.stat!.value), note: `${t.help} · ${t.stat!.games} games` })),
-  ];
-  return (
-    <section className="card stack" aria-labelledby="h-perf">
-      <h2 id="h-perf" style={{ margin: 0 }}>Performance overview <span className="quiet-num" style={{ textTransform: "none" }}>· last {p.games} games{p.mode ? ` in ${modeLabel[p.mode]}` : ""}</span></h2>
-      <div className="pf-perf">
-        {tiles.map((t) => (
-          <div key={t.label} className="tile" title={t.note}>
-            <div className="tile-value">{t.value}</div>
-            <div className="tile-label">{t.label}</div>
-          </div>
-        ))}
-      </div>
-    </section>
   );
 }
 

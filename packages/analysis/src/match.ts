@@ -20,7 +20,7 @@ import {
  * v4: skill order, purchases, full runes and shards, CS diff @15, gold share, damage per minute,
  *     damage taken and solo deaths.
  */
-export const ANALYSIS_VERSION = 4;
+export const ANALYSIS_VERSION = 5;
 
 const EARLY_GAME_MS = 14 * 60_000;
 const MID_GAME_MS = 15 * 60_000;
@@ -85,6 +85,10 @@ export interface MatchAnalysis {
   skillOrder: SkillSlot[] | null;
   /** Items bought (undos removed) with the second they were bought; requires the timeline. v4+ */
   purchases: Purchase[] | null;
+  /** Vision score as the scoreboard shows it; Summoner's Rift only. v5+ */
+  visionScore: number | null;
+  /** Your damage to champions per minute minus your lane opponent's. v5+ */
+  damagePerMinDiff: number | null;
 }
 
 export function analyzeMatch(match: NormalizedMatch, timeline: RawTimeline | null, puuid: string): MatchAnalysis | null {
@@ -179,5 +183,7 @@ export function analyzeMatch(match: NormalizedMatch, timeline: RawTimeline | nul
     soloDeaths: timeline ? soloDeathsOf(timeline, me.participantId) : null,
     skillOrder: timeline ? skillOrderOf(timeline, me.participantId) : null,
     purchases: timeline ? purchasesOf(timeline, me.participantId) : null,
+    visionScore: sr ? me.visionScore : null,
+    damagePerMinDiff: opp ? (me.damageToChampions - opp.damageToChampions) / minutes : null,
   };
 }

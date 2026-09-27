@@ -9,9 +9,21 @@ test("profile tabs (champion pool, matchups, LP gains, activity) and challenges"
   await page.getByRole("button", { name: "Link and analyze" }).click();
   await expect(page.getByText(/Based on \d+ analyzable games/)).toBeVisible({ timeout: 30_000 });
 
-  // Overview: rank card (demo history), performance, activity, roles, recent summary.
-  await expect(page.getByRole("region", { name: "Rank" }).getByText("Ranked Solo/Duo")).toBeVisible();
-  await expect(page.getByRole("heading", { name: /Performance overview/ })).toBeVisible();
+  // Top: queue cards (demo rank), radar, primary role table and performance for the selected queue.
+  const queues = page.getByRole("radiogroup", { name: "Queue" });
+  await expect(queues.getByRole("radio", { name: /Ranked Solo/ })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("heading", { name: /LP progress tracking/ })).toBeVisible();
+  const panel = page.getByRole("region", { name: "Overview for the selected queue" });
+  await expect(panel.getByRole("img", { name: /^Radar for / })).toBeVisible();
+  await expect(panel.getByRole("columnheader", { name: "LP" })).toBeVisible();
+  await expect(panel.getByRole("heading", { name: /Performance overview/ })).toBeVisible();
+  await expect(panel.getByText("GD@15")).toBeVisible();
+  // Picking a champion row puts that champion on the radar.
+  const firstChamp = panel.getByRole("button", { name: /^Show .+ on the radar$/ }).nth(1);
+  const champName = ((await firstChamp.getAttribute("aria-label")) ?? "").replace(/^Show | on the radar$/g, "");
+  await firstChamp.click();
+  await expect(panel.getByRole("img", { name: new RegExp(`^Radar for ${champName}`) })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Refresh data" })).toBeVisible();
   await expect(page.getByRole("grid", { name: /Games per day/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Top roles" })).toBeVisible();
   await expect(page.getByRole("heading", { name: /Recent summary/ })).toBeVisible();

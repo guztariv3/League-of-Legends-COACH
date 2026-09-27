@@ -180,23 +180,4 @@ export function LpGains({ history, queueType, queue, matches }: {
   );
 }
 
-/** Small LP line for the profile sidebar; not interactive, the LP tab has the full chart. */
-export function LpSpark({ history }: { history: RankPoint[] }) {
-  const points = history.filter((p): p is Point => p.points !== null).slice(-50);
-  if (points.length < 2) return <p className="tile-note" style={{ margin: 0 }}>The line starts after your second rank snapshot.</p>;
-  const W = 260, H = 90, P = 6;
-  const minP = Math.min(...points.map((p) => p.points)), maxP = Math.max(...points.map((p) => p.points));
-  const lo = Math.floor(minP / 100) * 100, hi = Math.max(lo + 100, Math.ceil(maxP / 100) * 100);
-  const x = (i: number) => P + (i / (points.length - 1)) * (W - 2 * P);
-  const y = (v: number) => P + ((hi - v) / (hi - lo)) * (H - 2 * P);
-  const divs: number[] = [];
-  for (let v = lo; v <= hi; v += 100) divs.push(v);
-  return (
-    <svg className="lp-spark" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`LP over the last ${points.length} snapshots, from ${rankLabel(points[0]!)} to ${rankLabel(points.at(-1)!)}`}>
-      {divs.map((v) => <g key={v}><line x1={0} x2={W} y1={y(v)} y2={y(v)} stroke="var(--grid)" strokeDasharray="2 4" />{v < hi && <text x={2} y={y(v) - 3} fontSize="10" fontWeight="700" fill={TIER_COLOR[TIERS[Math.floor(v / 400)] ?? "MASTER"]}>{shortDivision(v)}</text>}</g>)}
-      <path d={points.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.points).toFixed(1)}`).join("")} fill="none" stroke="var(--accent)" strokeWidth={1.8} strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-export { TIER_COLOR, title as tierTitle };
+export { TIER_COLOR };

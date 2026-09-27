@@ -126,6 +126,34 @@ export interface Performance {
   roles: { role: string; games: number; wins: number }[];
 }
 
+export interface OverviewRow {
+  kind: "role" | "champion";
+  name: string;
+  championId: number | null;
+  games: number;
+  wins: number;
+  kills: number;
+  deaths: number;
+  assists: number;
+  kda: number;
+  csPerMin: number | null;
+  killParticipation: number | null;
+  lp: { value: number; games: number } | null;
+  radar: { id: string; label: string; score: number | null; games: number }[];
+  performance: { goldDiff15: Stat; goldShare: Stat; damageShare: Stat; damagePerMinDiff: Stat; soloDeaths: Stat; visionScore: Stat };
+}
+export interface Overview {
+  queues: { queueId: number; label: string; ranked: boolean; rank: { tier: string; division: string; lp: number; wins: number; losses: number } | null; games: number; wins: number }[];
+  selected: number | null;
+  role: string | null;
+  games: number;
+  lpColumn: boolean;
+  rows: OverviewRow[];
+  axes: { id: string; label: string }[];
+  lpTrack: { queue: "RANKED_SOLO_5x5" | "RANKED_FLEX_SR" | null; history: RankPoint[] };
+  lastSyncedAt: string | null;
+}
+
 export interface MatchList {
   total: number;
   matches: MatchRow[];
@@ -538,6 +566,7 @@ export const api = {
   clearHistory: () => request<{ ok: true }>("/history", { method: "DELETE" }),
   improve: (champion?: string) => request<Improve>(`/improve${champion ? `?champion=${encodeURIComponent(champion)}` : ""}`),
   rank: () => request<RankResponse>("/rank"),
+  overview: (queue?: number) => request<Overview>(`/overview${queue ? `?queue=${queue}` : ""}`),
   challenges: () => request<ChallengesResponse>("/challenges"),
   acceptChallenge: (metric: string, kind: "next5" | "week") =>
     request<{ challenge: Challenge }>("/challenges", { method: "POST", body: JSON.stringify({ metric, kind }) }),
