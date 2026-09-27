@@ -96,7 +96,10 @@ test("in game: both teams with items, and your build from your history", async (
   await expect(next).toContainText("Morellonomicon");
   await expect(next).toContainText("Zed and Aatrox heal with lifesteal: applies Grievous Wounds");
   await expect(next.getByLabel("Components").getByRole("img")).toHaveCount(2);
-  await expect(next).toContainText("You need 2950 more gold in total. Your 1000 gold buys: Blasting Wand (850).");
+  await expect(next).toContainText("You need 2950 more gold in total.");
+  // What the 1000 gold buys now is in the shopping plan above (not repeated in the item card).
+  await expect(board.getByRole("region", { name: "Shopping plan" })).toContainText("Blasting Wand");
+  await expect(next).not.toContainText("gold buys");
   await expect(board).toContainText("Your history on Ahri (12 games)");
   // The Coach's Now card sits above the section, in its own voice.
   await expect(board.getByRole("region", { name: "Now" })).toBeVisible();
@@ -167,6 +170,12 @@ test("in game with the site connected: Items follows the site's build engine", a
   await expect(next).toContainText("Rabadon's Deathcap");
   await expect(next).toContainText("Ahri's Q, W, E and R scale with ability power");
   await expect(board.getByRole("region", { name: "Next suggested item" })).not.toContainText("Morellonomicon"); // the local rules no longer choose
+  // What your gold buys now toward it, and when the items arrive at your pace.
+  const shop = board.getByRole("region", { name: "Shopping plan" });
+  await expect(shop).toContainText("Buy now");
+  await expect(shop.getByRole("list", { name: "When your items arrive" })).toContainText("Rabadon's Deathcap");
+  await expect(shop).toContainText(/gold per minute/);
+  await page.screenshot({ path: "test-results/board-buynow.png", fullPage: true });
   // Only champions, item ids and kill/death counts go to the site.
   const sent = await page.evaluate(() => (window as unknown as { __items: Record<string, unknown> }).__items);
   expect(sent).toMatchObject({ me: "Ahri", mine: "3020.6655", opening: false });

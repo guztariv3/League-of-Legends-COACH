@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { isAdjustment, liveCoach, pickNow, SLOT_KEY, usualMaxOrder, type CoachDecision, type EngineItems, type LiveCoach, type Slot } from "@coach/coach";
-import { parseCatalog, type Catalog, type Suggestion } from "@coach/itemization";
+import { parseCatalog, type Catalog, type PurchasePlan, type Suggestion } from "@coach/itemization";
 import type { GameState } from "@coach/live";
 import { CoachCard } from "@coach/ui";
 import { sendOverlay } from "./bridge";
@@ -91,6 +91,7 @@ function Reasons({ s }: { s: Suggestion }) {
 
 /** Recipe with the pieces you already have ticked, and what your gold buys right now. */
 function HowToBuy({ s, gold, art }: { s: Suggestion; gold: number | null; art: Art }) {
+  // With a shopping plan on screen, `gold` is null here: the plan already says what it buys.
   const { steps, remaining, affordableNow } = s.path;
   return (
     <div className="howto">
@@ -115,6 +116,48 @@ function HowToBuy({ s, gold, art }: { s: Suggestion; gold: number | null; art: A
   );
 }
 
+const clock = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;
+
+/**
+ * What your gold buys now, whether a little more gold is worth waiting for, and when the next
+ * items arrive at the pace you are earning. Teaches the why: a big item you can't finish yet
+ * is bought piece by piece, and a recall at the right amount of gold buys a bigger piece.
+ */
+function BuyNow({ p, time, art }: { p: PurchasePlan; time: number; art: Art }) {
+  return (
+    <section className="buynow" aria-label="Shopping plan">
+      <div className="label">Buy now</div>
+      {p.now ? (
+        <>
+          <div className="recipe">{p.now.buys.map((b, i) => <ItemArt key={`${b.id}-${i}`} id={b.id} name={b.name} size={32} art={art} />)}</div>
+          <div className="next-name">{p.now.buys.map((b) => b.name).join(" + ")}</div>
+          <p className="quiet">
+            {p.now.spent} of your {p.now.spent + p.now.leftover} gold
+            {p.now.completes.length > 0 ? ` · completes ${p.now.completes.join(" and ")}.` : ` · toward ${p.now.toward}.`}
+          </p>
+        </>
+      ) : <p className="quiet">Your gold doesn't buy a piece of your next item yet.</p>}
+      {p.wait && (
+        <p className="buynow-wait">
+          Worth waiting: {p.wait.extra} more gold{p.wait.seconds !== null ? ` (about ${p.wait.seconds} s at your pace)` : ""} buys {p.wait.buys.map((b) => b.name).join(" + ")} instead — more of the item's stats for the same trip to base.
+        </p>
+      )}
+      {p.milestones.length > 0 && (
+        <ul className="milestones" aria-label="When your items arrive">
+          {p.milestones.slice(0, 3).map((m, i) => (
+            <li key={m.id}>
+              <ItemArt id={m.id} name={m.name} size={20} art={art} />
+              <span>{i === 0 ? "Next" : i === 1 ? "Then" : "After"}: <b>{m.name}</b></span>
+              <span className="quiet">{m.at === null ? `${m.remaining} gold to go` : m.at <= time + 1 ? "now" : `around ${clock(m.at)}`}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {p.pace !== null && <p className="quiet small">At your pace of about {Math.round(p.pace)} gold per minute: the gold and items you hold, over the minutes played. Consumables and sold items aren't counted, so it's a lower bound.</p>}
+    </section>
+  );
+}
+
 function ItemsTab({ state, coach, build, art, connected, demo, hasCatalog }: {
   state: GameState; coach: LiveCoach; build: PersonalBuild | null | "loading"; art: Art; connected: boolean; demo: boolean; hasCatalog: boolean;
 }) {
@@ -134,6 +177,7 @@ function ItemsTab({ state, coach, build, art, connected, demo, hasCatalog }: {
           {coach.starter.alternatives.length > 0 && <p className="quiet">Also fine: {coach.starter.alternatives.map((a) => a.name).join(", ")}.</p>}
         </section>
       )}
+      {coach.purchase && <BuyNow p={coach.purchase} time={state.time} art={art} />}
       <p className="quiet enemy-line">
         Enemy damage: {Math.round(s.enemy.magicShare * 100)}% magic · {100 - Math.round(s.enemy.magicShare * 100)}% physical
         {s.enemy.healers.length > 0 && ` · healing: ${s.enemy.healers.join(", ")}`}
@@ -149,7 +193,7 @@ function ItemsTab({ state, coach, build, art, connected, demo, hasCatalog }: {
             </div>
           </div>
           <Reasons s={s.next} />
-          <HowToBuy s={s.next} gold={state.gold} art={art} />
+          <HowToBuy s={s.next} gold={coach.purchase ? null : state.gold} art={art} />
         </section>
       ) : (
         <p className="quiet">{s.note}</p>

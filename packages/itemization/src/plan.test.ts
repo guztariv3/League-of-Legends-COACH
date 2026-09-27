@@ -1,0 +1,89 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+import { parseCatalog } from "./catalog.js";
+import { goldPace, planPurchases, STARTING_GOLD } from "./plan.js";
+
+// The real patch data (the same snapshot the build engine tests use).
+const read = (f: string) => JSON.parse(readFileSync(fileURLToPath(new URL(`../../knowledge/fixtures/game-data/${f}`, import.meta.url)), "utf8"));
+const catalog = parseCatalog(read("ddragon-item.json"), read("ddragon-champion-full.json"));
+const item = (id: number) => catalog.items.get(id)!;
+const MORELLO = 3165, WAND = 1026, ZHONYA = 3157, ROD = 1058;
+/** Every piece in an item's recipe, read from the patch data. */
+const recipe = (id: number, out = new Set<number>()): Set<number> => { out.add(id); for (const c of item(id).from) recipe(c, out); return out; };
+const plan = (targets: number[], gold: number | null, inventory: number[] = [], time = 900, itemGold = 0) =>
+  planPurchases({ targets: targets.map(item), inventory, gold, time, itemGold, catalog });
+
+describe("what to buy now", () => {
+  it("follows the recipe, never spends more than you have, and spends as much as it usefully can", () => {
+    for (const gold of [300, 450, 900, 1250, 1700, 2100, 2600]) {
+      const p = plan([MORELLO], gold);
+      const ids = recipe(MORELLO);
+      expect(p.now?.spent ?? 0, `${gold}`).toBeLessThanOrEqual(gold);
+      for (const b of p.now?.buys ?? []) expect(ids.has(b.id), `${gold}: ${b.name}`).toBe(true);
+      // No leftover big enough for another missing piece of the recipe.
+      const cheapestLeft = Math.min(...[...recipe(MORELLO)].filter((id) => item(id).from.length === 0).map((id) => item(id).gold));
+      if (p.now && p.now.completes.length === 0) expect(p.now.leftover, `${gold}`).toBeLessThan(cheapestLeft + 1);
+    }
+  });
+
+  it("with 1700 gold toward Morellonomicon it buys two bigger pieces, not four small ones", () => {
+    const p = plan([MORELLO], 1700)!;
+    expect(p.now!.spent).toBeGreaterThanOrEqual(1600);
+    expect(p.now!.buys.length).toBeLessThanOrEqual(2);
+  });
+
+  it("counts the pieces you hold: they lower the price and are not bought again", () => {
+    const withWand = plan([MORELLO], 5000, [WAND]);
+    expect(withWand.now!.completes).toEqual([item(MORELLO).name]);
+    expect(withWand.now!.buys[0]!.gold).toBe(item(MORELLO).gold - item(WAND).gold);
+  });
+
+  it("finishes the first item and spends the rest on the next one", () => {
+    const p = plan([MORELLO, ZHONYA], item(MORELLO).gold + 1300);
+    expect(p.now!.completes).toEqual([item(MORELLO).name]);
+    expect(p.now!.buys.some((b) => b.id === ROD)).toBe(true);
+    expect(p.now!.toward).toBe(item(MORELLO).name);
+  });
+});
+
+describe("waiting for a bit more gold", () => {
+  it("says so when a little more gold buys clearly more", () => {
+    // Toward Zhonya's: 1150 gold buys a smaller piece; a little more buys Needlessly Large Rod.
+    const p = plan([ZHONYA], 1150, [], 900, 2000);
+    expect(p.now!.spent).toBeLessThanOrEqual(1150);
+    expect(p.wait).not.toBeNull();
+    expect(p.wait!.extra).toBeLessThanOrEqual(450);
+    expect(p.wait!.buys.reduce((s, b) => s + b.gold, 0) - p.now!.spent).toBeGreaterThanOrEqual(300);
+    expect(p.wait!.seconds).toBeGreaterThan(0);
+  });
+
+  it("stays quiet when waiting would not change much", () => {
+    const p = plan([MORELLO], item(MORELLO).gold);
+    expect(p.wait).toBeNull();
+  });
+});
+
+describe("gold pace and when items arrive", () => {
+  it("is unknown in the first minutes, then gold held minus the starting gold over the minutes of income", () => {
+    expect(goldPace(120, 600, 0)).toBeNull();
+    const pace = goldPace(65 + 600, 300, 3200 + STARTING_GOLD)!; // 10 minutes of income
+    expect(pace).toBeCloseTo(350, 0);
+  });
+
+  it("puts the items in order, each later than the one before, at the current pace", () => {
+    const p = plan([MORELLO, ZHONYA], 400, [], 65 + 600, 3500 + STARTING_GOLD - 400);
+    expect(p.pace).toBeGreaterThan(0);
+    expect(p.milestones.map((m) => m.id)).toEqual([MORELLO, ZHONYA]);
+    expect(p.milestones[0]!.at!).toBeGreaterThan(665);
+    expect(p.milestones[1]!.at!).toBeGreaterThan(p.milestones[0]!.at!);
+    // Morellonomicon: its full price minus the 400 you hold, at 350 gold per minute.
+    expect(p.milestones[0]!.at! - 665).toBeCloseTo(((item(MORELLO).gold - 400) / p.pace!) * 60, 0);
+  });
+
+  it("gives no times without a pace, and no purchase without gold", () => {
+    const p = plan([MORELLO], null, [], 30, 0);
+    expect(p.now).toBeNull();
+    expect(p.milestones[0]!.at).toBeNull();
+  });
+});
