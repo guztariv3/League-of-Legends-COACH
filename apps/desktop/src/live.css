@@ -108,7 +108,7 @@ h3 { font-size: 12px; margin-top: 10px; }
 .history .item { width: 20px; height: 20px; }
 
 /* Coach card ("Now") */
-.coach-card { background: var(--surface-2); border: 1px solid var(--border-strong); border-left: 3px solid var(--accent); border-radius: var(--radius-m); padding: 10px; margin-bottom: 6px; display: flex; flex-direction: column; gap: 4px; }
+.coach-card { background: var(--surface-2); border: 1px solid var(--border-strong); border-left: 3px solid var(--text-muted); border-radius: var(--radius-m); padding: 10px; margin-bottom: 6px; display: flex; flex-direction: column; gap: 4px; }
 .coach-card-adjust { border-left-color: var(--cta); }
 .coach-card-label { font-size: 11px; text-transform: uppercase; color: var(--accent); font-weight: 700; }
 .coach-card-adjust .coach-card-label { color: var(--cta); }

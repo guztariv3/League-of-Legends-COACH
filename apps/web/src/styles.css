@@ -182,7 +182,7 @@ input:focus, select:focus { outline: none; border-color: var(--accent); }
 }
 
 /* ------------------------------------------------------------------ insights */
-.insight { border-left: 3px solid var(--accent); padding: 6px 0 6px 14px; }
+.insight { border-left: 3px solid var(--border-strong); padding: 6px 0 6px 14px; }
 .insight-title { font-weight: 700; margin: 0 0 4px; }
 .insight-detail { color: var(--text-secondary); margin: 0; font-size: 13px; }
 details.layer summary { cursor: pointer; color: var(--text-muted); font-size: 12px; margin-top: 8px; }
@@ -378,7 +378,7 @@ td .loadout { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
 .recent-champ .loading-art { width: 88px; height: 88px; aspect-ratio: 1; object-position: center 12%; border: 3px solid var(--accent); border-radius: 50%; }
 .recent-champ .loading-art-fallback { width: 88px; height: 88px; aspect-ratio: 1; border: 3px solid var(--accent); border-radius: 50%; font-size: 1.4rem; }
 .recent-champ-name { font-weight: 700; color: var(--text-primary); }
-.recent-champ-pct { font-family: var(--font-numeric); font-size: 20px; font-weight: 700; color: var(--accent); }
+.recent-champ-pct { font-family: var(--font-numeric); font-size: 20px; font-weight: 700; color: var(--text-primary); }
 @media (max-width: 640px) { .recent-champs { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; } }
 
 /* ------------------------------------------------------------------ desktop pairing code */
@@ -399,7 +399,7 @@ td .loadout { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
 .legal-footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 11px; }
 .legal-footer nav { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 12px; }
 .legal-footer a { color: var(--text-secondary); }
-.legal-footer p { margin: 0 0 6px; max-width: 90ch; }
+.legal-footer p { margin: 0 0 6px; max-width: 78ch; }
 @media (max-width: 640px) {
   .info-hero { flex-direction: column; align-items: flex-start; }
   .info-hero-avatar { width: 64px; height: 64px; }
@@ -519,3 +519,5 @@ td .loadout { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
 .champ-link:hover { text-decoration: none; }
 .champ-link:hover .match-title { color: var(--accent); }
 .champ-link .gi { border: 2px solid var(--accent); border-radius: 50%; }
+/* Prose stays readable: no line runs past ~75 characters, even in wide panels. */
+.card p, .insight p, .notice .tile-note, .page-sub { max-width: 75ch; }
