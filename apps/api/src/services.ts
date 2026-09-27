@@ -1,3 +1,5 @@
+import type { MatchAnalysis } from "@coach/analysis";
+import { playerMemory, type MemoryInput } from "@coach/coach";
 import { generateInsights, type GoalMetric, GOAL_METRICS, type InsightOptions } from "@coach/insights";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -9,13 +11,15 @@ export const MemoryCategories = z.object({
   focus: z.boolean().default(true),
   correction: z.boolean().default(true),
   note: z.boolean().default(true),
+  /** Patterns read from the player's own games (recurring mistakes, strengths, playstyle), phase 5. */
+  patterns: z.boolean().default(true),
 });
 
 export const Preferences = z.object({
   level: z.enum(["beginner", "intermediate", "advanced", "expert"]).default("intermediate"),
   language: z.enum(["es", "en"]).default("en"),
   /** Which Coach memory categories are used and recorded (brief §48). */
-  memory: MemoryCategories.default({ focus: true, correction: true, note: true }),
+  memory: MemoryCategories.default({ focus: true, correction: true, note: true, patterns: true }),
 });
 export type Preferences = z.infer<typeof Preferences>;
 
@@ -40,6 +44,13 @@ export function makeServices(db: Db, source: MatchSource) {
       focus: focusRef && focusRef in GOAL_METRICS ? (focusRef as GoalMetric) : null,
       dismissed: prefs.memory.correction ? memory.filter((m) => m.category === "correction" && m.ref).map((m) => m.ref!) : [],
     };
+  };
+
+  /** Recurring patterns and playstyle from the player's games (phase 5); null when turned off. */
+  const memoryFor = async (userId: string, ctx: { champion?: string | null; position?: string | null; reference?: MemoryInput["reference"]; analyses?: MatchAnalysis[] } = {}) => {
+    if (!(await prefsFor(userId)).memory.patterns) return null;
+    const history = ctx.analyses ?? (await profileAnalyses(userId)).analyses;
+    return playerMemory({ history, champion: ctx.champion ?? null, position: ctx.position ?? null, reference: ctx.reference ?? null });
   };
 
   const insightsFor = async (userId: string, maxVisible = 3) => {
@@ -67,7 +78,7 @@ export function makeServices(db: Db, source: MatchSource) {
     }
   };
 
-  return { prefsFor, profileAnalyses, insightOptions, insightsFor, activeGoals, logDecision };
+  return { prefsFor, profileAnalyses, insightOptions, insightsFor, memoryFor, activeGoals, logDecision };
 }
 
 export type Services = ReturnType<typeof makeServices>;

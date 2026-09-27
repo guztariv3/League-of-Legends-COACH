@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router";
-import { api, type Dimension, type MemoryCategory, type MemoryItem } from "../api";
+import { api, type Dimension, type MemoryCategory, type MemoryItem, type PlayerMemory } from "../api";
 import { Goals } from "../components/Goals";
 import { DecisionHistory, EvolutionSection } from "../components/Evolution";
 import { ErrorNotice, Loading, modeLabel, pct, roleLabel } from "../components/ui";
@@ -22,7 +22,7 @@ const stateLabel = { ahead: "Ahead at 15:00", even: "Even at 15:00", behind: "Be
 export function CoachProfile() {
   const [version, setVersion] = useState(0);
   const bump = () => setVersion((v) => v + 1);
-  const profile = useLoad(() => api.profile(), []);
+  const profile = useLoad(() => api.profile(), [version]);
   const goals = useLoad(() => api.goals(), [version]);
   const { hash } = useLocation();
 
@@ -74,6 +74,8 @@ export function CoachProfile() {
         </section>
       ))}
 
+      {p.memory && (p.memory.patterns.length > 0 || p.memory.style) && <PatternsCard memory={p.memory} />}
+
       {p.gameState.some((b) => b.games > 0) && (
         <section className="card stack dimension" aria-labelledby="h-state" id="state">
           <h2 id="h-state">By game state</h2>
@@ -102,6 +104,41 @@ export function CoachProfile() {
 
       <CoachMemory onChange={bump} metrics={goals.data?.metrics ?? []} />
     </div>
+  );
+}
+
+const STYLE_LABEL = { aggressive: "You look for fights", balanced: "Balanced", safe: "You play it safe" } as const;
+
+/** What keeps happening in your games (phase 5): read from your games each time, never guessed. */
+function PatternsCard({ memory }: { memory: PlayerMemory }) {
+  // Early deaths and lost leads over all games are already the Coach's insights above: not repeated.
+  const patterns = memory.patterns.filter((m) => !(m.scope === "all" && (m.id === "early-deaths" || m.id === "lead-lost")));
+  if (!patterns.length && !memory.style) return null;
+  return (
+    <section className="card stack" aria-labelledby="h-patterns" id="patterns">
+      <h2 id="h-patterns">What keeps happening in your games</h2>
+      <p className="tile-note" style={{ margin: 0 }}>
+        The Coach uses these to personalise its advice when several options are valid. They never change a call that is right for the game.
+      </p>
+      {memory.style && (
+        <div className="tile stack" style={{ gap: 4 }}>
+          <span className="tile-label">Playstyle</span>
+          <strong>{STYLE_LABEL[memory.style.style]}</strong>
+          <span className="tile-note">{memory.style.why}</span>
+        </div>
+      )}
+      {patterns.length > 0 && (
+        <ul className="stack" style={{ listStyle: "none", margin: 0, padding: 0, gap: 6 }}>
+          {patterns.map((m) => (
+            <li key={m.id} className="tile stack" style={{ gap: 4 }}>
+              <span className={`badge ${m.kind === "strength" ? "badge-win" : ""}`} style={{ alignSelf: "flex-start" }}>{m.kind === "strength" ? "Strength" : "To work on"}</span>
+              <strong>{m.text}</strong>
+              <span className="tile-note">{m.why}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -187,6 +224,20 @@ function CoachMemory({ onChange, metrics }: { onChange: () => void; metrics: { i
       <details className="layer">
         <summary>Control what the Coach remembers</summary>
         <div className="stack" style={{ marginTop: 8 }}>
+          <div className="row">
+            <label className="toggle">
+              <input
+                type="checkbox"
+                checked={categories.patterns}
+                onChange={async (e) => {
+                  await api.savePreferences({ memory: { ...categories, patterns: e.target.checked } });
+                  await refresh();
+                  reload();
+                }}
+              />
+              Patterns from my games (playstyle, recurring mistakes and strengths)
+            </label>
+          </div>
           {(Object.keys(categoryLabel) as MemoryCategory[]).map((cat) => (
             <div key={cat} className="row">
               <label className="toggle">

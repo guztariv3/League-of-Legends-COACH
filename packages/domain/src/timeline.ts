@@ -85,3 +85,19 @@ export function csDiffAt(timeline: RawTimeline, meId: number, oppId: number, min
   const b = frame?.participantFrames[String(oppId)];
   return a && b ? a.minionsKilled + a.jungleMinionsKilled - (b.minionsKilled + b.jungleMinionsKilled) : undefined;
 }
+
+/** Purchases before this second are the starting items, not a back. */
+export const FIRST_BACK_AFTER_SEC = 150;
+
+/**
+ * The first trip back to base: the first purchase after the starting items, with the gold the
+ * player held at the last timeline frame before it (frames are one minute apart, so it is the
+ * gold "in the minute before", a slight underestimate). Null without purchases or gold frames.
+ */
+export function firstBackOf(timeline: RawTimeline, participantId: number): { atSec: number; gold: number } | null {
+  const buy = (purchasesOf(timeline, participantId) ?? []).find((p) => p.atSec >= FIRST_BACK_AFTER_SEC);
+  if (!buy) return null;
+  const frame = [...timeline.info.frames].reverse().find((f) => f.timestamp <= buy.atSec * 1000);
+  const gold = frame?.participantFrames[String(participantId)]?.currentGold;
+  return gold === undefined ? null : { atSec: buy.atSec, gold };
+}

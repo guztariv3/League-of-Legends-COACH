@@ -237,3 +237,8 @@ body.overlay-body { background: transparent; }
 .coach-card-alt b { color: var(--text-primary); }
 .coach-card-more summary { font-size: 11px; color: var(--accent); cursor: pointer; }
 .coach-card-more ul { margin: 4px 0 0; padding-left: 16px; font-size: 12px; color: var(--text-secondary); }
+
+/* Phase 5: what keeps happening in the player's games (folded) and the style note on a close call. */
+.from-games { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; }
+.from-games summary { cursor: pointer; }
+.style-note { margin: 4px 0 0; }

@@ -39,6 +39,11 @@ describe("profile", () => {
     expect(body.profiles.length).toBeGreaterThan(0);
     expect(body.gameState.map((b: any) => b.state)).toEqual(["ahead", "even", "behind"]);
     expect(JSON.stringify(body)).not.toMatch(/"score"/);
+    // Phase 5: playstyle and recurring patterns, each with its numbers; the player can turn them off.
+    expect(body.memory.style.why).toMatch(/kill participation/);
+    for (const p of body.memory.patterns) expect(p.games).toBeGreaterThanOrEqual(5);
+    await call("/preferences", { method: "PUT", cookie, body: JSON.stringify({ memory: { patterns: false } }) });
+    expect((await call("/profile", { cookie })).body.memory).toBeNull();
   }, 60_000);
 });
 

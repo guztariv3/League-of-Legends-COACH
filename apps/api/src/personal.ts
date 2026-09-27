@@ -31,7 +31,9 @@ export function personalRoutes({ db, knowledge, services, wiki }: { db: Db; sour
 
   r.get("/profile", async (c) => {
     const { analyses } = await services.profileAnalyses(c.get("userId"));
-    return c.json({ profiles: buildProfile(analyses), gameState: gameStateSplit(analyses) });
+    // Recurring patterns and playstyle over all games (null when the player turned them off).
+    const memory = await services.memoryFor(c.get("userId"), { analyses });
+    return c.json({ profiles: buildProfile(analyses), gameState: gameStateSplit(analyses), memory });
   });
 
   // ------------------------------------------------------------ goals

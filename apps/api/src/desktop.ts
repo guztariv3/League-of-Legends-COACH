@@ -1,7 +1,7 @@
 import { randomBytes, randomInt } from "node:crypto";
 import { GAME_DATA_ATTRIBUTION, type GameFactsSource, type KnowledgeRegistry } from "@coach/knowledge";
 import { recommendBuild, recommendSetup, teamNeeds } from "@coach/build";
-import { championPool } from "@coach/coach";
+import { championPool, styleNote } from "@coach/coach";
 import { patchFromVersion } from "@coach/domain";
 import { challengeTitle, evaluateChallenge, type ChallengeKind, type GoalMetric } from "@coach/insights";
 import { and, asc, desc, eq, gt, inArray, isNull } from "drizzle-orm";
@@ -192,12 +192,31 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
     const setup = facts && myKit ? recommendSetup({ me: myKit, enemies: enemyInput, runes: facts.runes, spells: facts.spells, position: q.data.position ?? null }) : null;
     // What Master+ players do with this champion this patch (phase 4): evidence beside the engine, never the decision.
     const master = facts ? await championStats(db, me, q.data.position ?? null, patchFromVersion(facts.version)) : null;
+    // What keeps happening in the player's own games (phase 5): personalises, never changes the call.
+    const stats = master && facts ? statsEvidence(master, facts, { build: engine, setup, opponent }) : null;
+    const memory = await deps.services.memoryFor(device.userId, {
+      champion: me, position: q.data.position ?? null, analyses,
+      reference: stats?.firstItem?.avgMinute != null ? { itemId: stats.firstItem.id, name: stats.firstItem.name, avgMinute: stats.firstItem.avgMinute } : null,
+    });
+    const itemFacts = new Map((facts?.items ?? []).map((i) => [i.id, i]));
+    const defense = (id: number) => {
+      const st = itemFacts.get(id)?.stats;
+      return (st?.health?.flat ?? 0) / 10 + (st?.armor?.flat ?? 0) + (st?.magicResistance?.flat ?? 0);
+    };
+    const style = memory && engine?.first && engine.alternative
+      ? styleNote(memory.style, { name: engine.first.name, defense: defense(engine.first.id) }, { name: engine.alternative.name, defense: defense(engine.alternative.id) })
+      : null;
+    // A recurring mistake with this champion is the most useful "avoid" line: it is about this player.
+    const own = memory?.patterns.find((p) => p.kind === "mistake" && p.scope === "champion");
+    const gamePlan = own ? { ...plan, avoid: { text: own.text, basis: "observation" as const, why: own.why } } : plan;
     const build = facts && myKit && engine
       ? {
           ...engine,
           // Runes and summoner spells, decided the same way (packages/build/src/setup.ts).
           setup,
-          stats: master ? statsEvidence(master, facts, { build: engine, setup, opponent }) : null,
+          stats,
+          // On a close call, which option is nearer to how the player plays (both are valid).
+          styleNote: style,
           // What the team needs from you, from your allies' kits (packages/build/src/team.ts).
           team: teamNeeds(myKit, known(q.data.allies).map((a) => kits.get(a)).filter((k) => k !== undefined)),
           version: facts.version,
@@ -205,7 +224,7 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
           attribution: GAME_DATA_ATTRIBUTION,
         }
       : null;
-    return c.json({ champion: me, plan, keyPoints: draft.keyPoints, limits: draft.limits, build });
+    return c.json({ champion: me, plan: gamePlan, keyPoints: draft.keyPoints, limits: draft.limits, build, memory });
   });
 
   /**

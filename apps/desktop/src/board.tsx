@@ -79,6 +79,33 @@ export interface PlanResponse {
   plan: Record<"primaryObjective" | "secondaryObjective" | "biggestThreat" | "yourPowerSpike" | "enemyPowerSpike" | "avoid" | "lookFor", PlanLine | null> & {
     loadout: { games: number; keystone: { name: string } | null; spells: { names: string[] } | null; maxOrder: string[] | null; firstItem: { name: string } | null };
   };
+  /** Recurring patterns and playstyle from the player's games (phase 5); null when turned off. */
+  memory?: {
+    patterns: { id: string; kind: "mistake" | "strength"; scope: "champion" | "role" | "all"; text: string; why: string; games: number; hits: number }[];
+    style: { style: "aggressive" | "balanced" | "safe"; why: string; games: number } | null;
+  } | null;
+}
+
+const STYLE_LABEL = { aggressive: "You look for fights", balanced: "Balanced", safe: "You play it safe" } as const;
+
+/** What keeps happening in the player's games: folded, so the plan stays short. */
+function FromYourGames({ memory, avoid }: { memory: NonNullable<PlanResponse["memory"]>; avoid: string | null }) {
+  // The recurring mistake already shown as "What to avoid" isn't repeated.
+  const patterns = memory.patterns.filter((p) => p.text !== avoid);
+  if (!patterns.length && !memory.style) return null;
+  return (
+    <details className="from-games" aria-label="From your games">
+      <summary className="bar">
+        <span className="label">From your games</span>
+        {memory.style && <span className="quiet small">{STYLE_LABEL[memory.style.style]}</span>}
+      </summary>
+      <ul className="reasons">
+        {memory.style && <li>{memory.style.why}</li>}
+        {patterns.map((p) => <li key={p.id}><strong>{p.kind === "strength" ? "Strength: " : ""}{p.text}.</strong> {p.why}</li>)}
+      </ul>
+      <p className="quiet small">Read from your own games. It shapes how the coach explains things; it never changes a call that is right for this game.</p>
+    </details>
+  );
 }
 
 export interface PersonalBuild { champion: string; games: number; wins: number; items: BuildItem[]; note: string | null; skillOrders?: number[][] }
@@ -356,6 +383,7 @@ export function PlanTab({ plan, connected, live = null }: { plan: PlanResponse |
           return line ? [<div key={key} className="plan-row"><dt className="label">{label}</dt><dd><strong>{line.text}</strong><span className="quiet small"> {line.why}</span></dd></div>] : [];
         })}
       </dl>
+      {plan.memory && <FromYourGames memory={plan.memory} avoid={plan.plan.avoid?.text ?? null} />}
       {l.games > 0 && (
         <p className="quiet small">Your usual setup ({l.games} games): {[l.keystone?.name, l.spells?.names.join(" + "), l.maxOrder && `max ${l.maxOrder.join(" → ")}`, l.firstItem && `first item ${l.firstItem.name}`].filter(Boolean).join(" · ")}</p>
       )}
