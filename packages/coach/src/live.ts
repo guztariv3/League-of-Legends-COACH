@@ -36,7 +36,14 @@ export interface EngineItems {
   boots: EnginePick | null;
   situational: (EnginePick & { when: string })[];
   starter: { items: { id: number; name: string; gold: number }[]; why: string[] } | null;
+  /** Phase 3: how sure the next item is, its close runner-up, and the standard core it keeps or replaces. */
+  certainty?: "strong" | "preferred" | "close" | null;
+  alternative?: (EnginePick & { difference: string }) | null;
+  adaptation?: { standard: boolean; standardCore: { id: number; name: string }[]; note: string } | null;
 }
+
+/** The engine's certainty as a decision confidence (the words come from certaintyOf). */
+const ENGINE_CONFIDENCE = { strong: 0.85, preferred: 0.7, close: 0.5 } as const;
 
 /** The engine's answer in the live window's shape, with the purchase path from the catalog. */
 export function fromEngine(engine: EngineItems, local: Suggestions | null, catalog: Catalog, inventory: number[], gold: number | null): Suggestions {
@@ -127,7 +134,16 @@ export function liveCoach(input: LiveCoachInput): LiveCoach {
   // The next-item decision carries what the gold in your pocket buys toward it right now.
   const itemDecisions = (items ? fromItemSuggestions(items) : []).map((d) => d.kind === "item" && purchase?.now
     ? { ...d, evidence: [...d.evidence.filter((e) => e.label !== "You can buy now"), { label: "Buy now", value: `${purchase.now.buys.map((b) => b.name).join(" + ")} (${purchase.now.spent} gold)`, source: "this_game" as const }] }
-    : d);
+    : d)
+    // The engine says how sure it is, whether the standard core still holds, and which close option it weighed.
+    .map((d) => d.kind === "item" && engine?.first && d.ref === String(engine.first.id) && engine.certainty
+      ? {
+          ...d,
+          confidence: ENGINE_CONFIDENCE[engine.certainty],
+          reasons: engine.adaptation ? [engine.adaptation.note, ...d.reasons] : d.reasons,
+          alternatives: engine.alternative ? [{ label: engine.alternative.name, ref: String(engine.alternative.id), reason: engine.alternative.difference }] : d.alternatives,
+        }
+      : d);
   const situation = readSituation(state, gold, obj, purchase, catalog);
   const plan = situation && !opening ? situationDecisions(situation, { time: state.time, isDead: me.isDead, purchase }) : [];
   const decisions = [

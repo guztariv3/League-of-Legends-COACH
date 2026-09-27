@@ -22,6 +22,10 @@ export interface PreGameBuild {
     } | null;
     spells: { id: string; key: number; name: string; why: string }[];
   };
+  /** How sure the first item is, its close runner-up and the standard core it replaces (phase 3). */
+  certainty?: "strong" | "preferred" | "close" | null;
+  alternative?: (ItemPick & { difference: string }) | null;
+  adaptation?: { standard: boolean; standardCore: { id: number; name: string }[]; note: string } | null;
   /** What your team needs from you, from your allies' kits (packages/build/src/team.ts). */
   team?: { id: string; text: string; why: string }[];
   version: string;
@@ -34,6 +38,12 @@ const THREAT_LABEL: Record<string, string> = {
   tanks: "Tanky champions", attackSpeed: "Basic attacks", burst: "Burst damage",
 };
 const pct = (x: number) => `${Math.round(x * 100)}%`;
+/** How the certainty reads: never a number, never more sure than the scores allow. */
+export const CERTAINTY: Record<"strong" | "preferred" | "close", string> = {
+  strong: "Strong recommendation",
+  preferred: "Preferred option",
+  close: "Close call",
+};
 
 /** Starting items grouped: "Doran's Ring + 2 × Health Potion". */
 function starterLine(items: { id: number; name: string }[]) {
@@ -110,14 +120,24 @@ export function PreGameBuildView({ build, art }: { build: PreGameBuild; art: Art
 
       {first && (
         <div className="prebuild-block prebuild-first" aria-label="Recommended first item">
-          <div className="prebuild-title">Recommended first item</div>
+          <div className="prebuild-title">Recommended first item{build.certainty && <span className={`certainty c-${build.certainty}`}>{CERTAINTY[build.certainty]}</span>}</div>
           <div className="bar">
             <ItemArt id={first.id} name={first.name} size={36} art={art} />
             <strong>{first.name}</strong>
             <span className="quiet small">{first.gold} gold</span>
           </div>
-          <div className="prebuild-why">Why</div>
-          <ul className="reasons">{first.why.map((w) => <li key={w}>{w}</li>)}</ul>
+          {build.adaptation && <p className={`adapt${build.adaptation.standard ? " adapt-standard" : ""}`}>{build.adaptation.note}</p>}
+          <details className="rn-why">
+            <summary>Show reasoning</summary>
+            <ul className="reasons">{first.why.map((w) => <li key={w}>{w}</li>)}</ul>
+          </details>
+          {build.alternative && (
+            <div className="alt-line" aria-label="Alternative">
+              <span className="label">Alternative</span>
+              <ItemArt id={build.alternative.id} name={build.alternative.name} size={24} art={art} />
+              <span><strong>{build.alternative.name}</strong> <span className="quiet">{build.alternative.difference}</span></span>
+            </div>
+          )}
         </div>
       )}
 

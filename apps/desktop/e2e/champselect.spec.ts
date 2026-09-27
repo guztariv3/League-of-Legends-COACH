@@ -39,6 +39,9 @@ test("desktop: game plan during champion select", async ({ page }) => {
                 boots: { id: 3020, name: "Sorcerer's Shoes", gold: 1100, score: 0.9, why: ["Gives 12 magic penetration."] },
                 situational: [{ id: 3102, name: "Banshee's Veil", gold: 3000, score: 1, why: [], when: "Against the burst damage from Zed." }],
                 ruledOut: [{ id: 3143, name: "Randuin's Omen", why: "Its passive reduces damage from critical strikes, and no enemy relies on critical strikes." }],
+                certainty: "close",
+                alternative: { id: 3135, name: "Void Staff", gold: 3000, score: 1.35, why: [], difference: "Void Staff gives more of the stats your kit uses; Zhonya's Hourglass answers more of what the enemy team does." },
+                adaptation: { standard: false, standardCore: [{ id: 6655, name: "Luden's Companion" }], note: "Zhonya's Hourglass instead of the standard Luden's Companion: It has a stasis active (untargetable for a moment): Zed: deals its damage in short bursts." },
                 setup: {
                   runes: {
                     primaryTree: "Domination", keystone: { id: 8112, name: "Electrocute", why: "Hitting a champion with 3 separate attacks or abilities in 3s deals bonus adaptive damage. Fits: Ahri relies on abilities." },
@@ -84,10 +87,14 @@ test("desktop: game plan during champion select", async ({ page }) => {
   const build = select.getByRole("region", { name: "Build for this game" });
   await expect(build.getByText("2 × Health Potion")).toBeVisible();
   const first = build.getByLabel("Recommended first item");
-  await expect(first.getByText("Zhonya's Hourglass")).toBeVisible();
-  await expect(first.getByText("Why", { exact: true })).toBeVisible();
-  await expect(first.getByText(/stasis active .*Zed/)).toBeVisible();
-  await expect(build.getByText("Void Staff")).toBeVisible();
+  await expect(first.getByText("Zhonya's Hourglass", { exact: true })).toBeVisible();
+  // How sure it is, what it replaces from the standard core and why, and the close alternative.
+  await expect(first.getByText("Close call")).toBeVisible();
+  await expect(first.getByText(/instead of the standard Luden's Companion/)).toBeVisible();
+  await expect(first.getByLabel("Alternative")).toContainText("Void Staff gives more of the stats your kit uses");
+  await first.getByText("Show reasoning").click();
+  await expect(first.getByRole("listitem").filter({ hasText: /^It has a stasis active .*Zed/ })).toBeVisible();
+  await expect(build.getByText("Void Staff", { exact: true }).first()).toBeVisible();
   // Details are folded: the situational item shows its "when" once opened.
   await build.locator("summary").filter({ hasText: "Banshee's Veil" }).click();
   await expect(build.getByText("Against the burst damage from Zed.")).toBeVisible();

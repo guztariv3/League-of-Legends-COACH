@@ -18,6 +18,8 @@ export interface BuildInput {
   position?: string | null;
   /** Also suggest the starting items (default: when nothing is owned yet). */
   starter?: boolean;
+  /** Internal: this run computes the standard core (neutral enemy); it doesn't compute its own. */
+  baseline?: boolean;
 }
 
 export interface ItemPick { id: number; name: string; gold: number; score: number; why: string[] }
@@ -36,7 +38,24 @@ export interface BuildRecommendation {
   boots: ItemPick | null;
   situational: Situational[];
   ruledOut: { id: number; name: string; why: string }[];
+  /**
+   * How sure the first item is: "strong" when it clearly beats the next option, "preferred" when
+   * it is ahead, "close" when another item is almost as good (then `alternative` says which).
+   */
+  certainty: "strong" | "preferred" | "close" | null;
+  /** The runner-up for the first item, with what sets it apart; null when one choice is clear. */
+  alternative: (ItemPick & { difference: string }) | null;
+  /**
+   * The champion's standard core (its kit against a neutral enemy: even damage mix, no threats) against this game's: when they match,
+   * the enemy team gives no reason to change it; when they don't, `note` says what changed and why.
+   */
+  adaptation: { standard: boolean; standardCore: { id: number; name: string }[]; note: string } | null;
 }
+
+/** Score margin (share of the first item's score) above which the first item is a clear choice. */
+export const STRONG_MARGIN = 0.2;
+/** Below this margin the first two items are a close call. */
+export const CLOSE_MARGIN = 0.08;
 
 /** Every player starts a Summoner's Rift game with 500 gold. */
 export const STARTING_GOLD = 500;
@@ -162,6 +181,29 @@ function counterWithoutThreat(ip: ItemProfile, e: EnemyPicture): Counter | null 
   return relevant ? null : ip.counters[0]!;
 }
 
+const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+
+/** Why an item replaced the standard one, from this game: a threat it answers, the enemy's resists, or their damage type. */
+function changeReason(x: Scored, e: EnemyPicture): string | null {
+  const counter = x.why.find((w) => /^It /.test(w) && !/^It scores/.test(w) && !/^It increases critical/.test(w));
+  if (counter) return counter;
+  const pen = x.ip.stats.some((l) => /Penetration|lethality/.test(l.key));
+  const tanks = e.threats.tanks;
+  if (pen && tanks.weight >= RELEVANT) return `penetration is worth more against ${list(tanks.sources.slice(0, 3).map((s) => s.name))}, built to take hits.`;
+  return x.why.find((w) => /of the enemy damage is/.test(w)) ?? null;
+}
+
+/** What sets the runner-up apart from the first item, in one line: stats for the kit, or answers to the enemy. */
+function difference(alt: Scored, first: Scored): string {
+  const own = alt.why.find((w) => !first.why.includes(w) && !/^It scores/.test(w));
+  const counter = alt.why.find((w) => /^It /.test(w) && !/^It scores/.test(w) && !first.why.includes(w));
+  const a = alt.ip.item.name, f = first.ip.item.name;
+  const trim = (w: string) => w.replace(/\.$/, "");
+  if (alt.counterValue > first.counterValue + 0.05) return `${a} answers more of what the enemy team does${counter ? ` (${trim(counter)})` : ""}; ${f} gives more of the stats your kit uses.`;
+  if (alt.statValue > first.statValue + 0.05) return `${a} gives more of the stats your kit uses; ${f} answers more of what the enemy team does.`;
+  return own ? `${a}: ${own}` : `${a} is almost as good for this game.`;
+}
+
 const pick = (x: Scored): ItemPick => ({ id: x.ip.item.id, name: x.ip.item.name, gold: x.ip.item.gold, score: Math.round(x.score * 100) / 100, why: x.why });
 
 function starter(input: BuildInput, p: ChampionProfile, e: EnemyPicture, s: State, gold: Map<StatKey, number>): BuildRecommendation["starter"] {
@@ -222,7 +264,11 @@ function starter(input: BuildInput, p: ChampionProfile, e: EnemyPicture, s: Stat
 
 export function recommendBuild(input: BuildInput): BuildRecommendation {
   const p = championProfile(input.me);
-  const e = enemyPicture(input.enemies);
+  const seen = enemyPicture(input.enemies);
+  // The standard core is built against a neutral enemy: half physical, half magic, no threats.
+  const e: EnemyPicture = input.baseline
+    ? { ...seen, damage: { physical: 0.5, magic: 0.5, true: 0 }, threats: Object.fromEntries(Object.entries(seen.threats).map(([k, t]) => [k, { ...t, weight: 0, sources: [] }])) as unknown as EnemyPicture["threats"] }
+    : seen;
   const gold = statGoldValues(input.items);
   const owned = new Set(input.owned ?? []);
   const catalog = new Map(input.items.map((i) => [i.id, i]));
@@ -262,9 +308,12 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
   const picked = new Set<number>();
   const hasBoots = [...owned].some((id) => catalog.get(id)?.rank.includes("BOOTS"));
   let boots: Scored | null = null;
+  let runnerUp: Scored | null = null;
   for (let n = 0; n < 3; n++) {
-    const best = candidates(false)[0];
+    const pool = candidates(false);
+    const best = pool[0];
     if (!best) break;
+    if (n === 0) runnerUp = pool[1] ?? null;
     core.push(best);
     picked.add(best.ip.item.id);
     take(best.ip);
@@ -317,6 +366,34 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
   const first = core[0] ?? null;
   if (first && core[1]) first.why.push(`It scores ${Math.round(first.score * 100) / 100} for this game, against ${Math.round(core[1].score * 100) / 100} for ${core[1].ip.item.name}, the next best.`);
 
+  // Certainty: how far the first item is ahead of the best other choice for the same slot.
+  const margin = first && runnerUp && first.score > 0 ? (first.score - runnerUp.score) / first.score : first ? 1 : 0;
+  const certainty = !first ? null : margin >= STRONG_MARGIN ? "strong" : margin >= CLOSE_MARGIN ? "preferred" : "close";
+  const alternative = first && runnerUp && certainty === "close"
+    ? { ...pick(runnerUp), difference: difference(runnerUp, first) }
+    : null;
+
+  // The standard core: the same engine with the kit alone (no enemies, nothing owned).
+  let adaptation: BuildRecommendation["adaptation"] = null;
+  if (first && input.enemies.length > 0 && !input.baseline) {
+    // The same kit against a neutral enemy (even damage mix, no threats): what this champion
+    // builds when nothing in the enemy team calls for an answer.
+    const base = recommendBuild({ ...input, starter: false, baseline: true });
+    const standardCore = [base.first, ...base.next].filter((x): x is ItemPick => x !== null).map(({ id, name }) => ({ id, name }));
+    const coreNow = core.map((x) => x.ip.item.id);
+    const same = standardCore.length > 0 && standardCore[0]!.id === coreNow[0] && standardCore.every((x) => coreNow.includes(x.id));
+    const changedFirst = standardCore[0] && standardCore[0].id !== first.ip.item.id ? standardCore[0] : null;
+    adaptation = {
+      standard: same,
+      standardCore,
+      note: same
+        ? `Nothing in the enemy team changes ${p.name}'s standard core (${standardCore.map((x) => x.name).join(", ")}): continue with it.`
+        : changedFirst
+          ? `${first.ip.item.name} instead of the standard ${changedFirst.name}: ${lower(changeReason(first, e) ?? "it fits this enemy team better")}`
+          : `Same first item as the standard core; the later items change for this game.`,
+    };
+  }
+
   return {
     champion: p.name,
     kit: p.facts,
@@ -328,6 +405,9 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
     boots: boots ? pick(boots) : null,
     situational,
     ruledOut: [...ruledOut.values()].sort((a, b) => b.score - a.score).slice(0, 3).map(({ id, name, why }) => ({ id, name, why })),
+    certainty,
+    alternative,
+    adaptation,
   };
 }
 

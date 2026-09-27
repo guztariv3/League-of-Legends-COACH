@@ -47,6 +47,15 @@ export interface CoachDecision {
 export type DecisionInput = Omit<CoachDecision, "confidence" | "evidence" | "alternatives"> &
   Partial<Pick<CoachDecision, "evidence" | "alternatives">> & { confidence: number };
 
+/**
+ * How sure a recommendation is, in words (never shown as a number): a strong recommendation, a
+ * preferred option among viable ones, or an uncertain situation where the alternative matters.
+ */
+export type Certainty = "strong" | "preferred" | "uncertain";
+export function certaintyOf(d: Pick<CoachDecision, "confidence">): Certainty {
+  return d.confidence >= 0.8 ? "strong" : d.confidence >= 0.6 ? "preferred" : "uncertain";
+}
+
 /** Builds a decision, enforcing the contract: at least one reason and a confidence in 0..1. */
 export function decide(input: DecisionInput): CoachDecision {
   const reasons = input.reasons.map((r) => r.trim()).filter(Boolean);

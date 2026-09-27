@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { isAdjustment, liveCoach, pickNow, SLOT_KEY, usualMaxOrder, type CoachDecision, type EngineItems, type LiveCoach, type Slot } from "@coach/coach";
+import { certaintyOf, isAdjustment, liveCoach, pickNow, SLOT_KEY, usualMaxOrder, type CoachDecision, type EngineItems, type LiveCoach, type Slot } from "@coach/coach";
 import { parseCatalog, type Catalog, type PurchasePlan, type Suggestion } from "@coach/itemization";
 import type { GameState } from "@coach/live";
 import { CoachCard } from "@coach/ui";
@@ -434,7 +434,9 @@ export function Board({ state, art, catalog, build, connected, tab, demo = false
   const adjusted = now !== null && now.id === adjustedId;
   return (
     <section className="board" aria-label="Game">
-      {now && <CoachCard label="Now" headline={now.headline} reasons={now.reasons} basis={now.basis} adjustment={adjusted} art={<NowArt d={now} art={art} coach={coach} />} />}
+      {now && <CoachCard label="Now" headline={now.headline} reasons={now.reasons} basis={now.basis} adjustment={adjusted} art={<NowArt d={now} art={art} coach={coach} />}
+        certainty={certaintyOf(now)} alternative={certaintyOf(now) === "uncertain" ? now.alternatives[0] ?? null : null}
+        details={[...now.reasons.slice(1), ...now.evidence.map((e) => `${e.label}: ${e.value}`)]} />}
       <div role="tabpanel" aria-label={tab}>
         {tab === "items" && <ItemsTab state={state} coach={coach} build={build} art={art} connected={connected} demo={demo} hasCatalog={catalog !== null} />}
         {tab === "skills" && <SkillsTab state={state} coach={coach} history={history} connected={connected} />}

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseCatalog } from "@coach/itemization";
 import { AllGameData, emptyState, reduceState } from "@coach/live";
 import { championJson, itemJson } from "../../itemization/src/test-fixture.js";
-import { liveCoach, pickNow, type Slot } from "./index.js";
+import { certaintyOf, liveCoach, pickNow, type Slot } from "./index.js";
 
 const catalog = parseCatalog(itemJson, championJson);
 const QMAX: Slot[] = [1, 2, 3, 1, 1, 4, 1, 2, 1, 2, 4, 2, 2, 3, 3, 4, 3, 3];
@@ -65,6 +65,25 @@ describe("live coach", () => {
     const c = liveCoach({ state: { ...base, gold: 900 }, catalog, engine });
     expect(c.purchase?.now?.buys.map((b) => b.name)).toEqual(["Oblivion Orb"]);
     expect(c.decisions.find((d) => d.kind === "item")?.evidence.find((e) => e.label === "Buy now")?.value).toBe("Oblivion Orb (800 gold)");
+  });
+
+  it("carries the engine's certainty, its close alternative and the standard-core note (phase 3)", () => {
+    const engine = {
+      first: { id: 3165, name: "Morellonomicon", score: 1.4, why: ["It applies Grievous Wounds: Soraka: Q, W and R heal."] },
+      next: [], boots: null, situational: [], starter: null,
+      certainty: "close" as const,
+      alternative: { id: 3089, name: "Rabadon's Deathcap", score: 1.35, why: [], difference: "Rabadon's Deathcap gives more of the stats your kit uses." },
+      adaptation: { standard: false, standardCore: [{ id: 3089, name: "Rabadon's Deathcap" }], note: "Morellonomicon instead of the standard Rabadon's Deathcap: it applies Grievous Wounds." },
+    };
+    const c = liveCoach({ state: state(600, [{ itemID: 1026, price: 850 }], undefined, 7), catalog, engine });
+    const d = c.decisions.find((x) => x.kind === "item")!;
+    expect(certaintyOf(d)).toBe("uncertain");
+    expect(d.reasons[0]).toMatch(/instead of the standard Rabadon's Deathcap/);
+    expect(d.alternatives).toEqual([{ label: "Rabadon's Deathcap", ref: "3089", reason: "Rabadon's Deathcap gives more of the stats your kit uses." }]);
+    const strong = liveCoach({ state: state(600, [], undefined, 7), catalog, engine: { ...engine, certainty: "strong" as const, alternative: null, adaptation: { standard: true, standardCore: [], note: "Nothing in the enemy team changes Garen's standard core: continue with it." } } });
+    const s2 = strong.decisions.find((x) => x.kind === "item")!;
+    expect(certaintyOf(s2)).toBe("strong");
+    expect(s2.reasons[0]).toMatch(/continue with it/);
   });
 
   it("opens with the engine's starting items when it gives them", () => {
