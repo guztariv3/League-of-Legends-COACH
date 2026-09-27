@@ -35,6 +35,8 @@ export const LivePlayer = z.looseObject({
   level: z.number().default(1),
   position: z.string().optional(),
   isDead: z.boolean().optional(),
+  /** Seconds until a dead player respawns (0 when alive); public, shown on the scoreboard. */
+  respawnTimer: z.number().optional(),
   isBot: z.boolean().optional(),
   items: z.array(Item).default([]),
   scores: Scores.optional(),

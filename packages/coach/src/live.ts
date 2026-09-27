@@ -2,6 +2,7 @@ import { planPurchases, purchasePath, suggestItems, type PurchasePlan, suggestSt
 import { goldDifference, laneOpponent, objectives, type GameState, type GoldDifference, type Objectives } from "@coach/live";
 import { fromItemSuggestions } from "./adapters.js";
 import { decide, type CoachDecision } from "./decision.js";
+import { phaseDecisions } from "./phase.js";
 import { adviseSkill, type SkillReference, type Slot } from "./skills.js";
 import { readSituation, situationDecisions, type Situation } from "./situation.js";
 import { strategyFacts } from "./strategy.js";
@@ -147,7 +148,11 @@ export function liveCoach(input: LiveCoachInput): LiveCoach {
         }
       : d);
   const situation = readSituation(state, gold, obj, purchase, catalog);
-  const plan = situation && !opening ? situationDecisions(situation, { time: state.time, isDead: me.isDead, purchase }) : [];
+  const plan = [
+    ...(situation && !opening ? situationDecisions(situation, { time: state.time, isDead: me.isDead, purchase }) : []),
+    // Windows the game just opened: an enemy died, a level edge, long death timers (phase 6).
+    ...(!opening ? phaseDecisions({ state, turretsDown: obj ? obj.ally.turrets + obj.enemy.turrets : 0, purchase }) : []),
+  ];
   const decisions = [
     ...plan,
     ...(starter ? [starterDecision(starter)] : itemDecisions),

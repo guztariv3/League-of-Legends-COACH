@@ -116,3 +116,22 @@ Ya existe la base: el contrato de decisión (`packages/coach/src/decision.ts`) l
   - En la app de escritorio, el plan (Draft y pestaña Plan) añade el bloque plegado "From your games", sin repetir la línea de "avoid", y la nota de estilo junto a la alternativa.
   - En la web, la pestaña Coach añade la tarjeta "What keeps happening in your games". No repite lo que ya dicen los insights sobre todas las partidas.
 - **Privacidad:** hay un interruptor nuevo en "Control what the Coach remembers": "Patterns from my games". Apagado, ni la web ni la app usan patrones ni estilo.
+
+## Fase 6: detalles
+- **Qué se puede saber en partida:** la Live Client Data API da los niveles, los ítems, quién está muerto y cuánto le falta para reaparecer (`respawnTimer`, lo mismo que la tabla de puntuación), los eventos (torres, dragones, Barón) y el reloj. No da oleadas de súbditos, posiciones ni enfriamientos.
+- **Qué no se inventa:**
+  - Ningún consejo supone el estado de la oleada; los consejos de oleada salen solo en momentos que el juego sí informa (tu rival acaba de morir).
+  - No se siguen enfriamientos ni definitivas enemigas (regla del producto). El nivel 6 es público; tu propia R la da el juego.
+- **Ventanas** (`packages/coach/src/phase.ts`, nuevo tipo de decisión `moment`). Su prioridad está por debajo de la supervivencia y por encima del ítem y la habilidad, porque se cierran solas. Hay seis:
+  1. **Tu rival de línea está muerto** (8 s o más, fase de líneas): empuja la oleada. Después, según el caso:
+     - vuelve a base, si con el oro compras algo (dice qué);
+     - golpea la torre, si es antes del 14:00, porque las placas dan oro;
+     - o vuelve y reúnete con tu equipo con el tiempo ganado.
+  2. **Su jungla está muerto:** no puede venir un gank, así que es más seguro intercambiar o empujar.
+  3. **Nivel 6 primero:** si tú tienes la definitiva y tu rival no, es una ventana para intercambiar. Si es al revés, es un aviso: respeta su all-in hasta que llegues a 6.
+  4. **Nivel 2 primero:** antes del minuto 4, una ventana corta para intercambiar.
+  5. **Superioridad numérica** (dos o más enemigos muertos de diferencia): toma una torre o un objetivo con tu equipo antes de que reaparezcan. Da el temporizador más corto.
+  6. **Tiempos de muerte largos** (40 s o más, después de las líneas): quédate con tu equipo; una muerte cuesta un objetivo.
+
+  Todas llevan los segundos exactos y los niveles como evidencia. Nada sale estando muerto ni en una partida tranquila.
+- Se muestran en la tarjeta "Now" cuando son lo más urgente y en "Right now" de la pestaña Plan.

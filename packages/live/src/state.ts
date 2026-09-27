@@ -20,6 +20,8 @@ export interface PlayerState {
   assists: number;
   cs: number;
   isDead: boolean;
+  /** Seconds until respawn while dead (as the scoreboard shows); null when alive or not reported. */
+  respawn: number | null;
   /** Item ids currently held. */
   items: number[];
   /** Sum of item prices (from the snapshot or the knowledge bundle). */
@@ -95,6 +97,7 @@ function toPlayer(p: LivePlayer, ctx: StateContext): PlayerState {
     assists: p.scores?.assists ?? 0,
     cs: p.scores?.creepScore ?? 0,
     isDead: p.isDead ?? false,
+    respawn: p.isDead && p.respawnTimer !== undefined && p.respawnTimer > 0 ? p.respawnTimer : null,
     items,
     itemGold,
   };

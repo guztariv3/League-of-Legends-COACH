@@ -9,3 +9,4 @@ export * from "./postgame.js";
 export * from "./pools.js";
 export * from "./situation.js";
 export * from "./memory.js";
+export * from "./phase.js";
