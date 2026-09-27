@@ -230,6 +230,41 @@ export function createApp(deps: AppDeps) {
     return { deathsPerMin: mean(usable.map((a) => a.deathsPerMin)) || 0, kda: mean(usable.map((a) => a.kda)) || 0 };
   };
 
+  /**
+   * Averages over the last 20 analyzable games of the most played mode, each with how many
+   * games had the number (timeline-based ones need a timeline). Plus games and wins per role.
+   */
+  const performance = (list: AccountAnalysis[]) => {
+    const usable = list.filter((a) => a.analyzable);
+    const counts = new Map<string, number>();
+    for (const a of usable) counts.set(a.mode, (counts.get(a.mode) ?? 0) + 1);
+    const mode = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    const inMode = usable.filter((a) => a.mode === mode);
+    const last = inMode.slice(0, 20);
+    const stat = (pick: (a: AccountAnalysis) => number | null) => {
+      const xs = last.map(pick).filter((x): x is number => x !== null && Number.isFinite(x));
+      return xs.length ? { value: mean(xs), games: xs.length } : null;
+    };
+    const roles = new Map<string, { role: string; games: number; wins: number }>();
+    for (const a of inMode) {
+      if (a.role === "NONE") continue;
+      const r = roles.get(a.role) ?? { role: a.role, games: 0, wins: 0 };
+      r.games++; if (a.win) r.wins++;
+      roles.set(a.role, r);
+    }
+    return {
+      mode,
+      games: last.length,
+      goldDiff15: stat((a) => a.goldDiff15),
+      goldShare: stat((a) => a.goldShare),
+      damageShare: stat((a) => a.damageShare),
+      killParticipation: stat((a) => a.killParticipation),
+      soloDeaths: stat((a) => a.soloDeaths),
+      visionPerMin: stat((a) => a.visionPerMin),
+      roles: [...roles.values()],
+    };
+  };
+
   const matchRow = (a: AccountAnalysis, avg: ReturnType<typeof averages>) => ({
     matchId: a.matchId,
     accountId: a.accountId,
@@ -237,6 +272,7 @@ export function createApp(deps: AppDeps) {
     durationSec: a.durationSec,
     mode: a.mode,
     queue: queueLabel(a.queueId, a.mode),
+    queueId: a.queueId,
     patch: a.patch,
     analyzable: a.analyzable,
     win: a.win,
@@ -249,6 +285,9 @@ export function createApp(deps: AppDeps) {
     kda: a.kda,
     csPerMin: a.csPerMin,
     goldDiff15: a.goldDiff15,
+    killParticipation: a.killParticipation,
+    visionPerMin: a.visionPerMin,
+    opponent: a.laneOpponentChampion,
     headline: matchHeadline(a, avg),
     // Scoreboard loadout (analysis v3).
     level: a.level,
@@ -268,7 +307,8 @@ export function createApp(deps: AppDeps) {
       summary: summarize(analyses),
       insights,
       insufficientData,
-      recent: analyses.slice(0, 5).map((a) => matchRow(a, avg)),
+      recent: analyses.slice(0, 10).map((a) => matchRow(a, avg)),
+      performance: performance(analyses),
     });
   });
 

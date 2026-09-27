@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("improve: champion pool, matchups, LP and activity", async ({ page }, info) => {
+test("profile tabs (champion pool, matchups, LP gains, activity) and challenges", async ({ page }, info) => {
   const player = `Imp${info.project.name}`;
   await page.goto("/");
   await page.getByLabel("Your name").fill(player);
@@ -9,10 +9,51 @@ test("improve: champion pool, matchups, LP and activity", async ({ page }, info)
   await page.getByRole("button", { name: "Link and analyze" }).click();
   await expect(page.getByText(/Based on \d+ analyzable games/)).toBeVisible({ timeout: 30_000 });
 
+  // Overview: rank card (demo history), performance, activity, roles, recent summary.
+  await expect(page.getByRole("region", { name: "Rank" }).getByText("Ranked Solo/Duo")).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Performance overview/ })).toBeVisible();
+  await expect(page.getByRole("grid", { name: /Games per day/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Top roles" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Recent summary/ })).toBeVisible();
+  await page.screenshot({ path: `test-results/profile-overview-${info.project.name}.png`, fullPage: true });
+
+  // Champion pool: most played first, with an honest verdict.
+  await page.getByRole("tab", { name: "Champion pool" }).click();
+  const pool = page.getByRole("region", { name: "Champion pool" });
+  await expect(pool.getByRole("row")).not.toHaveCount(0);
+  await expect(pool.getByText(/Clearly winning|Clearly losing|Not clearly above or below 50%|Fewer than 5 games/).first()).toBeVisible();
+
+  // Matchups, then only for one champion.
+  await page.getByRole("tab", { name: "Matchup pool" }).click();
+  await expect(page.getByRole("heading", { name: "Lane opponents" })).toBeVisible();
+  await page.getByLabel("Playing").selectOption({ index: 1 });
+  await expect(page.getByRole("heading", { name: /Lane opponents when you play/ })).toBeVisible();
+  await expect(page).toHaveURL(/tab=matchups.*champion=|champion=.*tab=matchups/);
+
+  // LP gains: the chart and the panel of the selected point; the arrow keys move it.
+  await page.getByRole("tab", { name: "LP gains" }).click();
+  const chart = page.getByRole("img", { name: /Ranked Solo\/Duo: rank after each snapshot/ });
+  await expect(chart).toBeVisible();
+  const detail = page.getByRole("complementary", { name: "Selected point" });
+  await expect(detail.getByText(/^(Victory|Defeat)$/)).toBeVisible();
+  await expect(detail.getByText(/^[+-]\d+$/)).toBeVisible();
+  await expect(detail.getByRole("link", { name: "Match details" })).toBeVisible();
+  const before = await detail.textContent();
+  await chart.focus();
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowLeft");
+  await expect(detail).not.toHaveText(before ?? "");
+  await page.screenshot({ path: `test-results/profile-lp-${info.project.name}.png`, fullPage: true });
+  await detail.getByRole("link", { name: "Match details" }).click();
+  await expect(page.getByRole("link", { name: "← Matches" })).toBeVisible();
+
+  // Old Improve links land on the profile tab.
+  await page.goto("/improve?tab=lp");
+  await expect(page).toHaveURL(/\/\?tab=lp/);
+
+  // Improve is the challenges now: accept one, see its 5 slots, then drop it.
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Improve" }).click();
   await expect(page.getByRole("heading", { name: "Improve", exact: true })).toBeVisible();
-
-  // Challenges (default tab): accept one, see its 5 slots, then drop it.
   const mine = page.getByRole("region", { name: "Your challenges" });
   await expect(mine.getByText(/No challenge running/)).toBeVisible();
   const suggest = page.getByRole("region", { name: "Try one" });
@@ -23,27 +64,4 @@ test("improve: champion pool, matchups, LP and activity", async ({ page }, info)
   await page.screenshot({ path: `test-results/challenges-${info.project.name}.png`, fullPage: true });
   await mine.getByRole("button", { name: /Drop challenge/ }).click();
   await expect(mine.getByText(/No challenge running/)).toBeVisible();
-
-  // Champion pool: most played first, with an honest verdict.
-  await page.getByRole("tab", { name: "Champion pool" }).click();
-  const pool = page.getByRole("region", { name: "Champion pool" });
-  await expect(pool.getByRole("row")).not.toHaveCount(0);
-  await expect(pool.getByText(/Clearly winning|Clearly losing|Not clearly above or below 50%|Fewer than 5 games/).first()).toBeVisible();
-
-  // Matchups, then only for one champion.
-  await page.getByRole("tab", { name: "Matchups" }).click();
-  await expect(page.getByRole("heading", { name: "Lane opponents" })).toBeVisible();
-  await page.getByLabel("Playing").selectOption({ index: 1 });
-  await expect(page.getByRole("heading", { name: /Lane opponents when you play/ })).toBeVisible();
-  await expect(page).toHaveURL(/tab=matchups.*champion=|champion=.*tab=matchups/);
-
-  // LP: synthetic accounts have no rank, and the page says so.
-  await page.getByRole("tab", { name: "LP" }).click();
-  await expect(page.getByText(/No ranked games recorded yet/)).toBeVisible();
-
-  // Activity calendar with a summary and a list view.
-  await page.getByRole("tab", { name: "Activity" }).click();
-  await expect(page.getByRole("grid", { name: /Games per day/ })).toBeVisible();
-  await expect(page.getByText("Games in the last 30 days")).toBeVisible();
-  await page.screenshot({ path: `test-results/improve-${info.project.name}.png`, fullPage: true });
 });

@@ -23,7 +23,9 @@ test("profile, goals, memory, search and champion page", async ({ page }, info) 
 
   // Profile
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Profile" }).click();
-  await expect(page.getByRole("heading", { name: "Your profile" })).toBeVisible();
+  await page.getByRole("tab", { name: "Coach" }).click();
+  await expect(page).toHaveURL(/tab=coach/);
+  await expect(page.getByRole("heading", { name: "How you play" })).toBeVisible();
   await expect(page.getByText("Laning phase").first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "Your progress" })).toBeVisible();
   await page.getByText(/See timeline/).click().catch(() => {});

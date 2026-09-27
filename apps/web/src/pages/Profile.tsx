@@ -16,11 +16,10 @@ const trendText: Record<Dimension["trend"], string | null> = {
 const stateLabel = { ahead: "Ahead at 15:00", even: "Even at 15:00", behind: "Behind at 15:00" } as const;
 
 /**
- * One area for everything personal (brief §16): profile dimensions, game
- * state, goals and Coach memory. It shows conclusions first and numbers on
- * demand.
+ * The Coach tab of your profile (brief §16): how you play, game state, evolution, goals
+ * and Coach memory. Conclusions first, numbers on demand.
  */
-export function Profile() {
+export function CoachProfile() {
   const [version, setVersion] = useState(0);
   const bump = () => setVersion((v) => v + 1);
   const profile = useLoad(() => api.profile(), []);
@@ -37,10 +36,8 @@ export function Profile() {
 
   return (
     <div className="stack" style={{ gap: 24 }}>
-      <header>
-        <h1 className="page-title">Your profile</h1>
-        <p className="page-sub" style={{ margin: 0 }}>How you play, always compared with yourself. No global scores.</p>
-      </header>
+      <h2 className="section-title" style={{ margin: 0 }}>How you play</h2>
+      <p className="page-sub" style={{ margin: "-16px 0 0" }}>Always compared with yourself. No global scores.</p>
 
       {p.profiles.length === 0 && (
         <div className="notice">I do not have enough reliable information to describe how you play yet. I need at least 5 analyzable games in a mode.</div>

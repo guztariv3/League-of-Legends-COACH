@@ -65,6 +65,7 @@ export interface MatchRow {
   durationSec: number;
   mode: Mode;
   queue: string;
+  queueId: number;
   patch: string;
   analyzable: boolean;
   win: boolean;
@@ -76,6 +77,9 @@ export interface MatchRow {
   kda: number;
   csPerMin: number | null;
   goldDiff15: number | null;
+  killParticipation: number | null;
+  visionPerMin: number | null;
+  opponent: string | null;
   headline: string | null;
   championId: number;
   level: number;
@@ -106,6 +110,20 @@ export interface Dashboard {
   insights: Insight[];
   insufficientData: boolean;
   recent: MatchRow[];
+  performance: Performance;
+}
+
+export type Stat = { value: number; games: number } | null;
+export interface Performance {
+  mode: Mode | null;
+  games: number;
+  goldDiff15: Stat;
+  goldShare: Stat;
+  damageShare: Stat;
+  killParticipation: Stat;
+  soloDeaths: Stat;
+  visionPerMin: Stat;
+  roles: { role: string; games: number; wins: number }[];
 }
 
 export interface MatchList {

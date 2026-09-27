@@ -33,8 +33,18 @@ type Snapshot = typeof schema.rankSnapshots.$inferSelect;
  * nice-to-have and must never break a sync.
  */
 export async function recordRank(db: Db, source: MatchSource, account: { id: string; platform: string; puuid: string }): Promise<number> {
-  if (!source.leagueEntries) return 0;
   try {
+    // Demo only: the synthetic environment fills in the rank after each fictional ranked game once.
+    if (source.kind === "synthetic" && source.rankTrail && !source.leagueEntries) {
+      const [any] = await db.select().from(schema.rankSnapshots).where(eq(schema.rankSnapshots.accountId, account.id)).limit(1);
+      if (!any) {
+        const trail = await source.rankTrail(account.platform, account.puuid);
+        if (trail.length) {
+          await db.insert(schema.rankSnapshots).values(trail.map((p) => ({ accountId: account.id, queueType: p.queueType, tier: p.tier, rank: p.rank, lp: p.lp, wins: p.wins, losses: p.losses, takenAt: p.at })));
+        }
+      }
+    }
+    if (!source.leagueEntries) return 0;
     const entries: RiotLeagueEntry[] = await source.leagueEntries(account.platform, account.puuid);
     let added = 0;
     for (const e of entries) {
