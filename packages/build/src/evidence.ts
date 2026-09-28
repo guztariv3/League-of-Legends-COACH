@@ -27,8 +27,10 @@ export function purchasePrior(input: {
   const general=options(input.chosen.length ? e.core : e.first);
   const match=e.matchup && e.matchup.opponent===input.opponent ? options(input.chosen.length ? e.matchup.core : e.matchup.first) : new Map<number,{games:number;wins:number}>();
   const total=(m:typeof general)=>[...m.values()].reduce((n,r)=>n+r.games,0);
-  // Sparse matchup slices cannot displace a better supported champion/role baseline.
-  const scoped=total(match)>=100 && (match.get(input.candidate)?.games??0)>=30;
+  // Choose the scope for the whole comparison, never separately for each candidate.
+  // Once a matchup supports a ranking, sparse options get no empirical bonus rather
+  // than importing a differently sampled general-popularity bonus.
+  const scoped=total(match)>=100 && [...match.values()].some(row=>row.games>=30);
   const pool=scoped?match:general,n=total(pool),row=pool.get(input.candidate);
   if(n<100 || !row || row.games<30)return null;
   const wins=[...pool.values()].reduce((s,r)=>s+r.wins,0);

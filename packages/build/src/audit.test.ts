@@ -97,3 +97,17 @@ describe('user-provided Render excerpt (2026-09-28, patch 16.19; top five only)'
   expect(recommendBuild({...input,evidence:{...observed,patch:'16.18'}}).audit).toEqual(plain.audit);
  });
 });
+
+describe('consistent matchup scope across competing item candidates',()=>{
+ it('does not substitute general popularity for an unsupported option inside a supported matchup',()=>{
+  const scoped:BuildEvidence={...evidence,matchup:{opponent:'Zed',first:[{key:'3118',games:150,wins:75},{key:'3100',games:5,wins:5}],core:[]}};
+  expect(purchasePrior({...query,evidence:scoped,candidate:3118})?.reason).toContain('against Zed');
+  expect(purchasePrior({...query,evidence:scoped,candidate:3100})).toBeNull();
+ });
+ it('uses the same scope after an exact purchase prefix, and falls back for another opponent',()=>{
+  const scoped:BuildEvidence={...evidence,core:[{key:'3118>3100>3089',games:500,wins:250}],matchup:{opponent:'Zed',first:[],core:[{key:'3118>3157>3089',games:150,wins:75},{key:'3118>3100>3089',games:5,wins:5}]}};
+  expect(purchasePrior({...query,evidence:scoped,chosen:[3118],candidate:3157})?.reason).toContain('against Zed');
+  expect(purchasePrior({...query,evidence:scoped,chosen:[3118],candidate:3100})).toBeNull();
+  expect(purchasePrior({...query,evidence:scoped,opponent:'Lux',chosen:[3118],candidate:3100})?.reason).toContain('across matchups');
+ });
+});

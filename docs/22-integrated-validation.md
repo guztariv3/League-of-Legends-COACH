@@ -119,3 +119,16 @@ Two database-to-engine regressions fail before the correction and pass after it:
 paths aggregating to 100 next purchases, and small outcomes retained in the baseline
 without becoming eligible recommendations. This correction applies to all champions and
 roles. It does not certify strategic quality or solve the missing production categories.
+
+### Consistent comparison scope
+
+Purchase evidence now selects matchup versus champion/role scope once per purchase
+prefix, independently of the candidate. A supported matchup cannot score one option
+using opponent-specific observations while rewarding another using general popularity.
+Unsupported options remain mechanically eligible but receive no empirical bonus in that
+comparison. Sparse matchups still fall back as a whole. The same rule already applies
+to setup observations. Two synthetic regressions cover initial purchases and subsequent
+prefixes, including isolation when the requested opponent changes.
+
+User decision: historical recovery remains pending; do not run it in Render. New-category
+collection after a separately authorized deployment is the intended path for now.
