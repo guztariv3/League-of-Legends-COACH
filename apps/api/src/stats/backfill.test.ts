@@ -1,3 +1,8 @@
+import pg from 'pg';
+import { randomUUID } from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import { beforeEach, afterEach, expect, it } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
 import { generateHistory, SYNTHETIC_ITEMS } from '@coach/synthetic';
@@ -7,13 +12,35 @@ import { recordGame } from './store.js';
 import { backfillCandidates, enrichMatch, recoverCandidate, ENRICHMENT_KINDS } from './backfill.js';
 
 let opened:Database;
+let admin:pg.Client|undefined;
+let testDatabase:string|undefined;
+let testUrl:string|undefined;
 const game=generateHistory({seed:11,puuid:'backfill-test',gameName:'Test',tagLine:'T1',platform:'EUW1',count:40,now:Date.UTC(2026,8,20)}).find(g=>g.scenario==='normal' && g.timeline && g.match.info.queueId===420)!;
 const completed=new Set(SYNTHETIC_ITEMS.map(i=>i.id));
 const extracted=statRows(game.match,game.timeline,completed);
 const candidate={matchId:game.match.metadata.matchId,platform:'EUW1',patch:extracted.patch};
 const info={patch:extracted.patch,completed};
-beforeEach(async()=>{opened=await openDatabase();});
-afterEach(async()=>{await opened.close();});
+beforeEach(async()=>{
+ const configured=process.env.BACKFILL_TEST_DATABASE_URL;
+ if(!configured) { opened=await openDatabase(); return; }
+ const url=new URL(configured);
+ // Never use DATABASE_URL or an external host for this destructive test lifecycle.
+ if(!['127.0.0.1','localhost'].includes(url.hostname) || url.pathname!=='/postgres') throw new Error('Loopback PostgreSQL test service required');
+ admin=new pg.Client({connectionString:configured});
+ await admin.connect();
+ testDatabase=`backfill_test_${randomUUID().replaceAll('-','')}`;
+ await admin.query(`CREATE DATABASE "${testDatabase}"`);
+ url.pathname=`/${testDatabase}`;
+ testUrl=url.toString();
+ opened=await openDatabase(testUrl);
+});
+afterEach(async()=>{
+ await opened?.close();
+ if(admin) {
+  try { if(testDatabase) await admin.query(`DROP DATABASE "${testDatabase}" WITH (FORCE)`); }
+  finally {await admin.end();admin=undefined;testDatabase=undefined;testUrl=undefined;}
+ }
+});
 async function legacy() {
  await recordGame(opened.db,{...candidate,counted:true,rows:extracted.rows.filter(r=>!ENRICHMENT_KINDS.includes(r.kind))});
  // Simulate a pre-migration historical game: no per-match enrichment provenance.
@@ -77,4 +104,17 @@ it('migration blocks ambiguous patches while leaving clean historical patches el
   await client.exec(readFileSync(new URL('../db/migrations/0010_stats_enrichment.sql',import.meta.url),'utf8'));
   expect((await client.query('SELECT match_id,status FROM stats_enrichments')).rows).toEqual([{match_id:'old-ambiguous',status:'legacy_unknown'}]);
  } finally {await client.close();}
+});
+
+
+it.skipIf(!process.env.BACKFILL_TEST_DATABASE_URL)('PostgreSQL CLI preview is read-only without a Riot key',async()=>{
+ await legacy();
+ const before=await opened.db.select().from(schema.statsCounts);
+ const {stdout}=await promisify(execFile)(process.execPath,['--import','tsx','src/stats/backfill-cli.ts',candidate.patch,'10','--preview'],{
+  cwd:fileURLToPath(new URL('../../',import.meta.url)),
+  env:{...process.env,DATABASE_URL:testUrl!,RIOT_API_KEY:''},timeout:20000,
+ });
+ expect(JSON.parse(stdout.trim())).toMatchObject({mode:'--preview',selected:1});
+ expect(await opened.db.select().from(schema.statsCounts)).toEqual(before);
+ expect(await opened.db.select().from(schema.statsEnrichments)).toEqual([]);
 });

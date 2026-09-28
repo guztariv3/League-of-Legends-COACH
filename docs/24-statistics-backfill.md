@@ -78,3 +78,16 @@ objetos/partidas; recuperar datos no demuestra que una recomendación sea óptim
 Pruebas automatizadas usan PGlite/PostgreSQL compatible y partidas sintéticas, sin credenciales
 ni acceso a Render. Falta ensayo operacional en PostgreSQL con respuestas reales de Riot,
 respaldo, pausa del recolector y comprobación de contadores antes/después.
+
+## Ensayo PostgreSQL aislado en CI
+
+El job `Historical enrichment (PostgreSQL)` levanta PostgreSQL 16 temporal en el runner.
+No usa secretos de GitHub/Render ni datos reales. Cada prueba crea una base nueva con
+nombre aleatorio y la elimina al finalizar. El adaptador rechaza hosts externos y nunca
+lee `DATABASE_URL` como destino de pruebas. El servicio desaparece al terminar el job.
+
+Las pruebas de recuperación corren sobre conexiones PostgreSQL reales, incluidas dos
+transacciones concurrentes para la misma partida, rollback y CLI de vista previa sin clave
+Riot. La prueba específica de clasificación histórica de la migración también sigue
+corriendo en PGlite. Esto no sustituye validar respuestas reales de Riot o la operación
+con una copia autorizada de datos: demuestra aislamiento y comportamiento de base de datos.
