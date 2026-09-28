@@ -206,3 +206,13 @@ it("prioritizes useful stats over simply spending more gold", () => {
   expect(run({1:3,2:.5,3:1}).now!.buys.map(b=>b.id)).toEqual([1]);
   expect(run({1:.5,2:3,3:1}).now!.buys.map(b=>b.id)).toEqual([2]);
 });
+
+it("does not use gold spent on a later target to predict an earlier target's completion", () => {
+ const make=(id:number,gold:number,from:number[]=[])=>({...item(WAND),id,name:`Timing ${id}`,gold,from});
+ const aPiece=make(1,200), bPiece=make(2,400), a=make(3,1000,[1]), b=make(4,1200,[2]);
+ const local={...catalog,items:new Map([aPiece,bPiece,a,b].map(i=>[i.id,i]))};
+ const p=planPurchases({targets:[a,b],inventory:[],gold:400,time:900,itemGold:2000,catalog:local,utility:{1:.1,2:3,3:1,4:1}});
+ expect(p.now!.buys.map(x=>x.id)).toEqual([2]);
+ expect(p.milestones[0]!.at!-900).toBeCloseTo(1000/p.pace!*60,5);
+ expect(p.milestones[1]!.at!-900).toBeCloseTo(1800/p.pace!*60,5);
+});

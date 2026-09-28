@@ -146,7 +146,7 @@ function sequentialBuy(targets: CatalogItem[], inventory: number[], gold: number
     }
     break; // later targets wait until this one is finished
   }
-  return { buys, spent: gold - left, completes, toward, value: gold - left };
+  return { buys, spent: gold - left, completes, toward, value: gold - left, inventory: actual };
 }
 
 /** Search legal shopping sequences across targets. Inventory is simulated after EACH purchase;
@@ -198,7 +198,7 @@ function bestBuy(targets: CatalogItem[], inventory: number[], gold: number, cata
     beam = [...next.values()].sort((a,b)=>b.value-a.value || a.buys.length-b.buys.length).slice(0, 24);
     if (!beam.length) break;
   }
-  return {buys:best.buys,spent:best.spent,completes:best.completes,toward:best.buys[0]?.targetName ?? targets[0]?.name ?? '',value:best.value};
+  return {buys:best.buys,spent:best.spent,completes:best.completes,toward:best.buys[0]?.targetName ?? targets[0]?.name ?? '',value:best.value,inventory:best.inventory};
 }
 
 /** A visual recipe allocates shared inventory once across the planned targets. */
@@ -231,11 +231,15 @@ export function planPurchases(input: {
   // When each target would be finished, in order, at the current pace.
   const milestones: PurchasePlan["milestones"] = [];
   const pool = [...inventory];
-  let owed = -(gold ?? 0);
+  // Follow the recommended purchases before forecasting: gold spent on another
+  // target is no longer available for this one, and consumed pieces cannot count twice.
+  const projected = [...(now?.inventory ?? inventory)];
+  let owed = (now?.spent ?? 0) - (gold ?? 0);
   for (const t of ordered) {
     const remaining = cost(tree(t, catalog, pool));
     if (remaining === 0) continue;
-    owed += remaining;
+    owed += cost(tree(t, catalog, projected));
+    projected.push(t.id);
     pool.push(t.id);
     milestones.push({ id: t.id, name: t.name, remaining, at: pace ? time + Math.max(0, owed) / (pace / 60) : null });
   }
