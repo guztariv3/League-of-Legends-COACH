@@ -1,4 +1,4 @@
-import { recipeView } from "./plan.js";
+import { nextRecipePurchase, recipeView } from "./plan.js";
 import type { Catalog, CatalogChampion, CatalogItem } from "./catalog.js";
 
 /**
@@ -88,10 +88,7 @@ export function purchasePath(item: CatalogItem, inventory: number[], gold: numbe
   const root = recipeView(item, inventory, catalog);
   const steps = root.children.map(c=>({id:c.id,name:c.name,gold:c.gold,owned:c.owned}));
   const remaining = root.remaining;
-  const options: {id:number;name:string;gold:number}[] = [];
-  const visit = (n:typeof root) => { if(n.owned)return; if(n.remaining>0)options.push({id:n.id,name:n.name,gold:n.remaining}); n.children.forEach(visit); };
-  visit(root);
-  const affordableNow = gold === null ? null : options.filter(o=>o.gold<=gold).sort((a,b)=>b.gold-a.gold)[0]??null;
+  const affordableNow = nextRecipePurchase(item, inventory, gold, catalog);
   return { steps, remaining, affordableNow };
 }
 

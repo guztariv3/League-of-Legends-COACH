@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parseCatalog } from "./catalog.js";
+import { purchasePath } from "./suggest.js";
 import { goldPace, planPurchases, STARTING_GOLD } from "./plan.js";
 
 // The real patch data (the same snapshot the build engine tests use).
@@ -153,4 +154,36 @@ describe("contextual shopping across recipes", () => {
     const p=shopping(1000,[],{1:0,2:0,3:0,4:0,5:0});
     expect(p.now).toBeNull();
   });
+});
+
+
+describe("shop availability within component recipes", () => {
+  const component = { ...item(WAND), purchasable: false };
+  const target = { ...item(MORELLO), from:[WAND], gold:1500, purchasable:true };
+  const local = { ...catalog, items:new Map([[component.id,component],[target.id,target]]) };
+  it.each([undefined, {[WAND]:5,[MORELLO]:10}])("never recommends an unavailable component, including in wait suggestions", utility => {
+    const p=planPurchases({targets:[target],inventory:[],gold:900,time:900,itemGold:0,catalog:local,utility});
+    expect(p.now).toBeNull();
+    expect(p.wait).toBeNull();
+    expect(purchasePath(target,[],900,local).affordableNow).toBeNull();
+  });
+  it.each([undefined, {[WAND]:5,[MORELLO]:10}])("still credits an unavailable component already held when completing its buyable parent", utility => {
+    const p=planPurchases({targets:[target],inventory:[WAND],gold:1500-component.gold,time:900,itemGold:component.gold,catalog:local,utility});
+    expect(p.now!.buys.map(b=>b.id)).toEqual([MORELLO]);
+    expect(p.now!.spent).toBe(1500-component.gold);
+  });
+  it("preserves purchase restrictions from the source catalog", () => {
+    const parsed=parseCatalog({version:'test',data:{'1':{name:'Unavailable',gold:{total:500,purchasable:false}},'2':{name:'Hidden',gold:{total:500},inStore:false},'3':{name:'Ordinary',gold:{total:500,purchasable:true}}}}, {version:'test',data:{}});
+    expect(parsed.items.get(1)!.purchasable).toBe(false);
+    expect(parsed.items.get(2)!.purchasable).toBe(false);
+    expect(parsed.items.get(3)!.purchasable).toBe(true);
+  });
+});
+
+
+it("compact buy-now respects full slots while permitting component consumption", () => {
+ const occupied=[900001,900002,900003,900004,900005,900006];
+ expect(purchasePath(item(MORELLO),occupied,6000,catalog).affordableNow).toBeNull();
+ const withComponent=[WAND,...occupied.slice(1)];
+ expect(purchasePath(item(MORELLO),withComponent,6000,catalog).affordableNow?.id).toBe(MORELLO);
 });

@@ -41,3 +41,11 @@ The API integration fixture now generates recent games relative to the test time
 - The displayed sequence orders this shopping visit. Future trees/targets adapt on subsequent snapshots; it is not a rigid promise of every future shop action.
 
 To try the branch, use its matching API/web and desktop build together. Do not connect the updated companion to the old production API: the old strict frame schema does not know `detail`.
+
+## Follow-up: shop and inventory consistency
+
+The component planner now preserves Data Dragon shop availability in `CatalogItem.purchasable`. Unavailable recipe nodes are not offered as purchases or wait-for-gold purchases. Owned unavailable pieces still count toward a buyable parent recipe. The compact `affordableNow` suggestion now uses the same recipe-consumption and six-slot simulation as the full route, including the separate trinket slot.
+
+Regression coverage includes unavailable components with/without contextual utility, credit for already-owned unavailable components, source restriction parsing, and a full inventory that permits upgrades but forbids new loose pieces. Existing tests retain cross-target completion, holding an unfinished component, duplicate-component accounting, budget limits and ordered slot freeing.
+
+This does not establish strategically optimal component order. Contextual utility remains a heuristic; waiting and future completion times are approximations. Shop availability metadata does not fully model champion-specific exceptions, quest unlocks, item-group exclusivity, consumable stacking or every map-specific rule. This revision does not certify those cases or all champion/matchup builds.

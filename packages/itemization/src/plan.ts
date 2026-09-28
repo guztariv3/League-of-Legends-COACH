@@ -78,7 +78,7 @@ const related = (a: Node, b: Node) => {
 
 /** Every purchase you could make now toward this item: sets of pieces that don't overlap. */
 function options(root: Node): { set: Node[]; spent: number }[] {
-  const cands = nodes(root).filter((n) => cost(n) > 0).slice(0, 14);
+  const cands = nodes(root).filter((n) => cost(n) > 0 && n.item.purchasable !== false).slice(0, 14);
   const out: { set: Node[]; spent: number }[] = [];
   const walk = (i: number, set: Node[], spent: number) => {
     if (i === cands.length) { if (set.length) out.push({ set: [...set], spent }); return; }
@@ -123,7 +123,7 @@ function sequentialBuy(targets: CatalogItem[], inventory: number[], gold: number
     const full = cost(root);
     if (full === 0) continue;
     toward ||= t.name;
-    if (full <= left) {
+    if (full <= left && t.purchasable !== false) {
       const fit = fitPurchases([root], actual, catalog);
       if (!fit) break;
       buys.push({ id: t.id, name: t.name, gold: full });
@@ -167,7 +167,7 @@ function bestBuy(targets: CatalogItem[], inventory: number[], gold: number, cata
       const root = tree(target, catalog, [...state.inventory]);
       for (const node of nodes(root).slice(0, 20)) {
         const price = cost(node);
-        if (price <= 0 || price + state.spent > gold) continue;
+        if (node.item.purchasable === false || price <= 0 || price + state.spent > gold) continue;
         const fit = fitPurchases([node], state.inventory, catalog);
         if (!fit) continue;
         // Value is marginal: subtract the value of components consumed by this purchase.
@@ -256,4 +256,13 @@ export function planPurchases(input: {
 /** Shared recursive cost projection for compact item suggestions. */
 export function recipeView(item: CatalogItem, inventory: number[], catalog: Catalog): RecipeView {
   return recipesFor([item], inventory, catalog)[0]!;
+}
+
+/** Compact suggestion uses the same shop and slot checks as the full shopping route. */
+export function nextRecipePurchase(item: CatalogItem, inventory: number[], gold: number | null, catalog: Catalog): Buy | null {
+  if (gold === null) return null;
+  const root=tree(item,catalog,[...inventory]);
+  const candidate=nodes(root).filter(n=>n.item.purchasable!==false && cost(n)>0 && cost(n)<=gold && fitPurchases([n],inventory,catalog))
+    .sort((a,b)=>cost(b)-cost(a))[0];
+  return candidate ? {id:candidate.item.id,name:candidate.item.name,gold:cost(candidate)} : null;
 }
