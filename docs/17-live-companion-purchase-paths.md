@@ -67,3 +67,13 @@ The previous contextual search checked only +25, +175 and +325 gold, unintention
 Two regressions (a 200-gold upgrade needing 100 more gold, and a purchase needing 400 more gold) fail before the fix and pass after it. Budget, shop availability and inventory checks remain shared with the buy-now planner. The desktop labels saving as an alternative to following Buy now, explicitly avoiding an instruction to idle in base. No-purchase wording no longer assumes insufficient gold when inventory or utility may be the reason.
 
 This remains a bounded nearby-budget comparison, not an exhaustive optimal-saving/recall policy. It does not evaluate every component combination threshold, future wave state, travel losses, imminent combat or all power-spike breakpoints. Long-term targets can exceed the +450 comparison window; the window does not limit which final items the build engine can recommend. No real matchup win-rate claim is added.
+
+### Retained components after shopping
+
+The `Keep unfinished` explanation now uses the simulated post-purchase inventory, with
+one allocation per retained component across unfinished targets. Previously it could
+refer to a piece already consumed to complete a different target, or allocate one retained
+piece to two deferred recipes. Two regressions reproduce both misleading explanations;
+the existing cross-target test still verifies that an actually retained piece is reported
+when completing another target first. This changes explanation accuracy, not strategic
+optimality: contextual utility remains heuristic and wave/recall decisions are incomplete.

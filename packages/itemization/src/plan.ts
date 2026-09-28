@@ -271,7 +271,11 @@ export function planPurchases(input: {
     now: now.buys.length ? { buys: now.buys, spent: now.spent, completes: now.completes, toward: now.toward, leftover: gold - now.spent } : null,
     wait, milestones, pace,
     route: now.buys, recipes: recipesFor(ordered,inventory,catalog),
-    deferred: targets.filter(t => !inventory.includes(t.id) && !now.completes.includes(t.name) && (cost(tree(t,catalog,[...inventory])) < t.gold || now.buys.some(b=>b.targetId === t.id)) && now.buys.some(b=>b.targetId && b.targetId !== t.id)).map(t=>t.name),
+    // Describe what remains AFTER shopping, allocating each retained piece once.
+    // A piece consumed by another target is no longer an unfinished investment.
+    deferred: recipesFor(targets.filter(t=>!now.inventory.includes(t.id)),now.inventory,catalog)
+      .filter(r=>r.remaining>0 && r.remaining<r.gold && now.buys.some(b=>b.targetId && b.targetId!==r.id))
+      .map(r=>r.name),
   };
 }
 

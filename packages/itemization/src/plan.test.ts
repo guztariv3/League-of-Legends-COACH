@@ -135,6 +135,11 @@ describe("contextual shopping across recipes", () => {
     expect(p.deferred).toEqual(['Item 3']);
     expect(p.milestones[0]!.id).toBe(5);
   });
+  it("does not claim to keep a component consumed by the other completed target",()=>{
+    const p=shopping(300,[1]);
+    expect(p.now!.completes).toEqual(['Item 5']);
+    expect(p.deferred).toEqual([]);
+  });
   it("never credits a shared owned component twice across purchases",()=>{
     const p=shopping(1300,[1]);
     expect(p.now!.completes.sort()).toEqual(['Item 3','Item 5']);
@@ -233,4 +238,14 @@ it("does not skip an affordable threshold between 325 and 450 additional gold", 
  const p=planPurchases({targets:[target],inventory:[],gold:100,time:900,itemGold:1000,catalog:local,utility:{1:2}});
  expect(p.wait?.extra).toBe(400);
  expect(p.wait?.buys.map(b=>b.id)).toEqual([1]);
+});
+
+
+it("allocates a retained shared piece to only one deferred target after shopping",()=>{
+ const make=(id:number,gold:number,from:number[]=[])=>({...item(WAND),id,name:`Deferred ${id}`,gold,from});
+ const shared=make(1,100),a=make(2,2000,[1]),b=make(3,2000,[1]),c=make(4,400);
+ const local={...catalog,items:new Map([shared,a,b,c].map(i=>[i.id,i]))};
+ const p=planPurchases({targets:[a,b,c],inventory:[1],gold:400,time:900,itemGold:1000,catalog:local,utility:{1:1,2:1,3:1,4:10}});
+ expect(p.now!.buys.map(x=>x.id)).toEqual([4]);
+ expect(p.deferred).toEqual([a.name]);
 });
