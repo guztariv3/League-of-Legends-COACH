@@ -208,7 +208,7 @@ function recipesFor(targets: CatalogItem[], inventory: number[], catalog: Catalo
   return targets.slice(0,6).map(t=>view(tree(t,catalog,pool)));
 }
 
-/** How much more gold makes waiting worthwhile (less than this is not worth the time). */
+/** Suppress small spending-only changes; nearby completions and first useful purchases are exceptions. */
 const WAIT_MIN_GAIN = 300;
 const WAIT_MAX_EXTRA = 450;
 
@@ -247,11 +247,20 @@ export function planPurchases(input: {
   if (gold === null) return { now: null, wait: null, milestones, pace, recipes: recipesFor(targets,inventory,catalog), route: [], deferred: [] };
   if (!now) throw new Error("Missing purchase search");
 
-  // Would a little more gold buy clearly more? Look for the smallest extra that gains enough.
+  // Nearby saving alternatives, not a command to idle at the shop. Include exact
+  // recipe costs and the endpoint; the coarse utility grid alone skipped 326–450.
+  const thresholds = new Set<number>([WAIT_MAX_EXTRA]);
+  for (let extra=25;extra<=WAIT_MAX_EXTRA;extra+=input.utility?150:25) thresholds.add(extra);
+  for (const target of targets.slice(0,6)) for (const node of nodes(tree(target,catalog,[...inventory])).slice(0,20)) {
+    const extra=cost(node)-gold;
+    if(node.item.purchasable!==false && extra>0 && extra<=WAIT_MAX_EXTRA) thresholds.add(extra);
+  }
   let wait: PurchasePlan["wait"] = null;
-  for (let extra = 25; extra <= WAIT_MAX_EXTRA; extra += input.utility ? 150 : 25) {
+  for (const extra of [...thresholds].sort((a,b)=>a-b)) {
     const more = bestBuy(targets, inventory, gold + extra, catalog, input.utility);
-    if (more.spent - now.spent >= WAIT_MIN_GAIN && more.value > now.value) {
+    const completesNew = more.completes.some(name=>!now.completes.includes(name));
+    const usefulChange = more.spent-now.spent>=WAIT_MIN_GAIN || completesNew || now.buys.length===0;
+    if (usefulChange && more.buys.length>0 && more.value > now.value) {
       const need = Math.max(1, more.spent - gold);
       wait = { extra: need, buys: more.buys, seconds: pace ? Math.round((need / pace) * 60) : null };
       break;

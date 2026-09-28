@@ -216,3 +216,21 @@ it("does not use gold spent on a later target to predict an earlier target's com
  expect(p.milestones[0]!.at!-900).toBeCloseTo(1000/p.pace!*60,5);
  expect(p.milestones[1]!.at!-900).toBeCloseTo(1800/p.pace!*60,5);
 });
+
+it("shows a nearby completion even when the upgrade costs less than 300 gold", () => {
+ const component={...item(WAND),id:1,name:'Held piece',gold:1000,from:[]};
+ const target={...item(MORELLO),id:2,name:'Complete upgrade',gold:1200,from:[1]};
+ const local={...catalog,items:new Map([[1,component],[2,target]])};
+ const p=planPurchases({targets:[target],inventory:[1],gold:100,time:900,itemGold:1000,catalog:local,utility:{1:1,2:2}});
+ expect(p.now).toBeNull();
+ expect(p.wait?.extra).toBe(100);
+ expect(p.wait?.buys.map(b=>b.id)).toEqual([2]);
+});
+
+it("does not skip an affordable threshold between 325 and 450 additional gold", () => {
+ const target={...item(WAND),id:1,name:'Useful piece',gold:500,from:[]};
+ const local={...catalog,items:new Map([[1,target]])};
+ const p=planPurchases({targets:[target],inventory:[],gold:100,time:900,itemGold:1000,catalog:local,utility:{1:2}});
+ expect(p.wait?.extra).toBe(400);
+ expect(p.wait?.buys.map(b=>b.id)).toEqual([1]);
+});

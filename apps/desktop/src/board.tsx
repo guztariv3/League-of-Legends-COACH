@@ -167,11 +167,11 @@ function BuyNow({ p, time, art }: { p: PurchasePlan; time: number; art: Art }) {
             {p.now.completes.length > 0 ? ` · completes ${p.now.completes.join(" and ")}.` : ` · toward ${p.now.toward}.`}
           </p>
         </>
-      ) : <p className="quiet">Your gold doesn't buy a piece of your next item yet.</p>}
+      ) : <p className="quiet">No useful purchase fits your current gold and inventory.</p>}
       {!!p.deferred?.length && <p className="quiet">Keep unfinished: {p.deferred.join(", ")}. Re-evaluated as the game changes.</p>}
       {p.wait && (
         <p className="buynow-wait">
-          Next budget threshold: {p.wait.extra} more gold{p.wait.seconds !== null ? ` (about ${p.wait.seconds} s at your pace)` : ""} buys {p.wait.buys.map((b) => b.name).join(" + ")} instead. This does not mean you should wait in base; consider the wave and travel time.
+          Saving alternative: keep your current gold and earn {p.wait.extra} more gold{p.wait.seconds !== null ? ` (about ${p.wait.seconds} s at your pace)` : ""} buys {p.wait.buys.map((b) => b.name).join(" + ")} instead of following Buy now. This does not mean you should wait in base; consider the wave and travel time.
         </p>
       )}
       {p.milestones.length > 0 && (

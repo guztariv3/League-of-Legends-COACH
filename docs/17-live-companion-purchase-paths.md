@@ -59,3 +59,11 @@ The utility supplied by the build engine is still heuristic: champion stat fit, 
 ## Follow-up: timing after a cross-target purchase
 
 Completion-time forecasts now start from the simulated post-purchase inventory and leftover wallet. Previously, the plan could recommend a component of a later target while simultaneously treating that spent gold as available to finish the first target. The regression buys a 400-gold component of the second target and verifies that the first target still needs its full 1000 gold of future income, while the second benefits from its owned component. It fails on the previous code and passes with the fix. The displayed recipe cost remains the pre-shopping projection; timestamps are conditional on following the shopping plan and then completing the listed targets at the estimated income pace. These remain estimates, not promised completion times.
+
+## Follow-up: nearby saving alternatives
+
+The previous contextual search checked only +25, +175 and +325 gold, unintentionally omitting useful options between +326 and its documented +450 bound. It also suppressed small-cost completions using a blanket 300-gold spending difference. The search now includes exact missing recipe costs and the +450 endpoint. A more valuable new completion or the first useful purchase is not suppressed solely because its purchase cost is below 300 gold. Other spending-only changes retain that noise filter.
+
+Two regressions (a 200-gold upgrade needing 100 more gold, and a purchase needing 400 more gold) fail before the fix and pass after it. Budget, shop availability and inventory checks remain shared with the buy-now planner. The desktop labels saving as an alternative to following Buy now, explicitly avoiding an instruction to idle in base. No-purchase wording no longer assumes insufficient gold when inventory or utility may be the reason.
+
+This remains a bounded nearby-budget comparison, not an exhaustive optimal-saving/recall policy. It does not evaluate every component combination threshold, future wave state, travel losses, imminent combat or all power-spike breakpoints. Long-term targets can exceed the +450 comparison window; the window does not limit which final items the build engine can recommend. No real matchup win-rate claim is added.
