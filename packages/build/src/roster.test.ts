@@ -96,3 +96,18 @@ describe('mechanics and multi-role isolation',()=>{
   expect(recommendSetup({...input,evidence:{...evidence,runePages:[{key:'8000>8000>1>1>1>1>1>1>1>1>1',games:500,wins:500}]}})).toEqual(base);
  });
 });
+
+it.each(['trees','secondary','shards'])('invalid %s cannot suppress valid champion/role rune evidence', invalid=>{
+ const input={me:kit('Yasuo'),enemies:[{kit:kit('Ahri'),laneOpponent:true}],runes,spells,position:'MIDDLE',patch:'16.19'};
+ const key=pageKey(recommendSetup(input).runes!);
+ const bad=key.split('>');
+ if(invalid==='trees') bad[1]=bad[0]!;
+ if(invalid==='secondary') bad[7]=bad[6]!;
+ if(invalid==='shards') bad[8]='999999';
+ const evidence:BuildEvidence={champion:'Yasuo',position:'MIDDLE',patch:'16.19',first:[],core:[],runePages:[{key,games:500,wins:260}],
+  matchup:{opponent:'Ahri',first:[],core:[],runePages:[{key,games:10,wins:5},{key:bad.join('>'),games:200,wins:150}]}};
+ const answer=recommendSetup({...input,evidence});
+ expect(answer.runes!.keystone.why).toContain('500 games');
+ expect(answer.runes!.keystone.why).toContain('across matchups');
+ expect(pageKey(answer.runes!)).toBe(key);
+});

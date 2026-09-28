@@ -143,11 +143,26 @@ const sentence = (s: string) => s.split(/(?<=\.)\s|\n/)[0]!.trim();
 const why = (r: { short: string }, facts: string[]) =>
   `${sentence(r.short)} ${facts.length ? `Fits: ${facts.slice(0, 2).join("; ")}.` : "No rune in this row stands out for this champion; this one is a reasonable default."}`;
 
+const eligibleRune = (r: RuneFacts, k: KitNeeds) => !(/\bmana\b/i.test(r.short) && k.resource !== "MANA" && !(k.resource === "ENERGY" && /\benergy\b/i.test(r.short)))
+  && !(/immobiliz/i.test(r.short) && k.ownCc === 0);
+
+/** Validate a complete observed page before it can affect statistical scope or weights. */
+function legalObservedPage(key: string, data: RuneData, k: KitNeeds): boolean {
+  if (!/^\d+(>\d+){10}$/.test(key)) return false;
+  const ids=key.split('>').map(Number);
+  const pt=data.trees.find(t=>t.id===ids[0]), st=data.trees.find(t=>t.id===ids[1]);
+  if(!pt || !st || pt.id===st.id || !pt.secondary.includes(st.id)) return false;
+  if(![0,1,2,3].every(row=>pt.rows[row]?.includes(ids[2+row]!))) return false;
+  const rows=[ids[6]!,ids[7]!].map(id=>st.rows.findIndex(row=>row.includes(id)));
+  if(rows.some(row=>row<=0) || rows[0]===rows[1]) return false;
+  if(data.shardRows.length!==3 || !data.shardRows.every((row,i)=>row.shards.includes(ids[8+i]!) && data.shards.some(s=>s.id===ids[8+i]))) return false;
+  return ids.slice(2,8).every(id=>{const rune=data.runes.find(r=>r.id===id);return !!rune && eligibleRune(rune,k);});
+}
+
 function recommendRunes(data: RuneData, k: KitNeeds, e: EnemyPicture, observations: ReturnType<typeof setupObservations>): RuneRecommendation | null {
   const byId = new Map(data.runes.map((r) => [r.id, r]));
   // The summary says what the rune is for; the long text lists details that would add noise.
-  const eligible = (r: RuneFacts) => !(/\bmana\b/i.test(r.short) && k.resource !== "MANA" && !(k.resource === "ENERGY" && /\benergy\b/i.test(r.short)))
-    && !(/immobiliz/i.test(r.short) && k.ownCc === 0);
+  const eligible = (r: RuneFacts) => eligibleRune(r,k);
   const rated = (r: RuneFacts) => ({ r, ...scoreText(r.short, k, e), ...(eligible(r) ? {} : {score: -Infinity}) });
   const bestOf = (ids: number[]) => ids.map((id) => byId.get(id)).filter((r): r is RuneFacts => r !== undefined).map(rated).sort((a, b) => b.score - a.score || a.r.id - b.r.id)[0];
   // The primary tree is the one whose whole page (keystone, which weighs most, plus its best rune per row) fits best.
@@ -206,16 +221,10 @@ function recommendRunes(data: RuneData, k: KitNeeds, e: EnemyPicture, observatio
   };
   let answer = fallback, bestScore = mechanicalScore(fallback);
   for (const observation of observations) {
-    if (!/^\d+(>\d+){10}$/.test(observation.key)) continue;
+    if (!legalObservedPage(observation.key,data,k)) continue;
     const ids = observation.key.split(">").map(Number);
-    const pt = data.trees.find(t=>t.id===ids[0]), st=data.trees.find(t=>t.id===ids[1]);
-    if (!pt || !st || pt.id===st.id || !pt.secondary.includes(st.id)) continue;
-    if (![0,1,2,3].every(row=>pt.rows[row]?.includes(ids[2+row]!))) continue;
-    const secondRows = [ids[6]!,ids[7]!].map(id=>st.rows.findIndex(row=>row.includes(id)));
-    if (secondRows.some(row=>row<=0) || secondRows[0]===secondRows[1]) continue;
-    if (!data.shardRows.every((row,i)=>row.shards.includes(ids[8+i]!))) continue;
-    const perks=ids.slice(2,8).map(id=>byId.get(id));
-    if (perks.some(r=>!r || !eligible(r))) continue;
+    const pt = data.trees.find(t=>t.id===ids[0])!, st=data.trees.find(t=>t.id===ids[1])!;
+    const perks=ids.slice(2,8).map(id=>byId.get(id)!);
     const rp = perks.map(r=>pick(rated(r!)));
     const page: RuneRecommendation = {primaryTree:pt.name,secondaryTree:st.name,keystone:rp[0]!,primary:rp.slice(1,4),secondary:rp.slice(4),shards:ids.slice(8).map(id=>{const shard=shardById.get(id)!;return {id,name:shard.name,why:shard.text};})};
     const score = mechanicalScore(page) + observation.bonus * 4;
@@ -286,7 +295,7 @@ export function recommendSetup(input: SetupInput): SetupRecommendation {
   const e = enemyPicture(input.enemies);
   const evidence = {evidence:input.evidence,champion:input.me.id,position,patch:input.patch,opponent:input.enemies.find(x=>x.laneOpponent)?.kit.id};
   return {
-    runes: recommendRunes(input.runes, k, e, setupObservations({...evidence,kind:'runePages'})),
+    runes: recommendRunes(input.runes, k, e, setupObservations({...evidence,kind:'runePages',acceptKey:key=>legalObservedPage(key,input.runes,k)})),
     spells: recommendSpells(input.spells, k, e, position ?? "", setupObservations({...evidence,kind:'spells'})),
   };
 }

@@ -132,3 +132,14 @@ prefixes, including isolation when the requested opponent changes.
 
 User decision: historical recovery remains pending; do not run it in Render. New-category
 collection after a separately authorized deployment is the intended path for now.
+
+### Rune page validation before statistical weighting
+
+Observed rune pages are now checked against the loaded rune catalog and champion
+eligibility BEFORE selecting matchup/general scope and computing sample-weighted bonuses.
+Previously an invalid page could make a matchup appear sufficiently sampled, suppressing
+valid general-role evidence, even though that invalid page was rejected at selection time.
+The same validator is reused when materializing the page. Regression cases cover identical
+primary/secondary trees, duplicate secondary rows and invalid shards. Exact patch, role,
+opponent and full-page isolation remain; complete rune-page production data is still absent
+in the user-provided report, so this is a preventive pipeline fix, not proof of optimal runes.

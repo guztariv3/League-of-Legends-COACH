@@ -48,10 +48,12 @@ export function purchasePrior(input: {
 export function setupObservations(input: {
   evidence?: BuildEvidence; champion: string; position: string | null; patch?: string;
   opponent?: string | null; kind: 'runePages' | 'spells';
+  /** Validate catalog legality before selecting a scope or calculating sample weights. */
+  acceptKey?: (key: string) => boolean;
 }): { key: string; bonus: number; reason: string }[] {
   const e = input.evidence;
   if (!e || !input.position || !input.patch || e.champion !== input.champion || e.position !== input.position || e.patch !== input.patch) return [];
-  const valid = (rows: PurchaseObservation[] = []) => rows.filter(r => Number.isInteger(r.games) && r.games > 0 && Number.isInteger(r.wins) && r.wins >= 0 && r.wins <= r.games);
+  const valid = (rows: PurchaseObservation[] = []) => rows.filter(r => Number.isInteger(r.games) && r.games > 0 && Number.isInteger(r.wins) && r.wins >= 0 && r.wins <= r.games && (!input.acceptKey || input.acceptKey(r.key)));
   const matched = e.matchup && e.matchup.opponent === input.opponent ? valid(e.matchup[input.kind]) : [];
   const general = valid(e[input.kind]);
   const total = (rows: PurchaseObservation[]) => rows.reduce((n, r) => n + r.games, 0);
