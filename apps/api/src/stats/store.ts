@@ -56,6 +56,8 @@ export interface ChampionStats {
   wins: number;
   winRate: number;
   byKind: Partial<Record<Exclude<StatKind, "games">, StatOption[]>>;
+  /** Unfiltered counters for engine baselines and prefix aggregation; never display-filter first. */
+  evidenceByKind?: Partial<Record<Exclude<StatKind, "games">, StatOption[]>>;
 }
 
 /** The patch before "16.19" is "16.18"; null for the first patch of a season (unknown). */
@@ -84,16 +86,19 @@ export async function championStats(db: Db, champion: string, position: string |
     const total = rows.find((r) => r.kind === "games" && r.key === "");
     if (!total || total.games < MIN_GAMES) continue;
     const byKind: ChampionStats["byKind"] = {};
+    const evidenceByKind: ChampionStats["byKind"] = {};
     for (const r of rows) {
-      if (r.kind === "games" || r.games < MIN_OPTION) continue;
+      if (r.kind === "games") continue;
       const k = r.kind as Exclude<StatKind, "games">;
-      (byKind[k] ??= []).push({
-        key: r.key, games: r.games, wins: r.wins, share: r.games / total.games, winRate: r.wins / r.games,
+      const option: StatOption = {
+        key: r.key, games: r.games, wins: r.wins, share: r.games / total.games, winRate: r.games > 0 ? r.wins / r.games : 0,
         avgMinute: r.minuteN ? r.minuteSum / r.minuteN : null,
-      });
+      };
+      (evidenceByKind[k] ??= []).push(option);
+      if (r.games >= MIN_OPTION) (byKind[k] ??= []).push(option);
     }
     for (const k of Object.keys(byKind) as (keyof typeof byKind)[]) byKind[k]!.sort((a, b) => b.games - a.games);
-    return { patch, patchLabel, champion, position: pos, games: total.games, wins: total.wins, winRate: total.wins / total.games, byKind };
+    return { patch, patchLabel, champion, position: pos, games: total.games, wins: total.wins, winRate: total.wins / total.games, byKind, evidenceByKind };
   }
   return null;
 }

@@ -78,3 +78,44 @@ Usar `docs/23-validation-results.csv`; todas las filas comienzan PENDIENTE. Marc
 - Recomendación: revisión por campeón/rol/rival con límites documentados; no una aprobación global por pasar el barrido.
 - Producto: casos manuales y revisión visual; documentar pendientes de informe postpartida, economía rival y estrategia profunda.
 - Publicación: decisión separada del usuario después de revisar lo anterior. Página pública y clave privada del servidor son conceptos distintos.
+
+## User-provided production evidence: 2026-09-28
+
+Read-only Render Shell results supplied as screenshots by the user show 11,502 retained
+counted matches for 16.19 (NA1 3,745; KR 3,646; EUW1 4,111), with latest processing
+at 21:25:01 UTC. This is a user-executed database observation, not direct agent access
+or proof of sustained ingestion rate. Counts and statistics retention differ.
+
+The category report includes 173 champions and 687 champion/role `games` rows for 16.19.
+It contains eight categories; matchup purchase categories and complete rune-page categories
+are absent. The existing `matchup` category alone cannot establish item win rates against
+an opponent. New collector categories in this draft PR are not deployed or backfilled.
+
+A second, top-five-first-item excerpt shows:
+
+| Champion / role | Total games | Most frequent first item | Item games | Item wins |
+|---|---:|---|---:|---:|
+| Ahri / MIDDLE | 808 | 3118 Malignance | 510 | 264 |
+| Smolder / BOTTOM | 80 | 3508 Essence Reaver | 69 | 30 |
+| Yasuo / TOP | 336 | 3153 Blade of the Ruined King | 122 | 74 |
+| Yasuo / MIDDLE | 804 | 6673 Immortal Shieldbow | 460 | 239 |
+| Yasuo / BOTTOM | 319 | 3095 Stormrazor | 86 | 49 |
+
+These are partial observational excerpts, not full database fixtures, causal rankings,
+or certified optimal builds. The build audit replays all five provided top-five excerpts;
+it does not install them as runtime recommendations. Smolder's sample remains below
+the 100-observation gate, and its one-game 100% alternatives receive no empirical bonus.
+
+### Evidence pipeline correction
+
+`championStats` previously removed every option below eight games before handing counters
+to the recommendation engine. This altered denominators and could erase supported next
+purchases split among rare three-item paths. It now retains separate unfiltered evidence
+while preserving the display filter. Champion, role, patch and opponent isolation remain;
+100 observations per pool and 30 per candidate are still required after prefix aggregation.
+The read-only coverage report now uses the same unfiltered denominators.
+
+Two database-to-engine regressions fail before the correction and pass after it: rare
+paths aggregating to 100 next purchases, and small outcomes retained in the baseline
+without becoming eligible recommendations. This correction applies to all champions and
+roles. It does not certify strategic quality or solve the missing production categories.

@@ -9,10 +9,9 @@ export function coverageReport(rows: CoverageCount[], champions: string[], patch
   const current = rows.filter(r => r.patch === patch && Number.isInteger(r.games) && r.games >= 0 &&
     Number.isInteger(r.wins) && r.wins >= 0 && r.wins <= r.games);
   const sample = (rs: CoverageCount[]) => {
-    // championStats hides options below eight games before passing evidence to the engine.
-    const visible = rs.filter(r => r.games >= 8);
-    const observations = visible.reduce((n, r) => n + r.games, 0);
-    const supportedOptions = visible.filter(r => r.games >= 30).length;
+    // Engine baselines include rare options; only supported options may affect a ranking.
+    const observations = rs.reduce((n, r) => n + r.games, 0);
+    const supportedOptions = rs.filter(r => r.games >= 30).length;
     return { observations, supportedOptions, sampleThresholdMet: observations >= 100 && supportedOptions > 0 };
   };
   return champions.flatMap(champion => POSITIONS.map(position => {

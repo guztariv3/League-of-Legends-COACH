@@ -71,3 +71,29 @@ describe('sample-weighted purchase observations (fictional statistical fixtures)
   expect(purchasePrior({...query,evidence:e,chosen:[3118],candidate:3157})).toBeNull();
  });
 });
+
+describe('user-provided Render excerpt (2026-09-28, patch 16.19; top five only)',()=>{
+ const samples:[string,string,number[][]][]=[
+  ['Ahri','MIDDLE',[[3118,510,264],[2503,272,156],[6655,5,3],[4646,3,0],[6657,3,2]]],
+  ['Smolder','BOTTOM',[[3508,69,30],[3078,2,1],[3031,1,1],[3161,1,1],[3814,1,0]]],
+  ['Yasuo','TOP',[[3153,122,74],[6673,66,34],[6672,64,31],[3095,44,25],[3032,23,9]]],
+  ['Yasuo','MIDDLE',[[6673,460,239],[3153,108,52],[3095,104,57],[6672,39,20],[3046,38,16]]],
+  ['Yasuo','BOTTOM',[[3095,86,49],[6673,78,48],[6672,64,33],[3153,53,29],[3032,21,7]]],
+ ];
+ for(const [champion,position,rows] of samples)it(`${champion} ${position}: evidence reaches eligible engine candidates without leaking roles`,()=>{
+  const observed:BuildEvidence={champion,position,patch:'16.19',first:rows.map(([id,games,wins])=>({key:String(id),games:games!,wins:wins!})),core:[]};
+  const input={me:kit(champion),items,position,patch:'16.19',enemies:[]};
+  const plain=recommendBuild(input),actual=recommendBuild({...input,evidence:observed});
+  if(champion==='Smolder') {
+   expect(actual.audit).toEqual(plain.audit); // 74 observed completions cannot pass 100-game gate.
+   expect(actual.first!.id).toBe(3508); // Mechanics, not a fabricated statistical endorsement.
+  } else {
+   expect(actual.audit!.candidates.some(c=>c.empirical>0)).toBe(true);
+   for(const c of actual.audit!.candidates.filter(c=>c.empirical>0)) {
+    expect(observed.first.find(r=>r.key===String(c.id))!.games).toBeGreaterThanOrEqual(30);
+   }
+  }
+  expect(recommendBuild({...input,evidence:{...observed,position:position==='TOP'?'MIDDLE':'TOP'}}).audit).toEqual(plain.audit);
+  expect(recommendBuild({...input,evidence:{...observed,patch:'16.18'}}).audit).toEqual(plain.audit);
+ });
+});
