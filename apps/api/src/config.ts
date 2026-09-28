@@ -28,7 +28,7 @@ export interface Config {
   statsCrawl: boolean;
   /** Platforms whose Master+ ladders are read (STATS_PLATFORMS=EUW1,KR,NA1). */
   statsPlatforms: string[];
-  /** Milliseconds between two crawler steps; each step makes at most three Riot calls. */
+  /** Milliseconds between two crawler steps; ladder refreshes can make three Riot calls per platform. */
   statsIntervalMs: number;
 }
 

@@ -1,7 +1,7 @@
 import type { RawMatch, RawTimeline } from "@coach/domain";
 import { patchFromVersion } from "@coach/domain";
 import type { GameFacts } from "@coach/knowledge";
-import type { RiotApexLeague } from "@coach/riot";
+import { RiotApiError, type RiotApexLeague } from "@coach/riot";
 import type { Db } from "../db/index.js";
 import { SOLO_QUEUE, statRows } from "./aggregate.js";
 import { previousPatch, recordGame, seen } from "./store.js";
@@ -38,7 +38,9 @@ const PLAYERS_TTL_MS = 6 * 3_600_000;
  */
 export class StatsCrawler {
   private players: { platform: string; puuid: string }[] = [];
-  private playersAt = 0;
+  private playersAt: number | null = null;
+  private progress: Record<string, number> = {};
+  private lastReportAt: number | null = null;
   private cursor = 0;
   private queue: { platform: string; matchId: string }[] = [];
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -56,8 +58,20 @@ export class StatsCrawler {
 
   start(intervalMs: number): void {
     if (this.timer) return;
-    this.timer = setInterval(() => { void this.step().catch((err) => console.warn("[stats] step failed:", err instanceof Error ? err.message : err)); }, intervalMs);
+    this.timer = setInterval(() => {
+      void this.step().then(result => this.report(result)).catch(err => this.report(err instanceof RiotApiError ? `failed-${err.kind}` : "failed"));
+    }, intervalMs);
     this.timer.unref?.();
+  }
+
+  /** Aggregate process-local progress only; no keys, URLs, match ids or player identities. */
+  private report(result: string): void {
+    this.progress[result] = (this.progress[result] ?? 0) + 1;
+    const now = (this.deps.now ?? Date.now)();
+    if (this.lastReportAt === null || now - this.lastReportAt >= 60_000) {
+      console.info("[stats] progress", JSON.stringify({ steps: this.progress, players: this.players.length, queued: this.queue.length }));
+      this.lastReportAt = now;
+    }
   }
 
   stop(): void {
@@ -66,7 +80,7 @@ export class StatsCrawler {
   }
 
   /** Does one unit of work: refresh players, list a player's games, or count one game. */
-  async step(): Promise<"busy" | "no-patch" | "players" | "listed" | "counted" | "skipped" | "idle"> {
+  async step(): Promise<"busy" | "no-patch" | "players" | "listed" | "counted" | "skipped" | "idle" | "unavailable"> {
     if (this.busy) return "busy";
     this.busy = true;
     try {
@@ -74,7 +88,7 @@ export class StatsCrawler {
       if (!info) return "no-patch";
       const now = (this.deps.now ?? Date.now)();
 
-      if (!this.players.length || now - this.playersAt > PLAYERS_TTL_MS) {
+      if (this.playersAt === null || now - this.playersAt >= (this.players.length ? PLAYERS_TTL_MS : 60_000)) {
         const found: { platform: string; puuid: string }[] = [];
         for (const platform of this.deps.platforms) {
           for (const tier of TIERS) {
@@ -87,7 +101,8 @@ export class StatsCrawler {
         }
         this.players = found;
         this.playersAt = now;
-        this.cursor = 0;
+        // Keep walking through the ladder across refreshes instead of restarting at its top.
+        this.cursor = found.length ? this.cursor % found.length : 0;
         return "players";
       }
 
@@ -104,11 +119,14 @@ export class StatsCrawler {
 
       if ((await seen(this.deps.db, [next.matchId])).size) return "skipped";
       const match = await this.deps.riot.getMatch(next.platform, next.matchId);
-      if (!match) { await recordGame(this.deps.db, { matchId: next.matchId, platform: next.platform, patch: "", rows: [], counted: false }); return "skipped"; }
+      // Missing responses are not immutable evidence: a later listing may retry this match.
+      if (!match) return "unavailable";
       const patchOf = statRows(match, null, new Set()).patch;
       const wanted = patchOf === info.patch || patchOf === previousPatch(info.patch);
       if (!wanted) { await recordGame(this.deps.db, { matchId: next.matchId, platform: next.platform, patch: patchOf, rows: [], counted: false }); return "skipped"; }
       const timeline = await this.deps.riot.getTimeline(next.platform, next.matchId);
+      // Do not permanently claim a game without the timeline needed for purchase evidence.
+      if (!timeline) return "unavailable";
       const { rows } = statRows(match, timeline, info.completed);
       await recordGame(this.deps.db, { matchId: next.matchId, platform: next.platform, patch: patchOf, rows, counted: rows.length > 0 });
       return rows.length ? "counted" : "skipped";

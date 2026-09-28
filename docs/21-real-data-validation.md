@@ -36,7 +36,13 @@ Each champion × position row reports total games, first-completed-item, full ru
 ## Known gaps to assess before declaring completion
 
 - Older counted matches are immutable and are not backfilled with the newly added full rune-page/matchup counters. Collect new matches; do not delete shared counters or re-add old matches to force numbers upward.
-- A null timeline can leave a counted game without purchase observations; current crawler bookkeeping does not retry it. Inspect category coverage rather than using total games as proof of item coverage.
+- Before the crawler repair, a null timeline could permanently claim a game without purchase observations. The repair leaves missing matches/timelines unclaimed so subsequent history listings can retry them. It does not repair older counters or promise when the match will reappear. Permanently unavailable matches can remain absent; inspect category coverage rather than treating total games as proof of purchase coverage.
 - The collector can retain the previous patch for display, but this report and recommendation evidence use the requested exact patch only.
 - Compare actual recommended choices against supported samples by champion/role/opponent and examine exceptions. A larger win rate alone does not establish the best first item: completion bias and player selection matter.
 - Windows/League gameplay validation is still required independently of statistical coverage.
+
+## Crawler diagnostics (requires deploying this revision)
+
+`[stats] progress` emits an initial process-local summary and then at most one per minute while steps complete. `steps` counts outcomes since this process started, not lifetime database matches. `players` and `queued` are aggregate sizes. `counted` means this worker completed eligible aggregation; concurrent workers may have claimed the same match first, so use database counters for authoritative totals. `unavailable` means match or timeline data was absent and not permanently claimed. `no-patch` means game facts are unavailable. `failed-auth`, `failed-rate_limited`, `failed-schema`, `failed-server`, and other Riot error categories distinguish causes without logging raw exception text, secrets, player identities, URLs or match ids. Other exceptions appear as `failed`. A stalled request may delay the summary: it is not an independent health heartbeat.
+
+Empty ladders are retried after a minute instead of on every tick. Nonempty ladders keep the player cursor across six-hour refreshes to reduce repeatedly starting at the highest-ranked players. Sampling still remains selective. No collector speed increase, credential change, migration or production deployment is included.

@@ -1,9 +1,10 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { normalizeMatch, type RawMatch, type RawTimeline } from "@coach/domain";
 import { generateHistory, SYNTHETIC_ITEMS } from "@coach/synthetic";
 import { openDatabase, type Database } from "../db/index.js";
 import { maxOrder, statRows, type StatRow } from "./aggregate.js";
 import { championStats, MIN_GAMES, MIN_OPTION, previousPatch, recordGame, seen } from "./store.js";
+import { RiotApiError } from "@coach/riot";
 import { StatsCrawler, type StatsRiot } from "./crawler.js";
 
 const COMPLETED = new Set(SYNTHETIC_ITEMS.map((i) => i.id));
@@ -157,6 +158,62 @@ describe("StatsCrawler", () => {
     } finally {
       await opened.close();
     }
+  });
+
+  it.each(["match", "timeline"] as const)("does not claim missing %s data and counts a later successful retry only once", async missing => {
+    const opened = await openDatabase();
+    try {
+      const game = history.find(g => g.match.info.queueId === 420 && g.timeline && g.scenario !== "remake")!;
+      const { riot, calls } = fakeRiot([game]);
+      let available = false;
+      const getMatch = riot.getMatch, getTimeline = riot.getTimeline;
+      riot.getMatch = async (...args) => missing === "match" && !available ? null : getMatch(...args);
+      riot.getTimeline = async (...args) => missing === "timeline" && !available ? null : getTimeline(...args);
+      const crawler = new StatsCrawler({ db: opened.db, riot, platforms:["EUW1"], perLeague:1,
+        patch:async()=>({patch:normalizeMatch(game.match).patch,completed:COMPLETED}) });
+      await crawler.step(); await crawler.step();
+      expect(await crawler.step()).toBe("unavailable");
+      expect((await seen(opened.db,[game.match.metadata.matchId])).size).toBe(0);
+      available = true;
+      await crawler.step();
+      expect(await crawler.step()).toBe("counted");
+      expect((await seen(opened.db,[game.match.metadata.matchId])).size).toBe(1);
+      const count = calls.timeline;
+      await crawler.step(); await crawler.step();
+      expect(calls.timeline).toBe(count);
+    } finally { await opened.close(); }
+  });
+
+  it("backs off an empty ladder for a minute instead of fetching every tick", async () => {
+    let now=0, calls=0;
+    const {riot}=fakeRiot([]);
+    riot.getApexLeague=async()=>{ calls++; return null; };
+    const crawler=new StatsCrawler({db:database.db,riot,platforms:["EUW1"],now:()=>now,
+      patch:async()=>({patch:"16.19",completed:COMPLETED})});
+    expect(await crawler.step()).toBe("players");
+    expect(calls).toBe(3);
+    now=59_999;
+    expect(await crawler.step()).toBe("idle");
+    expect(calls).toBe(3);
+    now=60_000;
+    expect(await crawler.step()).toBe("players");
+    expect(calls).toBe(6);
+  });
+
+  it("reports bounded aggregate progress without copying exception messages or secrets", async () => {
+    vi.useFakeTimers();
+    const log=vi.spyOn(console,"info").mockImplementation(()=>{});
+    const {riot}=fakeRiot([]);
+    const crawler=new StatsCrawler({db:database.db,riot,platforms:["EUW1"],
+      patch:async()=>{throw new RiotApiError("private-key-and-player-details",403,"auth");}});
+    try {
+      crawler.start(1000);
+      await vi.advanceTimersByTimeAsync(61_000);
+      expect(log).toHaveBeenCalledTimes(2);
+      const output=JSON.stringify(log.mock.calls);
+      expect(output).toContain("failed-auth");
+      expect(output).not.toContain("private-key-and-player-details");
+    } finally {crawler.stop();log.mockRestore();vi.useRealTimers();}
   });
 
   it("does nothing without patch data", async () => {
