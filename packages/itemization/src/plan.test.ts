@@ -187,3 +187,22 @@ it("compact buy-now respects full slots while permitting component consumption",
  const withComponent=[WAND,...occupied.slice(1)];
  expect(purchasePath(item(MORELLO),withComponent,6000,catalog).affordableNow?.id).toBe(MORELLO);
 });
+
+it("does not gain artificial priority by buying a shared component through an earlier target", () => {
+  const make=(id:number,gold:number,from:number[]=[])=>({...item(WAND),id,name:`Priority ${id}`,gold,from});
+  const shared=make(1,100), earlier=make(2,2000,[1]), chosen=make(3,400,[1]);
+  const local={...catalog,items:new Map([shared,earlier,chosen].map(i=>[i.id,i]))};
+  const p=planPurchases({targets:[earlier,chosen],inventory:[],gold:400,time:900,itemGold:0,catalog:local,utility:{1:1,2:1,3:1}});
+  expect(p.now!.completes).toEqual([chosen.name]);
+  // Both routes end with the same object and spend the same gold: no unnecessary intermediate click.
+  expect(p.now!.buys.map(b=>b.id)).toEqual([chosen.id]);
+});
+
+it("prioritizes useful stats over simply spending more gold", () => {
+  const make=(id:number,gold:number,from:number[]=[])=>({...item(WAND),id,name:`Utility ${id}`,gold,from});
+  const useful=make(1,200), expensive=make(2,400), target=make(3,1500,[1,2]);
+  const local={...catalog,items:new Map([useful,expensive,target].map(i=>[i.id,i]))};
+  const run=(utility:Record<number,number>)=>planPurchases({targets:[target],inventory:[],gold:400,time:900,itemGold:0,catalog:local,utility});
+  expect(run({1:3,2:.5,3:1}).now!.buys.map(b=>b.id)).toEqual([1]);
+  expect(run({1:.5,2:3,3:1}).now!.buys.map(b=>b.id)).toEqual([2]);
+});
