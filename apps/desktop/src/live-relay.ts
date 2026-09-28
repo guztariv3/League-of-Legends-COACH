@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import type { CoachDecision, LiveCoach } from "@coach/coach";
-import { clockSample, describeOffset, NOTABLE_OFFSET_MS, ServerClock, type GameState } from "@coach/live";
+import { clockSample, describeOffset, NOTABLE_OFFSET_MS, ServerClock, stampNow, type GameState, type Stamp } from "@coach/live";
 import type { LiveFrame, LiveSection } from "@coach/ui";
 import type { PlanResponse } from "./board";
 import { fetchServerTime, publishLive, type ChampSelect } from "./bridge";
@@ -33,6 +33,14 @@ function planSections(plan:PlanResponse|null):LiveSection[] {
 }
 interface RelayInput { enabled:boolean; link:{origin:string;token:string}|null; state:GameState|null; select:ChampSelect|null; draft:PlanResponse|null; plan:PlanResponse|null; patch:string|null; paused:boolean; reconnecting:boolean; ended:boolean; output:MutableRefObject<Output|null>; demo:boolean }
 
+/**
+ * When the data behind an object was read (stamped where it is read: the game snapshot, the
+ * champion-select read). The relay never stamps data itself, so a capture that waits to be sent
+ * keeps its age.
+ */
+const acquisitions=new WeakMap<object,Stamp>();
+export function markAcquired(data:object,at:Stamp){acquisitions.set(data,at);}
+
 /** What the Settings line shows about private web Live sharing. */
 export interface RelayStatus { state:"off"|"syncing"|"connected"|"waiting"|"no-clock"|"offline"; text:string }
 const OFF:RelayStatus={state:"off",text:"off"};
@@ -40,7 +48,7 @@ const OFF:RelayStatus={state:"off",text:"off"};
 /**
  * One in-flight publication, latest-state sampling, no backlog; never blocks the game reader.
  * Frames are stamped in the site's time (measured with /desktop/time), with the moment their data
- * was observed: a PC clock that is off still shares, and old data is never re-stamped as new.
+ * was read: a PC clock that is off still shares, and old data is never re-stamped as new.
  */
 export function useLiveRelay(input:RelayInput) {
  const [status,setStatus]=useState<RelayStatus>(OFF);
@@ -48,23 +56,20 @@ export function useLiveRelay(input:RelayInput) {
  const stream=useRef(crypto.randomUUID()); const sequence=useRef(0);
  const lastGame=useRef<GameState|null>(null);
  const wasEnabled=useRef(false);
- // When the data behind the advice was read (client clock), keyed by the object that carried it.
- const observed=useRef<{key:unknown;at:number}>({key:null,at:0});
  useEffect(()=>{
   if(!input.link){setStatus(OFF);return;}
   let stopped=false; let timer:ReturnType<typeof setTimeout>;
   const link=input.link;
   const clock=new ServerClock();
   const sync=async()=>{
-   const t0=Date.now(); const r=await fetchServerTime(link.origin,link.token); const t1=Date.now();
+   const t0=stampNow(); const r=await fetchServerTime(link.origin,link.token); const t1=stampNow();
    return r.ok && clock.update(clockSample(t0,r.data.serverTime,t1));
   };
-  const frameAt=(clientMs:number)=>clock.toServer(clientMs)!;
   if(!input.enabled){
    // Sharing is off: nothing is published. Only when it was just turned off, one empty frame
    // replaces what was shared, so the web page stops showing it.
    setStatus(OFF);
-   if(wasEnabled.current)void sync().then(ok=>{ if(!ok)return; void publishLive(link.origin,link.token,{version:1,streamId:stream.current,sequence:++sequence.current,capturedAt:frameAt(Date.now()),phase:"idle",
+   if(wasEnabled.current)void sync().then(ok=>{ if(!ok)return; const now=stampNow(); void publishLive(link.origin,link.token,{version:1,streamId:stream.current,sequence:++sequence.current,capturedAt:clock.capturedAt(now,now)!,phase:"idle",
     champion:null,position:null,patch:null,time:null,gold:null,allies:[],enemies:[],headline:"No active shared game",sections:[]}); });
    wasEnabled.current=false;
    return;
@@ -72,9 +77,8 @@ export function useLiveRelay(input:RelayInput) {
   wasEnabled.current=true;
   let terminalSent=false;
   const loop=async()=>{
-   const v=latest.current;
    if(stopped)return;
-   if(clock.needsSync(Date.now())){
+   if(clock.needsSync(stampNow())){
     setStatus(st=>st.state==="connected" ? st : {state:"syncing",text:"checking the time with the website…"});
     if(!(await sync())){
      if(!stopped){setStatus({state:"no-clock",text:"can't check the time with the website, so nothing is shared yet. Retrying…"});timer=setTimeout(loop,5000);}
@@ -82,6 +86,7 @@ export function useLiveRelay(input:RelayInput) {
     }
     if(stopped)return;
    }
+   const v=latest.current; // sampled after any time check: the latest data the app has read
    const s=v.state;
    if(s?.me && !v.demo)lastGame.current=s;
    let phase:LiveFrame["phase"]=v.demo ? "idle" : v.reconnecting ? "reconnecting" : s?.me ? v.paused ? "paused":"live" : v.select?.phase==="ChampSelect" ? v.select.me?.locked ? "pregame":"draft" : ["GameStart","InProgress"].includes(v.select?.phase??"") ? "loading" : v.ended ? "ended":"idle";
@@ -90,6 +95,10 @@ export function useLiveRelay(input:RelayInput) {
    const out=v.output.current;
    // A coach answer belongs to a specific snapshot; mismatches stay hidden until recomputed.
    if(phase==="live" && (!out || out.time!==s?.time))phase="reconnecting";
+   // Advice carries the moment its data was read; without that moment it is not shared.
+   const source=phase==="live" ? s : phase==="draft"||phase==="pregame" ? v.select : null;
+   const acquired=source ? acquisitions.get(source) : undefined;
+   if(source && !acquired)phase="reconnecting";
    const r=v.draft?.draftRead;
    let sections:LiveSection[]=phase==="live" && out ? [...liveSections(out),...planSections(v.plan)] : phase==="pregame" ? planSections(v.draft) : phase==="draft" && r ? [
     {title:"Team fit",lines:[r.teamFit],primary:true},{title:"Versus enemy",lines:[r.versus],primary:true},
@@ -102,11 +111,10 @@ export function useLiveRelay(input:RelayInput) {
    if(phase === "live") sections.push({title:"Equipped runes and summoner spells",lines:[s?.loadout?.runes.map(r=>r.name).join(" · ")||"Actual runes not reported.",s?.loadout?.spells.join(" + ")||"Actual summoner spells not reported."]});
    const ended=lastGame.current;
    if(phase==="ended" && ended?.me)sections=[{title:"Last observed match snapshot",lines:[`${ended.me.champion}: ${ended.me.kills}/${ended.me.deaths}/${ended.me.assists}; ${ended.me.cs} CS in ${(ended.time/60).toFixed(1)} minutes.`,"Open Matches for the verified post-game Coach after Riot match history finishes syncing."]}];
-   // Advice carries the time its data was read; frames without advice (waiting, paused, ended)
-   // describe this moment. Either way the time is converted to the site's clock.
-   const source=phase==="live" ? s : phase==="draft"||phase==="pregame" ? v.select : null;
-   if(source!==observed.current.key)observed.current={key:source,at:Date.now()};
-   const frame:LiveFrame={version:1,streamId:stream.current,sequence:++sequence.current,capturedAt:frameAt(source ? observed.current.at : Date.now()),phase,
+   // Frames without advice (waiting, paused, ended) describe this moment. Either way the time is
+   // the site's: the server's current time minus the capture's age.
+   const now=stampNow();
+   const frame:LiveFrame={version:1,streamId:stream.current,sequence:++sequence.current,capturedAt:clock.capturedAt(phase==="reconnecting" ? now : acquired??now,now)!,phase,
     champion:s?.me?.championId??v.draft?.champion??null,position:s?.me?.position??v.select?.me?.position??null,patch:v.patch,
     time:s?.time??null,gold:s?.gold??null,
     allies:s?.allies.map(p=>p.championId)??v.draft?.roster?.allies??[],enemies:s?.enemies.map(p=>p.championId)??v.draft?.roster?.enemies??[],

@@ -27,21 +27,47 @@ aggregation now claims and increments each match inside one transaction to preve
 
 A PC whose clock is minutes ahead or behind can still share. Before publishing, the companion asks
 the site for its time (`GET /api/desktop/time`, device token, `no-store`, rate limited) and measures
-the offset from the request's round trip (samples slower than 3 s are discarded). It re-measures every
-5 minutes and after any rejected frame. Each frame's `capturedAt` is the moment its data was
-*observed* (the game snapshot for live advice, the champion-select read for draft/pre-game), converted
-to server time; frames without advice describe the moment they are sent. The site still judges
-freshness by absolute server time (at most 15 s old, 5 s into the future), so data observed long ago
-stays old however late it is sent, and a replayed request never becomes current. Ordering guards
-(same stream: higher sequence only; a new stream after a restart must be captured later) are unchanged.
+the offset from the request's round trip (samples slower than 3 s are discarded). The offset is taken
+against the monotonic clock (`performance.now()`), not the PC's wall clock.
+
+Every read is stamped where it happens: the game snapshot (`live_snapshot`) and the champion-select
+read (`lcu_champ_select`) carry a stamp on both local clocks, taken just before the read. The relay
+never stamps data itself. A frame's `capturedAt` is the server's current time minus the capture's
+age, and that age is the larger of the monotonic and wall-clock ages. Consequences:
+
+- data held back (reader stalled, no website time, sharing enabled later) keeps its real age;
+- changing the PC clock, or re-measuring the offset, after a read never makes it younger;
+- a sleeping PC (monotonic clock stopped) only makes data look older.
+
+The companion re-measures every 5 minutes, after any rejected frame and whenever the wall and
+monotonic clocks drift apart by more than 2 s (the PC time was changed, or the PC slept).
+The site still judges freshness by absolute server time (at most 15 s old, 5 s into the future),
+so old captures and replayed requests stay rejected. Ordering guards (same stream: higher sequence
+only; a new stream after a restart must be captured later) are unchanged.
 
 Without a time measurement nothing is published. Desktop Settings shows the connection state:
 `connected` (and how far the PC clock is from the site's, when 10 s or more), `can't check the time
 with the website…`, `waiting for fresh game data…` (a frame was rejected as stale) or `can't reach the
 website…`. The web hides expired advice and says it is waiting for recent data from the companion.
-Covered by `packages/live/src/clock.test.ts`, `apps/api/src/desktop.test.ts` (skewed clocks, truly old
-captures, late answers, reconnection) and `apps/desktop/e2e/live-share.spec.ts` (10 min ahead/behind,
-time check failing, rejection, no publishing while off).
+
+Tests:
+- `packages/live/src/clock.test.ts`: offsets, capture age, clock set back/forward, sleep.
+- `apps/api/src/desktop.test.ts`: skewed clocks, truly old captures, late answers, reconnection.
+- `apps/desktop/e2e/live-share.spec.ts`: the full path with two independent simulated clocks,
+  the website's and the PC's. It covers:
+  - PC clock 10 min ahead or behind;
+  - a champion-select read held 65 s before its first publication;
+  - the PC clock set back between reading and sending;
+  - a game snapshot held 65 s before sharing is enabled;
+  - time check failing, rejection, and no publishing while off.
+
+**Manual check of clock skew.** Changing the time of the PC that also runs a local test server
+changes both clocks together: there is no skew to observe. Run the test server on a *second*
+computer, whose clock stays correct. The companion only accepts plain `http` for `localhost`,
+so forward a local port on the Windows PC to it (built into Windows, administrator PowerShell):
+`netsh interface portproxy add v4tov4 listenaddress=127.0.0.1 listenport=8787 connectaddress=<second computer's IP> connectport=8787`.
+Remove it afterwards with `netsh interface portproxy delete v4tov4 listenaddress=127.0.0.1 listenport=8787`.
+Then connect the companion to `http://localhost:8787` and change only the Windows PC's clock.
 
 ## Draft
 

@@ -1,9 +1,9 @@
 import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { ConnectionHealth, DEFAULT_CONTROLS, laneOpponent, LiveEngine, modeInfo, type Delivery, type EngineTick, type Intensity, type LiveControls } from "@coach/live";
+import { ConnectionHealth, DEFAULT_CONTROLS, laneOpponent, LiveEngine, modeInfo, stampNow, type Delivery, type EngineTick, type Intensity, type LiveControls } from "@coach/live";
 import { STARTER_WINDOW_SEC, type EngineItems } from "@coach/coach";
 import { goldPace } from "@coach/itemization";
-import { useLiveRelay, type Output } from "./live-relay";
+import { markAcquired, useLiveRelay, type Output } from "./live-relay";
 import { CoachAvatar, DraftCard } from "@coach/ui";
 import { checkUpdate, fetchBuild, fetchItems, fetchPlan, inTauri, installUpdate, readChampSelect, readLoad, readSnapshot, setOverlay, windowControl, type ChampSelect, type UpdateInfo } from "./bridge";
 import { Board, ChampArt, PlanTab, useArt, useCatalog, type BoardTab, type PersonalBuild, type PlanResponse } from "./board";
@@ -128,6 +128,8 @@ function LiveWindow() {
         if (stopped) return;
         const load = await readLoad();
         let raw: unknown = null;
+        // When this snapshot is read: its age travels with it to web Live (never re-stamped later).
+        const readAt = stampNow();
         if (demo) raw = demo.snapshot();
         else {
           const snap = await readSnapshot();
@@ -162,6 +164,7 @@ function LiveWindow() {
             if (health === "ended") { live = false; engine = null; resetMatch(); }
           } else {
             interrupted = false;
+            markAcquired(t.state, readAt);
             setTick(t);
             const d = t.deliveries[0];
             if (d && !controlsRef.current.paused) setMessage({ ...d, shownAt: t.state.time });
@@ -247,8 +250,10 @@ function LiveWindow() {
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
     const loop = async () => {
+      const readAt = stampNow();
       const r = await readChampSelect();
       if (stopped) return;
+      if (r.ok) markAcquired(r.data, readAt);
       setChampSelect(r.ok ? r.data : null);
       // Faster inside champion select, slow when the client is closed.
       timer = setTimeout(loop, !r.ok ? 10_000 : r.data.phase === "ChampSelect" ? 400 : 2000);
