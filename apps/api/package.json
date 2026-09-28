@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "DEV_LOGIN=1 tsx watch src/server.ts",
     "start": "node --import tsx src/server.ts",
-    "stats:coverage": "node --import tsx src/stats/report-cli.ts"
+    "stats:coverage": "node --import tsx src/stats/report-cli.ts",
+    "stats:backfill": "node --import tsx src/stats/backfill-cli.ts"
   },
   "dependencies": {
     "@coach/ai": "workspace:*",

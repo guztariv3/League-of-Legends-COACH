@@ -23,6 +23,7 @@ export async function recordGame(db: Db, g: { matchId: string; platform: string;
     const claimed = await tx.insert(schema.statsMatches).values({matchId:g.matchId,platform:g.platform,patch:g.patch,counted:g.counted})
       .onConflictDoNothing().returning({id:schema.statsMatches.matchId});
     if (!claimed.length) return;
+    if (g.counted) await tx.insert(schema.statsEnrichments).values({matchId:g.matchId,status:"complete"});
     const c = schema.statsCounts;
     for (const a of acc.values()) {
       await tx.insert(c).values({ patch: g.patch, ...a })
