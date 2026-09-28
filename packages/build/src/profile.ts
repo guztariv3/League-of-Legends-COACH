@@ -27,6 +27,9 @@ export interface ChampionProfile {
   /** Its abilities heal or shield (it values heal and shield power). */
   healsOrShields: number;
   ranged: boolean;
+  spellOnHit: boolean;
+  damagingUltimate: boolean;
+  repeatUltimate: boolean;
   /** Plain facts used by the explanations. */
   facts: string[];
 }
@@ -47,7 +50,10 @@ export function championProfile(kit: ChampionKit): ChampionProfile {
   const facts: string[] = [];
   const reliance = kit.ratings?.["abilityReliance"];
   // The Wiki gives 0–100; without it, a champion whose abilities do most things is assumed ability-reliant.
-  const abilityReliance = typeof reliance === "number" ? clamp(reliance / 100) : 0.6;
+  const spellOnHit = kit.abilities.some(a => BASICS.includes(a.slot as typeof BASICS[number]) && (a.cooldown?.[0] ?? 999) <= 6 && /appl(?:ies|ying) on-hit effects/i.test(a.text) && a.scalings.some(s=>s==="AD"||s==="bonusAD"));
+  const reportedReliance = typeof reliance === "number" ? clamp(reliance / 100) : 0.6;
+  // A repeatable damaging spell is not an attack-speed steroid, even if it applies on-hit.
+  const abilityReliance = spellOnHit ? Math.max(.75, reportedReliance) : reportedReliance;
   const attackReliance = 1 - abilityReliance;
 
   // Damage type: abilities by their damage type, plus basic attacks (physical) by attack reliance.
@@ -127,6 +133,10 @@ export function championProfile(kit: ChampionKit): ChampionProfile {
 
   const healsOrShields = clamp(kit.abilities.filter((a) => a.values.some((v) => /^(heal|shield strength|maximum heal|minimum heal|heal per)/i.test(v))).length / 3);
 
+  if (spellOnHit) facts.push(`${kit.name} has a short-cooldown damage spell that applies on-hit effects; attack speed does not reduce its cooldown`);
+  const ultimate = first(kit, "R");
+  const damagingUltimate = Boolean(ultimate && /(?:deals?|dealing) .{0,80}damage/i.test(ultimate.text));
+  const repeatUltimate = Boolean(damagingUltimate && ultimate && /recast|damage every|per second/i.test(ultimate.text));
   const total = damage.physical + damage.magic + damage.true || 1;
   return {
     id: kit.id,
@@ -140,6 +150,7 @@ export function championProfile(kit: ChampionKit): ChampionProfile {
     manaNeed,
     mana,
     healsOrShields,
+    spellOnHit, damagingUltimate, repeatUltimate,
     ranged: kit.attackType === "RANGED",
     facts,
   };

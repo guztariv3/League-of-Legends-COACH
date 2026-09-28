@@ -18,6 +18,8 @@ export type StatKind =
   | "skill_seq"  // key "1,2,3,…": the first 9 level-ups (slots 1–4)
   | "keystone"   // key "keystoneId:secondaryStyleId"
   | "spells"     // key "4+14" (sorted summoner spell ids)
+  | "matchup_first_item" // key "opponent|item": first completed item in this lane matchup
+  | "matchup_core" // key "opponent|id>id>id": completed core in this lane matchup
   | "matchup";   // key lane opponent's champion
 
 export interface StatRow { champion: string; position: string; kind: StatKind; key: string; win: boolean; minute: number | null }
@@ -55,6 +57,8 @@ export function statRows(raw: RawMatch, timeline: RawTimeline | null, completed:
       const done: { id: number; min: number }[] = [];
       for (const b of a.purchases) if (completed.has(b.itemId) && !done.some((d) => d.id === b.itemId)) done.push({ id: b.itemId, min: b.atSec / 60 });
       if (done[0]) rows.push({ ...base, kind: "first_item", key: String(done[0].id), minute: done[0].min });
+      if (a.laneOpponentChampion && done[0]) rows.push({...base,kind:"matchup_first_item",key:`${a.laneOpponentChampion}|${done[0].id}`,minute:done[0].min});
+      if (a.laneOpponentChampion && done.length>=3) rows.push({...base,kind:"matchup_core",key:`${a.laneOpponentChampion}|${done.slice(0,3).map(d=>d.id).join(">")}`,minute:done[2]!.min});
       if (done.length >= 3) rows.push({ ...base, kind: "core", key: done.slice(0, 3).map((d) => d.id).join(">"), minute: done[2]!.min });
     }
     if (a.skillOrder) {

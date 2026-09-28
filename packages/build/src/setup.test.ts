@@ -41,8 +41,8 @@ describe("rune page", () => {
   });
 
   it("follows the kit: basic-attack champions get an attack keystone, ability champions an ability one", () => {
-    for (const me of ["Jinx", "Smolder"]) expect(runeById.get(setup(me, MIXED, "BOTTOM").runes!.keystone.id)!.short, me).toMatch(/attack/i);
-    for (const me of ["Ahri", "Soraka"]) expect(runeById.get(setup(me, MIXED, "MIDDLE").runes!.keystone.id)!.short, me).toMatch(/abilit|allies/i);
+    for (const me of ["Jinx", "Caitlyn"]) expect(runeById.get(setup(me, MIXED, "BOTTOM").runes!.keystone.id)!.short, me).toMatch(/attack/i);
+    for (const me of ["Ahri", "Soraka", "Smolder"]) expect(runeById.get(setup(me, MIXED, "MIDDLE").runes!.keystone.id)!.short, me).toMatch(/abilit|allies/i);
   });
 
   it("never gives mana runes to a champion without mana, nor crowd-control keystones to a kit without hard crowd control", () => {

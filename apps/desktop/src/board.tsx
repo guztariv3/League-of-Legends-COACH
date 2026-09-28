@@ -195,7 +195,8 @@ function ItemsTab({ state, coach, build, art, connected, demo, hasCatalog }: {
 }) {
   const me = state.me!;
   if (demo) return <p className="quiet">In the demo the items are made up, so there are no suggestions. In a real game you will see your next suggested item here and how to buy it.</p>;
-  if (!hasCatalog || !coach.items) return <p className="quiet">Loading the patch item catalog… (needs an Internet connection)</p>;
+  if (!hasCatalog) return <p className="quiet">Loading the patch item catalog… (needs an Internet connection)</p>;
+  if (!coach.items) return <p className="quiet">Contextual item guidance unavailable. Connect to a server with current champion and item mechanics; class-only guesses are not shown.</p>;
   const s = coach.items;
   const price = (x: Suggestion) => `${x.item.gold} gold`;
   return (
@@ -439,6 +440,7 @@ export function Board({ state, art, catalog, build, connected, tab, demo = false
     skillHistory: history,
     skillReference,
     engine,
+    allowLocalItems: false,
   }) : null, [state,catalog,demo,suspended,engine,build,plan]);
   previousItem.current = coach?.items?.next?.item.id ?? null;
   const now = coach ? pickNow(coach.decisions, shownId) : null;

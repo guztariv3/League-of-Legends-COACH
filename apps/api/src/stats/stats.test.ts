@@ -38,6 +38,9 @@ describe("statRows", () => {
       expect(COMPLETED.has(Number(r.key))).toBe(true);
       expect(r.minute).toBeGreaterThan(0);
     }
+    const matchupFirst=rows.filter(r=>r.kind==='matchup_first_item');
+    expect(matchupFirst.length).toBeGreaterThan(0);
+    for(const r of matchupFirst){const [opponent,id]=r.key.split('|');expect(opponent).toBeTruthy();expect(first.some(f=>f.champion===r.champion&&f.position===r.position&&f.key===id&&f.win===r.win)).toBe(true);}
     // Wins match the team result.
     const winners = games.filter((r) => r.win).length;
     expect(winners).toBe(5);

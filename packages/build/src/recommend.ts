@@ -1,3 +1,4 @@
+import { purchasePrior, type BuildEvidence } from "./evidence.js";
 import { itemTiming, type EconomyContext, type ItemTiming } from "./economy.js";
 import type { ChampionKit, ItemFacts, ItemStat } from "@coach/knowledge";
 import { COUNTERS, THREAT_ONLY, itemProfile, statGoldValues, type Counter, type ItemProfile, type StatKey } from "./capabilities.js";
@@ -22,6 +23,8 @@ export interface BuildInput {
   /** Internal: this run computes the standard core (neutral enemy); it doesn't compute its own. */
   baseline?: boolean;
   economy?: EconomyContext;
+  patch?: string;
+  evidence?: BuildEvidence;
 }
 
 export interface ItemPick { id: number; name: string; gold: number; score: number; why: string[]; timing?: ItemTiming }
@@ -30,6 +33,7 @@ export interface Situational extends ItemPick { when: string }
 export interface BuildRecommendation {
   champion: string;
   componentUtility?: Record<number, number>;
+  audit?: { basis: "mechanics" | "observed"; candidates: {id:number;name:string;score:number;mechanical:number;empirical:number}[] };
   /** Facts about the champion's own kit that drive the build. */
   kit: string[];
   enemyDamage: EnemyPicture["damage"];
@@ -124,6 +128,7 @@ interface Scored {
   /** 0–1: the share of the item's stats (in gold) this champion makes use of. */
   fit: number;
   timing?: ItemTiming;
+  empirical?: number;
 }
 
 function score(ip: ItemProfile, p: ChampionProfile, e: EnemyPicture, s: State): Scored {
@@ -158,6 +163,22 @@ function score(ip: ItemProfile, p: ChampionProfile, e: EnemyPicture, s: State): 
     const ownCrit = ip.stats.filter(l=>l.key.split(":")[0] === "criticalStrikeChance").reduce((sum,l)=>sum+l.amount,0);
     bonus += p.scales.crit * p.offense * .5 * clamp((s.critChance + ownCrit) / 100);
     why.push(`It increases critical strike damage, which multiplies ${p.name}'s critical strikes.`);
+  }
+  // Offensive passive mechanics used to have no value while every defensive counter did.
+  const effects = ip.item.effects.map(ef=>ef.text).join(" ");
+  if (/after using an ability.*(?:next basic attack|next attack)/i.test(effects)) {
+    const scaling = /magic damage/i.test(effects) ? p.scales.AP : p.scales.AD;
+    const synergy = scaling * (p.spellOnHit ? .35 : .18 * p.abilityReliance);
+    bonus += synergy;
+    if (synergy > .08) why.push(p.spellOnHit ? `Its spell-triggered on-hit damage fits ${p.name}'s repeatable on-hit spell.` : `Its empowered attack can follow ${p.name}'s spell casts; this requires weaving an attack.`);
+  }
+  if (/ultimate haste/i.test(effects) && p.damagingUltimate) {
+    bonus += p.abilityReliance * .16;
+    why.push(`Ultimate haste reduces the cooldown of ${p.name}'s damaging ultimate.`);
+  }
+  if (/with your ultimate ability/i.test(effects) && /magic damage/i.test(effects) && p.damagingUltimate) {
+    bonus += p.scales.AP * (p.repeatUltimate ? .18 : .08);
+    why.push(`Its ultimate-triggered damage can be applied by ${p.name}'s ultimate${p.repeatUltimate ? " and its repeated damage" : ""}.`);
   }
   const armor = lines.find((l) => l.stat === "armor"), mr = lines.find((l) => l.stat === "magicResistance");
   if (armor && e.damage.physical >= 0.55) why.push(`${pct(e.damage.physical)} of the enemy damage is physical.`);
@@ -282,6 +303,7 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
     return { champion: p.name, kit: p.facts, enemyDamage: e.damage, threats: [], starter: null,
       first: null, next: [], boots: null, situational: [], ruledOut: [], certainty: null, alternative: null, adaptation: null };
   }
+  const firstCompletedItem = !equipped.some(i=>i.rank.includes("LEGENDARY") && !i.rank.includes("BOOTS"));
   const profiles = input.items.map((i) => itemProfile(i, gold, catalog))
     .filter((ip) => (ip.finished || ip.boots) && (ip.item.requiredChampion === null || ip.item.requiredChampion === p.id) && ip.item.requiredAlly === null);
 
@@ -306,6 +328,17 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
     .filter((ip) => ip.boots === boots && !owned.has(ip.item.id) && !picked.has(ip.item.id) && !ip.item.effects.some((ef) => ef.unique && ef.name && state.effects.has(ef.name)))
     .map((ip) => {
       const sc = score(ip, p, e, state);
+      if (!boots && firstCompletedItem && picked.size === 0 && ip.counters.some(c=>THREAT_ONLY.includes(c))) {
+        // Team-wide generic CC/healing is not by itself a reason to rush a defensive counter.
+        // Keep lane-critical counters available, especially against an already fed opponent.
+        const lane = input.enemies.find(x=>x.laneOpponent);
+        const lanePicture = lane ? enemyPicture([lane]) : null;
+        const critical = lanePicture && ip.counters.some(c=>COUNTERS[c].answers.some(k=>lanePicture.threats[k].weight>=.5));
+        const emergency = critical && (lane!.kills??0)-(lane!.deaths??0)>=3;
+        const retained = emergency ? 1 : critical ? .65 : .25;
+        sc.score -= sc.counterValue * (1-retained);
+        sc.why.push(emergency ? "Visible lane results justify urgent defensive counter value." : "First-item counter value is discounted until the lane threat justifies delaying the core spike.");
+      }
       if (!boots) {
         const timing = itemTiming(ip.item, input.items, input.owned ?? [], input.economy,
           component => score(itemProfile(component, gold, catalog), p, e, state).score);
@@ -317,6 +350,10 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
         sc.score += (1 - timing.remaining / Math.max(1, ip.item.gold)) * .2;
         sc.timing = timing;
         sc.why.push(timing.reason);
+      }
+      if (!boots && firstCompletedItem) {
+        const prior=purchasePrior({evidence:input.evidence,champion:input.me.id,position:input.position,patch:input.patch,opponent:input.enemies.find(x=>x.laneOpponent)?.kit.id,chosen:core.map(x=>x.ip.item.id),candidate:ip.item.id});
+        if(prior){sc.empirical=prior.bonus;sc.score+=prior.bonus;sc.why.push(prior.reason);}
       }
       const useless = counterWithoutThreat(ip, e);
       if (useless) {
@@ -334,11 +371,12 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
   const hasBoots = [...owned].some((id) => catalog.get(id)?.rank.includes("BOOTS"));
   let boots: Scored | null = null;
   let runnerUp: Scored | null = null;
+  let firstPool: Scored[] = [];
   for (let n = 0; n < 3; n++) {
     const pool = candidates(false);
     const best = pool[0];
     if (!best) break;
-    if (n === 0) runnerUp = pool[1] ?? null;
+    if (n === 0) {runnerUp = pool[1] ?? null;firstPool=pool.slice(0,10); }
     core.push(best);
     picked.add(best.ip.item.id);
     take(best.ip);
@@ -389,7 +427,8 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
   }
 
   const first = core[0] ?? null;
-  if (first && core[1]) first.why.push(`It scores ${Math.round(first.score * 100) / 100} for this game, against ${Math.round(core[1].score * 100) / 100} for ${core[1].ip.item.name}, the next best.`);
+  if (first && first.empirical === undefined) first.why.push("This choice has no sufficiently sampled current-patch purchase evidence; its ranking is based on mechanics, not observed win rate.");
+  if (first && runnerUp) first.why.push(`Heuristic score ${Math.round(first.score * 100) / 100}, versus ${Math.round(runnerUp.score * 100) / 100} for ${runnerUp.ip.item.name} in the same slot. This is not a win probability.`);
 
   // Certainty: how far the first item is ahead of the best other choice for the same slot.
   const margin = first && runnerUp && first.score > 0 ? (first.score - runnerUp.score) / first.score : first ? 1 : 0;
@@ -421,7 +460,8 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
 
   return {
     champion: p.name,
-    kit: p.facts,
+    audit: {basis:firstPool.some(x=>x.empirical!==undefined)?"observed":"mechanics",candidates:firstPool.map(x=>({id:x.ip.item.id,name:x.ip.item.name,score:x.score,mechanical:x.score-(x.empirical??0),empirical:x.empirical??0}))},
+    kit: [...p.facts, firstPool.some(x=>x.empirical!==undefined) ? "Current-patch purchase evidence contributes to the ranking; this is not a predicted win rate." : "No sufficiently sampled current-patch purchase evidence is available for this ranking; guidance is heuristic."],
     enemyDamage: e.damage,
     componentUtility: Object.fromEntries(input.items.filter(i => i.purchasable && i.gold > 0).map(i => [i.id, score(itemProfile(i, gold, catalog), p, e, componentState).score])),
     threats: Object.values(e.threats).filter((t) => t.weight >= RELEVANT).sort((a, b) => b.weight - a.weight),

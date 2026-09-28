@@ -29,6 +29,7 @@ export interface LiveCoachInput {
    * replaces the local suggestions; without a connected site the local rules still run.
    */
   engine?: EngineItems | null;
+  allowLocalItems?: boolean;
 }
 
 interface EnginePick { id: number; name: string; score: number; why: string[]; timing?: { remaining: number; seconds: number | null; reason: string } }
@@ -122,10 +123,10 @@ export function liveCoach(input: LiveCoachInput): LiveCoach {
   const local = catalog
     ? suggestItems({ catalog, map: state.map, gold: state.gold, me, enemies: state.enemies, usual: input.usualItems ?? [], previous: input.previousItem ?? null })
     : null;
-  const items = catalog && engine ? fromEngine(engine, local, catalog, me.items, state.gold) : local;
+  const items = catalog && engine ? fromEngine(engine, local, catalog, me.items, state.gold) : input.allowLocalItems === false ? null : local;
   // The build in order (the engine's core when the site is connected, else the local suggestion).
   const targets = catalog
-    ? (engine ? [engine.first, engine.boots, ...engine.next] : [local?.next ?? null]).map((p) => (p ? catalog.items.get("item" in p ? p.item.id : p.id) : undefined)).filter((i): i is CatalogItem => i !== undefined)
+    ? (engine ? [engine.first, engine.boots, ...engine.next] : [items?.next ?? null]).map((p) => (p ? catalog.items.get("item" in p ? p.item.id : p.id) : undefined)).filter((i): i is CatalogItem => i !== undefined)
     : [];
   const purchase = catalog && targets.length && !opening
     ? planPurchases({ targets, inventory: me.items, gold: state.gold, time: state.time, itemGold: me.itemGold, catalog, ...(engine?.componentUtility ? { utility: engine.componentUtility } : {}) })
