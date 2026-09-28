@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { certaintyOf, isAdjustment, liveCoach, pickNow, SLOT_KEY, usualMaxOrder, type CoachDecision, type EngineItems, type LiveCoach, type Slot } from "@coach/coach";
 import { parseCatalog, type Catalog, type PurchasePlan, type Suggestion } from "@coach/itemization";
 import type { GameState } from "@coach/live";
@@ -160,7 +160,7 @@ function BuyNow({ p, time, art }: { p: PurchasePlan; time: number; art: Art }) {
       <div className="label">Buy now</div>
       {p.now ? (
         <>
-          <div className="recipe">{p.now.buys.map((b, i) => <ItemArt key={`${b.id}-${i}`} id={b.id} name={b.name} size={32} art={art} />)}</div>
+          <ol className="purchase-order">{p.now.buys.map((b,i)=><li key={`${b.id}-${i}`}><ItemArt id={b.id} name={b.name} size={32} art={art}/><span><strong>{b.name}</strong> · {b.gold} gold{b.targetName && <small> → {b.targetName}</small>}{b.reason && <small>{b.reason}</small>}</span></li>)}</ol>
           <div className="next-name">{p.now.buys.map((b) => b.name).join(" + ")}</div>
           <p className="quiet">
             {p.now.spent} of your {p.now.spent + p.now.leftover} gold
@@ -168,6 +168,7 @@ function BuyNow({ p, time, art }: { p: PurchasePlan; time: number; art: Art }) {
           </p>
         </>
       ) : <p className="quiet">Your gold doesn't buy a piece of your next item yet.</p>}
+      {!!p.deferred?.length && <p className="quiet">Keep unfinished: {p.deferred.join(", ")}. Re-evaluated as the game changes.</p>}
       {p.wait && (
         <p className="buynow-wait">
           Next budget threshold: {p.wait.extra} more gold{p.wait.seconds !== null ? ` (about ${p.wait.seconds} s at your pace)` : ""} buys {p.wait.buys.map((b) => b.name).join(" + ")} instead. This does not mean you should wait in base; consider the wave and travel time.
@@ -184,7 +185,7 @@ function BuyNow({ p, time, art }: { p: PurchasePlan; time: number; art: Art }) {
           ))}
         </ul>
       )}
-      {p.pace !== null && <p className="quiet small">At your pace of about {Math.round(p.pace)} gold per minute: the gold and items you hold, over the minutes played. Consumables and sold items aren't counted, so it's a lower bound.</p>}
+      {p.pace !== null && <p className="quiet small">At your pace of about {Math.round(p.pace)} gold per minute: the gold and items you hold, over the minutes played. Consumables and sold items aren't counted, so this is an estimate, not a guaranteed completion time.</p>}
     </section>
   );
 }
@@ -430,7 +431,7 @@ export function Board({ state, art, catalog, build, connected, tab, demo = false
   const skillReference = master?.skills
     ? { max: master.skills.max, sequence: master.skills.sequence, games: master.skills.games, total: master.games, patch: master.patch, patchLabel: master.patchLabel }
     : null;
-  const coach = state.me && !suspended ? liveCoach({
+  const coach = useMemo(() => state.me && !suspended ? liveCoach({
     state,
     catalog: demo ? null : catalog,
     usualItems: personal?.items.map((i) => i.id) ?? [],
@@ -438,7 +439,7 @@ export function Board({ state, art, catalog, build, connected, tab, demo = false
     skillHistory: history,
     skillReference,
     engine,
-  }) : null;
+  }) : null, [state,catalog,demo,suspended,engine,build,plan]);
   previousItem.current = coach?.items?.next?.item.id ?? null;
   const now = coach ? pickNow(coach.decisions, shownId) : null;
   const myItems = state.me?.items ?? [];

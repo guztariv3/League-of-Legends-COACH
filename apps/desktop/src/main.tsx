@@ -292,7 +292,7 @@ function LiveWindow() {
     return () => { stopped = true; clearTimeout(t); };
   }, [rivals.link, csKey]);
 
-  const liveShareStatus = useLiveRelay({enabled:shareLive,link:rivals.link,state:mode==="live" ? tick?.state??null:null,select:champSelect,draft:csPlan,plan,patch:art.version,paused:controls.paused,reconnecting,ended,output:coachOutput,demo:mode==="demo"});
+  const liveShareStatus = useLiveRelay({rivals:rivals.scout?.enemies,contextual:Boolean(engine),enabled:shareLive,link:rivals.link,state:mode==="live" ? tick?.state??null:null,select:champSelect,draft:csPlan,plan,patch:art.version,paused:controls.paused,reconnecting,ended,output:coachOutput,demo:mode==="demo"});
 
   // Updates are checked at start-up and offered only outside a game (the game always comes first).
   useEffect(() => { void checkUpdate().then(setUpdate); }, []);

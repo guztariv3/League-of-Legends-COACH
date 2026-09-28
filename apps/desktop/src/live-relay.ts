@@ -1,3 +1,5 @@
+import { liveDetail } from "./live-detail";
+import type { ScoutedRival } from "./rivals";
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import type { CoachDecision, LiveCoach } from "@coach/coach";
 import { clockSample, describeOffset, NOTABLE_OFFSET_MS, ServerClock, stampNow, type GameState, type Stamp } from "@coach/live";
@@ -31,7 +33,7 @@ function planSections(plan:PlanResponse|null):LiveSection[] {
   {title:"Situational options",lines:b?.situational.map(i=>`${i.name}: ${i.when}`)??[]},
  ].map(s=>({...s,lines:s.lines.map(l=>l.slice(0,1600)).slice(0,24)})).filter(s=>s.lines.length);
 }
-interface RelayInput { enabled:boolean; link:{origin:string;token:string}|null; state:GameState|null; select:ChampSelect|null; draft:PlanResponse|null; plan:PlanResponse|null; patch:string|null; paused:boolean; reconnecting:boolean; ended:boolean; output:MutableRefObject<Output|null>; demo:boolean }
+interface RelayInput { rivals?:ScoutedRival[]; contextual?:boolean; enabled:boolean; link:{origin:string;token:string}|null; state:GameState|null; select:ChampSelect|null; draft:PlanResponse|null; plan:PlanResponse|null; patch:string|null; paused:boolean; reconnecting:boolean; ended:boolean; output:MutableRefObject<Output|null>; demo:boolean }
 
 /**
  * When the data behind an object was read (stamped where it is read: the game snapshot, the
@@ -120,6 +122,7 @@ export function useLiveRelay(input:RelayInput) {
     allies:s?.allies.map(p=>p.championId)??v.draft?.roster?.allies??[],enemies:s?.enemies.map(p=>p.championId)??v.draft?.roster?.enemies??[],
     headline:phase==="live" ? out?.now?.headline??"No urgent recommendation." : phase==="draft" ? "Provisional pick — draft still developing" : phase==="pregame" ? "Champion locked — prepare your game" : phase==="ended" ? "Match ended" : phase==="paused" ? "Coach paused" : phase==="reconnecting" ? "Waiting for fresh game data" : phase==="loading" ? "Match loading" : "No active shared game",
     sections:sections.slice(0,16),};
+   if(["live","draft","pregame"].includes(phase))frame.detail=liveDetail(s,phase==="live" ? out?.coach??null:null,phase==="live" ? v.plan:v.draft,phase,v.patch?.includes("synthetic") ? "synthetic":(phase === "live" ? v.contextual : Boolean(v.draft?.build)) ? "contextual":"limited",v.rivals);
    if(phase==="idle"){frame.champion=null;frame.position=null;frame.allies=[];frame.enemies=[];frame.time=null;frame.gold=null;}
    const result=await publishLive(link.origin,link.token,frame);
    if(result.ok && phase === "ended")terminalSent=true;

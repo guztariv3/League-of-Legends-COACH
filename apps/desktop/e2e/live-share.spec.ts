@@ -1,3 +1,4 @@
+import { LiveFrameSchema } from "../../api/src/live-frame.js";
 import { expect, test, type Page } from "@playwright/test";
 import { championJson, itemJson } from "../../../packages/itemization/src/test-fixture";
 
@@ -14,7 +15,7 @@ import { championJson, itemJson } from "../../../packages/itemization/src/test-f
  */
 const SERVER = Date.UTC(2026, 8, 28, 12);
 interface Mock { pcAheadMs?: number; timeFails?: boolean; alwaysReject?: boolean; select?: boolean; game?: boolean }
-interface Sent { phase: string; capturedAt: number; serverNow: number; accepted: boolean }
+interface Sent { payload?: unknown; phase: string; capturedAt: number; serverNow: number; accepted: boolean }
 
 async function linkedAndWaiting(page: Page, mock: Mock = {}, { share = false } = {}) {
   await page.clock.install({ time: SERVER + (mock.pcAheadMs ?? 0) });
@@ -65,7 +66,7 @@ async function linkedAndWaiting(page: Page, mock: Mock = {}, { share = false } =
           case "desktop_live": {
             const now = serverNow(), f = args.frame!;
             const accepted = !mock.alwaysReject && f.capturedAt <= now + 5000 && now - f.capturedAt <= 15_000;
-            sent.push({ phase: f.phase, capturedAt: f.capturedAt, serverNow: now, accepted });
+            sent.push({ payload: f, phase: f.phase, capturedAt: f.capturedAt, serverNow: now, accepted });
             if (!accepted) throw "rejected";
             return { ok: true, accepted: true, serverTime: now };
           }
@@ -214,4 +215,18 @@ test("in game: a snapshot kept 65 s before sharing is turned on is not accepted 
     expect(f.accepted).toBe(false);
     expect(f.serverNow - f.capturedAt).toBeGreaterThanOrEqual(f.trueAge - 1000);
   }
+});
+
+
+test("the desktop emits a structured player and purchase frame accepted by the API schema", async ({page}) => {
+  await linkedAndWaiting(page, {game:true}, {share:true});
+  await page.goto("/");
+  await page.clock.runFor(11_000);
+  await expect.poll(async ()=>(await sent(page)).filter(f=>f.phase==="live").length).toBeGreaterThan(0);
+  const payload=(await sent(page)).find(f=>f.phase==="live")!.payload;
+  const parsed=LiveFrameSchema.parse(payload);
+  expect(parsed.detail!.players.allies).toHaveLength(5);
+  expect(parsed.detail!.players.enemies).toHaveLength(5);
+  expect(parsed.detail!.source).toBe("limited");
+  expect(parsed.detail!.players.allies[0]!.name).toBe("Yo#EUW");
 });

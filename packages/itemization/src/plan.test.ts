@@ -121,3 +121,36 @@ describe("gold pace and when items arrive", () => {
     expect(p.milestones[0]!.at).toBeNull();
   });
 });
+
+describe("contextual shopping across recipes", () => {
+  const make = (id:number,gold:number,from:number[]=[]) => ({id,name:`Item ${id}`,gold,from,tags:[],stats:{},maps:[11],completed:from.length>0,boots:false,antiHeal:false});
+  const pieces = [make(1,100),make(2,200),make(3,1000,[1,2]),make(4,100),make(5,400,[1,4])];
+  const local = {...catalog,items:new Map(pieces.map(i=>[i.id,i]))};
+  const shopping = (gold:number,inventory:number[]=[],utility:Record<number,number>={1:1,2:1,3:1,4:3,5:4}) => planPurchases({targets:[local.items.get(3)!,local.items.get(5)!],inventory,gold,time:900,itemGold:100,catalog:local,utility});
+  it("can finish the second target while leaving an owned component of the first unfinished",()=>{
+    const p=shopping(400,[2]);
+    expect(p.now!.completes).toEqual(['Item 5']);
+    expect(p.now!.spent).toBe(400);
+    expect(p.deferred).toEqual(['Item 3']);
+    expect(p.milestones[0]!.id).toBe(5);
+  });
+  it("never credits a shared owned component twice across purchases",()=>{
+    const p=shopping(1300,[1]);
+    expect(p.now!.completes.sort()).toEqual(['Item 3','Item 5']);
+    expect(p.now!.spent).toBe(1300);
+    expect(p.now!.buys.reduce((sum,b)=>sum+b.gold,0)).toBe(1300);
+  });
+  it("cannot buy components into a full inventory but can combine owned pieces",()=>{
+    expect(shopping(1000,[90,91,92,93,94,95]).now).toBeNull();
+    expect(shopping(300,[1,90,91,92,93,94]).now!.completes).toEqual(['Item 5']);
+  });
+  it("allocates an owned component once in the displayed trees",()=>{
+    const p=shopping(0,[1]);
+    expect(p.recipes!.map(r=>r.remaining)).toEqual([900,400]);
+    expect(p.deferred).toEqual([]);
+  });
+  it("does not duplicate targets or recommend a zero-utility purchase",()=>{
+    const p=shopping(1000,[],{1:0,2:0,3:0,4:0,5:0});
+    expect(p.now).toBeNull();
+  });
+});

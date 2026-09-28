@@ -52,8 +52,8 @@ describe("live coach", () => {
     expect(c.items?.alternatives[1]?.reasons).toContain("Against the shields from Lux.");
     expect(c.items?.boots?.item.name).toBe("Mercury's Treads");
     expect(c.decisions.find((d) => d.kind === "item")?.headline).toBe("Next: Morellonomicon");
-    // When the items arrive: Morellonomicon first (the Blasting Wand you hold lowers what's left), then Rabadon's.
-    expect(c.purchase?.milestones.map((m) => m.name)).toEqual(["Morellonomicon", "Rabadon's Deathcap"]);
+    // When the items arrive: Morellonomicon first (the Blasting Wand you hold lowers what's left), then boots and Rabadon's.
+    expect(c.purchase?.milestones.map((m) => m.name)).toEqual(["Morellonomicon", "Mercury's Treads", "Rabadon's Deathcap"]);
     expect(c.purchase?.milestones[0]?.remaining).toBe(2950 - 850);
     expect(c.purchase?.pace).toBeGreaterThan(0);
     expect(c.purchase?.milestones[1]!.at!).toBeGreaterThan(c.purchase!.milestones[0]!.at!);

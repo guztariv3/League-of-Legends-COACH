@@ -125,7 +125,7 @@ export function liveCoach(input: LiveCoachInput): LiveCoach {
   const items = catalog && engine ? fromEngine(engine, local, catalog, me.items, state.gold) : local;
   // The build in order (the engine's core when the site is connected, else the local suggestion).
   const targets = catalog
-    ? (engine ? [engine.first, ...engine.next] : [local?.next ?? null]).map((p) => (p ? catalog.items.get("item" in p ? p.item.id : p.id) : undefined)).filter((i): i is CatalogItem => i !== undefined)
+    ? (engine ? [engine.first, engine.boots, ...engine.next] : [local?.next ?? null]).map((p) => (p ? catalog.items.get("item" in p ? p.item.id : p.id) : undefined)).filter((i): i is CatalogItem => i !== undefined)
     : [];
   const purchase = catalog && targets.length && !opening
     ? planPurchases({ targets, inventory: me.items, gold: state.gold, time: state.time, itemGold: me.itemGold, catalog, ...(engine?.componentUtility ? { utility: engine.componentUtility } : {}) })

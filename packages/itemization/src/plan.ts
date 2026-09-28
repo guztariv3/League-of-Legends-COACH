@@ -6,7 +6,8 @@ import type { Catalog, CatalogItem } from "./catalog.js";
  * prices and from this game's numbers; nothing is assumed about other players.
  */
 
-export interface Buy { id: number; name: string; gold: number }
+export interface Buy { id: number; name: string; gold: number; targetId?: number; targetName?: string; reason?: string }
+export interface RecipeView { id: number; name: string; gold: number; remaining: number; owned: boolean; children: RecipeView[] }
 
 export interface PurchasePlan {
   /** The best purchase with the gold you have now (several pieces when they fit). */
@@ -20,6 +21,9 @@ export interface PurchasePlan {
   milestones: { id: number; name: string; remaining: number; at: number | null }[];
   /** Gold earned per minute so far this game (null too early to tell). */
   pace: number | null;
+  route?: Buy[];
+  recipes?: RecipeView[];
+  deferred?: string[];
 }
 
 /** Summoner's Rift: 500 starting gold; income (minions, passive gold) starts around 1:05. */
@@ -109,7 +113,7 @@ function fitPurchases(set: Node[], inventory: number[], catalog: Catalog): { ord
   return { ordered, inventory: next };
 }
 
-function bestBuy(targets: CatalogItem[], inventory: number[], gold: number, catalog: Catalog, utility?: Record<number, number>) {
+function sequentialBuy(targets: CatalogItem[], inventory: number[], gold: number, catalog: Catalog, utility?: Record<number, number>) {
   const buys: Buy[] = [], completes: string[] = [];
   let left = gold, toward = "";
   let actual = [...inventory];
@@ -145,6 +149,55 @@ function bestBuy(targets: CatalogItem[], inventory: number[], gold: number, cata
   return { buys, spent: gold - left, completes, toward };
 }
 
+/** Search legal shopping sequences across targets. Inventory is simulated after EACH purchase;
+ * recipes cannot reuse a component already consumed by an earlier purchase. Search is bounded
+ * so the game reader is never blocked by an exponential six-item combination search.
+ * Without contextual utilities retain the conservative ordered plan, not invented urgency.
+ */
+function bestBuy(targets: CatalogItem[], inventory: number[], gold: number, catalog: Catalog, utility?: Record<number, number>) {
+  if (!utility) return sequentialBuy(targets, inventory, gold, catalog);
+  type Search = { inventory: number[]; buys: Buy[]; spent: number; value: number; completes: string[] };
+  let beam: Search[] = [{ inventory: [...inventory], buys: [], spent: 0, value: 0, completes: [] }];
+  let best = beam[0]!;
+  const worth = (id: number) => Math.max(0, utility[id] ?? 0);
+  for (let depth = 0; depth < 8; depth++) {
+    const next = new Map<string, Search>();
+    for (const state of beam) for (const [index, target] of targets.slice(0, 6).entries()) {
+      if (state.inventory.includes(target.id)) continue;
+      const root = tree(target, catalog, [...state.inventory]);
+      for (const node of nodes(root).slice(0, 20)) {
+        const price = cost(node);
+        if (price <= 0 || price + state.spent > gold) continue;
+        const fit = fitPurchases([node], state.inventory, catalog);
+        if (!fit) continue;
+        // Value is marginal: subtract the value of components consumed by this purchase.
+        const heldValue = (n: Node): number => n.owned ? n.item.gold * worth(n.item.id) : n.children.reduce((v,c)=>v+heldValue(c),0);
+        const gain = Math.max(0, node.item.gold * worth(node.item.id) - heldValue(node));
+        if (gain <= 0) continue;
+        const completed = node === root;
+        const value = state.value + gain / (1 + index * .18) + (completed ? price * .1 : 0);
+        const reason = index === 0 ? 'Advances your current target with useful stats.' : `Prioritized by the contextual item scores; re-evaluate after this purchase.`;
+        const step: Search = { inventory: fit.inventory, spent: state.spent + price, value,
+          buys: [...state.buys, {id:node.item.id,name:node.item.name,gold:price,targetId:target.id,targetName:target.name,reason}],
+          completes: completed ? [...state.completes,target.name] : state.completes };
+        const key = [...step.inventory].sort((a,b)=>a-b).join(',');
+        if (!next.has(key) || next.get(key)!.value < value) next.set(key, step);
+        if (value > best.value || value === best.value && step.buys.length < best.buys.length) best = step;
+      }
+    }
+    beam = [...next.values()].sort((a,b)=>b.value-a.value || a.buys.length-b.buys.length).slice(0, 24);
+    if (!beam.length) break;
+  }
+  return {buys:best.buys,spent:best.spent,completes:best.completes,toward:best.buys[0]?.targetName ?? targets[0]?.name ?? ''};
+}
+
+/** A visual recipe allocates shared inventory once across the planned targets. */
+function recipesFor(targets: CatalogItem[], inventory: number[], catalog: Catalog): RecipeView[] {
+  const pool = [...inventory];
+  const view = (n: Node): RecipeView => ({id:n.item.id,name:n.item.name,gold:n.item.gold,remaining:cost(n),owned:n.owned,children:n.children.map(view)});
+  return targets.slice(0,6).map(t=>view(tree(t,catalog,pool)));
+}
+
 /** How much more gold makes waiting worthwhile (less than this is not worth the time). */
 const WAIT_MIN_GAIN = 300;
 const WAIT_MAX_EXTRA = 450;
@@ -158,14 +211,18 @@ export function planPurchases(input: {
   catalog: Catalog;
   utility?: Record<number, number>;
 }): PurchasePlan {
-  const { targets, inventory, gold, time, itemGold, catalog } = input;
+  const { inventory, gold, time, itemGold, catalog } = input;
+  const targets = [...new Map(input.targets.map(t => [t.id,t])).values()];
+  const now = gold === null ? null : bestBuy(targets, inventory, gold, catalog, input.utility);
+  const priority = [...(now?.completes ?? []).flatMap(name=>targets.filter(t=>t.name===name)), ...targets];
+  const ordered = [...new Map(priority.map(t=>[t.id,t])).values()];
   const pace = goldPace(time, gold, itemGold);
 
   // When each target would be finished, in order, at the current pace.
   const milestones: PurchasePlan["milestones"] = [];
   const pool = [...inventory];
   let owed = -(gold ?? 0);
-  for (const t of targets) {
+  for (const t of ordered) {
     const remaining = cost(tree(t, catalog, pool));
     if (remaining === 0) continue;
     owed += remaining;
@@ -173,12 +230,12 @@ export function planPurchases(input: {
     milestones.push({ id: t.id, name: t.name, remaining, at: pace ? time + Math.max(0, owed) / (pace / 60) : null });
   }
 
-  if (gold === null) return { now: null, wait: null, milestones, pace };
-  const now = bestBuy(targets, inventory, gold, catalog, input.utility);
+  if (gold === null) return { now: null, wait: null, milestones, pace, recipes: recipesFor(targets,inventory,catalog), route: [], deferred: [] };
+  if (!now) throw new Error("Missing purchase search");
 
   // Would a little more gold buy clearly more? Look for the smallest extra that gains enough.
   let wait: PurchasePlan["wait"] = null;
-  for (let extra = 25; extra <= WAIT_MAX_EXTRA; extra += 25) {
+  for (let extra = 25; extra <= WAIT_MAX_EXTRA; extra += input.utility ? 150 : 25) {
     const more = bestBuy(targets, inventory, gold + extra, catalog, input.utility);
     const useful = (buys: Buy[]) => buys.reduce((s,b)=>s+b.gold*(input.utility?.[b.id]??1),0);
     if (more.spent - now.spent >= WAIT_MIN_GAIN && useful(more.buys)>useful(now.buys)) {
@@ -191,5 +248,12 @@ export function planPurchases(input: {
   return {
     now: now.buys.length ? { ...now, leftover: gold - now.spent } : null,
     wait, milestones, pace,
+    route: now.buys, recipes: recipesFor(ordered,inventory,catalog),
+    deferred: targets.filter(t => !inventory.includes(t.id) && !now.completes.includes(t.name) && (cost(tree(t,catalog,[...inventory])) < t.gold || now.buys.some(b=>b.targetId === t.id)) && now.buys.some(b=>b.targetId && b.targetId !== t.id)).map(t=>t.name),
   };
+}
+
+/** Shared recursive cost projection for compact item suggestions. */
+export function recipeView(item: CatalogItem, inventory: number[], catalog: Catalog): RecipeView {
+  return recipesFor([item], inventory, catalog)[0]!;
 }

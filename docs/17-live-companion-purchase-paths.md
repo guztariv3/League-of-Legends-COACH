@@ -1,0 +1,43 @@
+# Structured Live Companion and contextual shopping
+
+Review branch based on `9181fed` (PR #50). No production deployment or release is part of this change.
+
+## Behavior
+
+- The desktop's shared Coach remains the only source of purchase recommendations. The web renders an optional, bounded `detail` projection in the existing version-1 private Live frame. Existing clients without `detail` keep their text view.
+- Recommended Build displays ordered affordable purchases, remaining gold, target items, owned components and combination costs, recommended versus equipped runes/spells, skill priority and the reference level sequence when available.
+- Summoner Insights pairs known roles, shows current scoreboard information and reported loadouts, and includes existing scouted ranks/history only when the player identity matches. Unconfirmed roles are not asserted as lane assignments. Missing history is not converted to percentages or invented tendencies.
+- Paused, loading, disconnected and stale states suppress both structured views and advice. Generic profile coaching popups are suppressed on `/live` so they do not obscure or contradict the match view.
+- Both clients display the same purchase sequence. Boots participate in the target plan. The planner may finish a later target while preserving components of an earlier target.
+
+## Purchase search
+
+The contextual path searches up to six targets, eight purchases and 24 retained inventory states per depth. Each candidate consumes its owned recipe components before checking six-slot capacity. Marginal value subtracts the value of consumed components; contextual utility comes from the existing build engine, with an ordered-target preference and a completion bonus. Unknown utilities do not manufacture urgency. Without contextual utility, the conservative sequential planner remains available and the UI marks local guidance as limited.
+
+This is a bounded heuristic, not a guarantee of the globally optimal purchase. Waiting suggestions sample three nearby budgets for contextual search; conservative search retains 25-gold increments. Recipe projections support three component levels and allocate owned pieces once across targets. The compact suggestion and full planner now use the same recursive recipe accounting. Estimates assume the displayed completion order and observed income; they are not promises about future income, recalls or enemy purchases.
+
+## Data and compatibility
+
+- No new package dependencies or lockfile changes.
+- Optional player spells/runes are taken only from fields reported by Live Client Data. No hidden identities, cooldown tracking or enemy wallets are inferred.
+- API schema bounds teams, shopping lists and recursive trees, in addition to the existing request-size limit.
+- Existing capture stamps, clock synchronization, freshness limits, session ordering and sharing-off behavior remain in place.
+- Synthetic knowledge is explicitly labeled. A local server without a real knowledge bundle/Riot configuration cannot validate match recommendation quality. Art depends on the configured asset bundle/CDN; offline and synthetic contexts keep the existing fallbacks.
+
+## Verification
+
+Tests cover later-target completion, shared-component consumption, full inventory, recursive discounts, unavailable data, protocol compatibility and payload bounds. Web browser tests exercise both tabs on desktop/mobile and hiding them on pause/staleness. Desktop browser tests exercise clock changes, stale captures and sharing privacy, plus validation of an emitted structured frame against the API schema. Existing draft-response and game-end tests are retained.
+
+An indicative local benchmark (30 plans, four real-catalog targets, 1,300 gold, one owned component, uniform utility) averaged 4.6 ms per plan. This is not a Windows/League performance measurement.
+
+The API integration fixture now generates recent games relative to the test time instead of June 2026: its activity assertion previously expired as the calendar moved forward.
+
+## Remaining validation and coverage
+
+- Real League/Windows: LCU field availability, draft hover/lock/trade/dodge, team role accuracy, rendering performance, active-data sharing off, reconnect and next-match reset.
+- Rank/history coverage remains limited to the existing scouting data. A full champion-history/tendency dataset for every teammate is not supplied by this change.
+- Early/mid/late team power curves are explicitly unavailable until supported by a validated model; no fake win probability is displayed.
+- Enemy completion forecasts and hidden gold are not available. Only observable inventory and the existing contextual build evidence are used.
+- The displayed sequence orders this shopping visit. Future trees/targets adapt on subsequent snapshots; it is not a rigid promise of every future shop action.
+
+To try the branch, use its matching API/web and desktop build together. Do not connect the updated companion to the old production API: the old strict frame schema does not know `detail`.

@@ -1,3 +1,4 @@
+import { recipeView } from "./plan.js";
 import type { Catalog, CatalogChampion, CatalogItem } from "./catalog.js";
 
 /**
@@ -84,29 +85,13 @@ const list = (names: string[]) => (names.length <= 1 ? names.join("") : `${names
 
 /** Components of an item and what is left to pay, counting the ones already in the inventory. */
 export function purchasePath(item: CatalogItem, inventory: number[], gold: number | null, catalog: Catalog): PurchasePath {
-  const pool = [...inventory];
-  const take = (id: number) => { const at = pool.indexOf(id); if (at < 0) return false; pool.splice(at, 1); return true; };
-  const steps: PathStep[] = item.from.map((id) => {
-    const c = catalog.items.get(id);
-    return { id, name: c?.name ?? `Item ${id}`, gold: c?.gold ?? 0, owned: take(id) };
-  });
-  const remaining = Math.max(0, item.gold - steps.filter((s) => s.owned).reduce((s, x) => s + x.gold, 0));
-  let affordableNow: PurchasePath["affordableNow"] = null;
-  if (gold !== null) {
-    if (gold >= remaining) affordableNow = { id: item.id, name: item.name, gold: remaining };
-    else {
-      // The most expensive missing piece that fits in the purse (looking one level down too).
-      const options: { id: number; name: string; gold: number }[] = [];
-      for (const s of steps.filter((x) => !x.owned)) {
-        options.push({ id: s.id, name: s.name, gold: s.gold });
-        for (const sub of catalog.items.get(s.id)?.from ?? []) {
-          const c = catalog.items.get(sub);
-          if (c) options.push({ id: c.id, name: c.name, gold: c.gold });
-        }
-      }
-      affordableNow = options.filter((o) => o.gold <= gold).sort((a, b) => b.gold - a.gold)[0] ?? null;
-    }
-  }
+  const root = recipeView(item, inventory, catalog);
+  const steps = root.children.map(c=>({id:c.id,name:c.name,gold:c.gold,owned:c.owned}));
+  const remaining = root.remaining;
+  const options: {id:number;name:string;gold:number}[] = [];
+  const visit = (n:typeof root) => { if(n.owned)return; if(n.remaining>0)options.push({id:n.id,name:n.name,gold:n.remaining}); n.children.forEach(visit); };
+  visit(root);
+  const affordableNow = gold === null ? null : options.filter(o=>o.gold<=gold).sort((a,b)=>b.gold-a.gold)[0]??null;
   return { steps, remaining, affordableNow };
 }
 

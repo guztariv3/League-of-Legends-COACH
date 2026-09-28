@@ -242,3 +242,5 @@ body.overlay-body { background: transparent; }
 .from-games { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; }
 .from-games summary { cursor: pointer; }
 .style-note { margin: 4px 0 0; }
+
+.purchase-order {padding-left:24px}.purchase-order li{padding:8px 0}.purchase-order li>span{display:inline-block;vertical-align:top;margin-left:8px}.purchase-order small{display:block;max-width:300px;color:var(--muted,#aaa)}
