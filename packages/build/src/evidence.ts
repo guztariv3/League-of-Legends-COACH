@@ -2,8 +2,8 @@
 export interface PurchaseObservation { key: string; games: number; wins: number }
 export interface BuildEvidence {
   champion: string; position: string; patch: string;
-  first: PurchaseObservation[]; core: PurchaseObservation[];
-  matchup?: { opponent: string; first: PurchaseObservation[]; core: PurchaseObservation[] };
+  first: PurchaseObservation[]; core: PurchaseObservation[]; runePages?: PurchaseObservation[]; spells?: PurchaseObservation[];
+  matchup?: { opponent: string; first: PurchaseObservation[]; core: PurchaseObservation[]; runePages?: PurchaseObservation[]; spells?: PurchaseObservation[] };
 }
 export interface PurchasePrior { bonus:number; reason:string }
 
@@ -40,4 +40,27 @@ export function purchasePrior(input: {
   const bonus=support*(.35*popularity+advantage);
   const scope=scoped?`against ${input.opponent}`:'across matchups';
   return {bonus,reason:`Observed ${input.chosen.length?'next purchase after this prefix':'first completed item'}: ${row.games} games, ${(100*row.wins/row.games).toFixed(1)}% wins, patch ${e.patch}, ${e.position}, ${scope}. Sample-weighted evidence; outcomes are observational and include completion/survivorship bias.`};
+}
+
+/** Setup rows remain exact pages/pairs; components from incompatible pages are never mixed. */
+export function setupObservations(input: {
+  evidence?: BuildEvidence; champion: string; position: string | null; patch?: string;
+  opponent?: string | null; kind: 'runePages' | 'spells';
+}): { key: string; bonus: number; reason: string }[] {
+  const e = input.evidence;
+  if (!e || !input.position || !input.patch || e.champion !== input.champion || e.position !== input.position || e.patch !== input.patch) return [];
+  const valid = (rows: PurchaseObservation[] = []) => rows.filter(r => Number.isInteger(r.games) && r.games > 0 && Number.isInteger(r.wins) && r.wins >= 0 && r.wins <= r.games);
+  const matched = e.matchup && e.matchup.opponent === input.opponent ? valid(e.matchup[input.kind]) : [];
+  const general = valid(e[input.kind]);
+  const total = (rows: PurchaseObservation[]) => rows.reduce((n, r) => n + r.games, 0);
+  const scoped = total(matched) >= 100 && matched.some(r => r.games >= 30);
+  const rows = scoped ? matched : general, n = total(rows);
+  if (n < 100) return [];
+  const baseline = rows.reduce((n, r) => n + r.wins, 0) / n;
+  return rows.filter(r => r.games >= 30).map(r => {
+    const adjusted = (r.wins + 100 * baseline) / (r.games + 100);
+    const support = r.games / (r.games + 100);
+    return {key: r.key, bonus: support * (.8 * Math.sqrt(r.games / n) + Math.max(-.1, Math.min(.1, adjusted - baseline))),
+      reason: `Observed ${input.kind === 'runePages' ? 'complete rune page' : 'spell pair'}: ${r.games} games, ${(100 * r.wins / r.games).toFixed(1)}% wins, patch ${e.patch}, ${e.position}, ${scoped ? `against ${input.opponent}` : 'across matchups'}. Observational support, not predicted win probability.`};
+  });
 }

@@ -35,6 +35,7 @@ export interface LiveCoachInput {
 interface EnginePick { id: number; name: string; score: number; why: string[]; timing?: { remaining: number; seconds: number | null; reason: string } }
 /** The part of the build engine's answer (BuildRecommendation) the live window uses. */
 export interface EngineItems {
+  unavailableReason?: string;
   componentUtility?: Record<number, number>;
   first: EnginePick | null;
   next: EnginePick[];
@@ -66,7 +67,7 @@ export function fromEngine(engine: EngineItems, local: Suggestions | null, catal
     alternatives,
     boots: one(engine.boots),
     enemy: local?.enemy ?? { magicShare: 0.5, healers: [], armor: 0, magicResist: 0 },
-    note: next ? null : "Nothing left to suggest for this game.",
+    note: engine.unavailableReason ?? (next ? null : "Nothing left to suggest for this game."),
   };
 }
 
@@ -115,7 +116,7 @@ export function liveCoach(input: LiveCoachInput): LiveCoach {
   const engineStarter = engine?.starter
     ? { items: engine.starter.items.map((i) => catalog?.items.get(i.id)).filter((i): i is CatalogItem => i !== undefined), reasons: engine.starter.why, alternatives: [] }
     : null;
-  const starter = opening
+  const starter = opening && !engine?.unavailableReason
     ? engineStarter?.items.length
       ? engineStarter
       : suggestStarter({ catalog, map: state.map, position: me.position, championId: me.championId, laneOpponentId: laneOpponent(state)?.championId ?? null })

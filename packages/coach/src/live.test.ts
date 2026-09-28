@@ -31,6 +31,14 @@ describe("live coach", () => {
     expect(c.decisions.find((d) => d.kind === "item")?.headline).toMatch(/^Next: /);
   });
 
+  it("withholds opening guesses and explains incomplete mechanics from the shared engine", () => {
+    const engine={first:null,next:[],boots:null,situational:[],starter:null,unavailableReason:"Detailed champion mechanics are unavailable."};
+    const c=liveCoach({state:state(20,[]),catalog,engine,allowLocalItems:false});
+    expect(c.starter).toBeNull();expect(c.purchase).toBeNull();expect(c.items?.next).toBeNull();
+    expect(c.items?.note).toBe(engine.unavailableReason);
+    expect(c.decisions.some(d=>d.kind==='item')).toBe(false);
+  });
+
   it("does not leak generic purchases when contextual guidance is required", () => {
     const c = liveCoach({ state: state(600, [], undefined, 7), catalog, allowLocalItems: false });
     expect(c.items).toBeNull();

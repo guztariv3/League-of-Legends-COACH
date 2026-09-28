@@ -1,3 +1,4 @@
+import { normalizePosition, positionReason } from "./position.js";
 import { purchasePrior, type BuildEvidence } from "./evidence.js";
 import { itemTiming, type EconomyContext, type ItemTiming } from "./economy.js";
 import type { ChampionKit, ItemFacts, ItemStat } from "@coach/knowledge";
@@ -31,6 +32,7 @@ export interface ItemPick { id: number; name: string; gold: number; score: numbe
 export interface Situational extends ItemPick { when: string }
 
 export interface BuildRecommendation {
+  unavailableReason?: string;
   champion: string;
   componentUtility?: Record<number, number>;
   audit?: { basis: "mechanics" | "observed"; candidates: {id:number;name:string;score:number;mechanical:number;empirical:number}[] };
@@ -101,16 +103,16 @@ function statWeights(p: ChampionProfile, e: EnemyPicture, s: State): Record<Item
     abilityPower: AP,
     attackDamage: AD,
     adaptiveForce: Math.max(AD, AP),
-    attackSpeed: p.scales.attackSpeed * p.offense * 0.9,
+    attackSpeed: p.scales.attackSpeed * p.offense * (p.attackSpeedCooldown ? 1.35 : .9),
     criticalStrikeChance: p.scales.crit * p.offense,
     criticalStrikeDamage: p.scales.crit * p.offense,
     lethality: AD * p.abilityReliance * (1 - tanks * 0.5),
-    armorPenetration: AD * (0.3 + tanks),
-    magicPenetration: AP * (0.4 + tanks * 0.8),
+    armorPenetration: AD * p.damage.physical * (0.3 + tanks),
+    magicPenetration: AP * p.damage.magic * (0.4 + tanks * 0.8),
     abilityHaste: 0.25 + 0.5 * p.abilityReliance,
     mana: s.manaNeed,
     manaRegen: s.manaNeed * 0.6,
-    health: defense + p.scales.health * 0.8,
+    health: p.cannotGainHealth ? AD * .15 : defense + p.scales.health * 0.8,
     armor: defense * e.damage.physical * 2 + p.scales.resists * 0.5,
     magicResistance: defense * e.damage.magic * 2 + p.scales.resists * 0.5,
     healthRegen: defense * 0.3,
@@ -289,12 +291,18 @@ function starter(input: BuildInput, p: ChampionProfile, e: EnemyPicture, s: Stat
 }
 
 export function recommendBuild(input: BuildInput): BuildRecommendation {
+  input = { ...input, position: normalizePosition(input.position) };
   const p = championProfile(input.me);
   const seen = enemyPicture(input.enemies);
   // The standard core is built against a neutral enemy: half physical, half magic, no threats.
   const e: EnemyPicture = input.baseline
     ? { ...seen, damage: { physical: 0.5, magic: 0.5, true: 0 }, threats: Object.fromEntries(Object.entries(seen.threats).map(([k, t]) => [k, { ...t, weight: 0, sources: [] }])) as unknown as EnemyPicture["threats"] }
     : seen;
+  if (input.me.detail !== "full") return {
+    unavailableReason: "Detailed champion mechanics are unavailable for this patch; item and rune recommendations are withheld.",
+    champion: p.name, kit: [positionReason(normalizePosition(input.position)), "Detailed champion mechanics are unavailable; item recommendations are withheld until the current kit can be evaluated."],
+    enemyDamage:e.damage, threats:[], starter:null, first:null, next:[], boots:null, situational:[], ruledOut:[], certainty:null, alternative:null, adaptation:null,
+  };
   const gold = statGoldValues(input.items);
   const owned = new Set(input.owned ?? []);
   const catalog = new Map(input.items.map((i) => [i.id, i]));
@@ -305,7 +313,7 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
   }
   const firstCompletedItem = !equipped.some(i=>i.rank.includes("LEGENDARY") && !i.rank.includes("BOOTS"));
   const profiles = input.items.map((i) => itemProfile(i, gold, catalog))
-    .filter((ip) => (ip.finished || ip.boots) && (ip.item.requiredChampion === null || ip.item.requiredChampion === p.id) && ip.item.requiredAlly === null);
+    .filter((ip) => (ip.finished || (ip.boots && !p.cannotBuyBoots)) && (ip.item.requiredChampion === null || ip.item.requiredChampion === p.id) && ip.item.requiredAlly === null);
 
   const state: State = {
     threats: Object.fromEntries(Object.entries(e.threats).map(([k, t]) => [k, t.weight])) as Record<ThreatKind, number>,
@@ -314,7 +322,7 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
     effects: new Set(),
   };
   const take = (ip: ItemProfile) => {
-    state.critChance += ip.stats.filter(l=>l.key.split(":")[0] === "criticalStrikeChance").reduce((sum,l)=>sum+l.amount,0);
+    state.critChance += p.critMultiplier * ip.stats.filter(l=>l.key.split(":")[0] === "criticalStrikeChance").reduce((sum,l)=>sum+l.amount,0);
     // What an item already answers no longer needs answering; its unique effects can't stack.
     for (const c of ip.counters) for (const k of COUNTERS[c].answers) state.threats[k] *= 0.15;
     state.manaNeed *= clamp(1 - ip.mana / 600);
@@ -328,6 +336,16 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
     .filter((ip) => ip.boots === boots && !owned.has(ip.item.id) && !picked.has(ip.item.id) && !ip.item.effects.some((ef) => ef.unique && ef.name && state.effects.has(ef.name)))
     .map((ip) => {
       const sc = score(ip, p, e, state);
+      if (!boots && input.position === "UTILITY") {
+        // Role affects utility/accessibility, never fabricates a gold-per-minute estimate.
+        const text = ip.item.effects.map(x => x.text).join(" ");
+        const utility = /(?:heal|shield|protect|empower)[^.]{0,100}all(?:y|ies|ied)|all(?:y|ies|ied)[^.]{0,100}(?:heal|shield|damage reduction)/i.test(text);
+        const compatible = Math.max(p.healsOrShields, p.frontline);
+        if (utility && compatible > 0) { sc.score += .3 * compatible; sc.why.push("Support utility: this effect can protect or empower allies when its trigger is met."); }
+        const costWeight = Math.max(0, Math.min(1, (ip.item.gold - 2000) / 2000));
+        sc.score /= 1 + .18 * costWeight;
+        sc.why.push("Support role: expensive recipes carry an accessibility penalty; actual wallet and observed income still decide purchase timing.");
+      }
       if (!boots && firstCompletedItem && picked.size === 0 && ip.counters.some(c=>THREAT_ONLY.includes(c))) {
         // Team-wide generic CC/healing is not by itself a reason to rush a defensive counter.
         // Keep lane-critical counters available, especially against an already fed opponent.
@@ -461,7 +479,7 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
   return {
     champion: p.name,
     audit: {basis:firstPool.some(x=>x.empirical!==undefined)?"observed":"mechanics",candidates:firstPool.map(x=>({id:x.ip.item.id,name:x.ip.item.name,score:x.score,mechanical:x.score-(x.empirical??0),empirical:x.empirical??0}))},
-    kit: [...p.facts, firstPool.some(x=>x.empirical!==undefined) ? "Current-patch purchase evidence contributes to the ranking; this is not a predicted win rate." : "No sufficiently sampled current-patch purchase evidence is available for this ranking; guidance is heuristic."],
+    kit: [...p.facts, positionReason(normalizePosition(input.position)), ...(input.me.detail !== "full" ? ["Detailed champion mechanics are incomplete; this recommendation requires review."] : []), firstPool.some(x=>x.empirical!==undefined) ? "Current-patch purchase evidence contributes to the ranking; this is not a predicted win rate." : "No sufficiently sampled current-patch purchase evidence is available for this ranking; guidance is heuristic."],
     enemyDamage: e.damage,
     componentUtility: Object.fromEntries(input.items.filter(i => i.purchasable && i.gold > 0).map(i => [i.id, score(itemProfile(i, gold, catalog), p, e, componentState).score])),
     threats: Object.values(e.threats).filter((t) => t.weight >= RELEVANT).sort((a, b) => b.weight - a.weight),

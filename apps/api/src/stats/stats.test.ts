@@ -26,6 +26,16 @@ describe("maxOrder", () => {
 });
 
 describe("statRows", () => {
+  it("preserves complete rune pages with role and matchup instead of mixing individual runes", () => {
+    const g = structuredClone(history.find(h => h.scenario === "normal" && h.timeline)!);
+    const p = g.match.info.participants[0]!;
+    p.perks = {styles:[{style:8000,selections:[8008,9101,9104,8299].map(perk=>({perk}))},{style:8400,selections:[8444,8451].map(perk=>({perk}))}],statPerks:{offense:5005,flex:5008,defense:5001}};
+    const {rows}=statRows(g.match,g.timeline,COMPLETED);
+    const page=rows.find(r=>r.kind==='rune_page' && r.champion===p.championName)!;
+    expect(page.key).toBe('8000>8400>8008>9101>9104>8299>8444>8451>5005>5008>5001');
+    expect(rows.some(r=>r.kind==='matchup_rune_page' && r.position===page.position && r.key.endsWith('|'+page.key))).toBe(true);
+  });
+
   it("counts every player of a solo-queue game and nothing about who they are", () => {
     const g = history.find((h) => h.scenario === "normal" && h.timeline)!;
     const { rows } = statRows(g.match, g.timeline, COMPLETED);

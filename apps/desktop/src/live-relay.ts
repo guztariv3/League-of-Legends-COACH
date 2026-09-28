@@ -14,7 +14,7 @@ export function liveSections(output: Output): LiveSection[] {
  return [
   section("What matters now",[output.now?.headline,...output.now?.reasons??[]],true),
   section("Buy now",c.purchase?.now ? [...c.purchase.now.buys.map(b=>`${b.name}: ${b.gold} gold`),`${c.purchase.now.leftover} gold left; toward ${c.purchase.now.toward}`] : ["No supported immediate purchase with the available data."],true),
-  section("Next major item",[c.items?.next?.item.name,...c.items?.next?.reasons??[]]),
+  section("Next major item",[c.items?.note,c.items?.next?.item.name,...c.items?.next?.reasons??[]]),
   section("Build order and timing",c.purchase?.milestones.map(m=>`${m.name}: ${m.remaining} gold remaining${m.at===null ? "; timing unknown" : `; estimated minute ${(m.at/60).toFixed(1)} at the observed pace`}`)??[]),
   section("Strategy and next objective",c.plan.flatMap(d=>[d.headline,...d.reasons])),
   section("Skill priority",c.decisions.filter(d=>d.kind==="skill").flatMap(d=>[d.headline,...d.reasons])),
@@ -26,6 +26,7 @@ function planSections(plan:PlanResponse|null):LiveSection[] {
  if(!plan)return [];
  const b=plan.build;
  return [
+  {title:"Champion mechanics and position",lines:b?.kit??[]},
   {title:"Economy and recall scenarios",lines:b?.economyNotes??[]},
   {title:"Pre-game plan",lines:Object.entries(plan.plan).filter(([k])=>k!=="loadout").flatMap(([k,v])=>v && "text" in v ? [`${k}: ${v.text} — ${v.why}`]:[])},
   {title:"Recommended pre-game runes and summoner spells",lines:[b?.setup?.runes ? `${b.setup.runes.primaryTree}: ${[b.setup.runes.keystone,...b.setup.runes.primary,...b.setup.runes.secondary,...b.setup.runes.shards].map(r=>`${r.name} (${r.why})`).join("; ")}`:"Rune recommendation unavailable.",...b?.setup?.spells.map(s=>`${s.name}: ${s.why}`)??[]]},

@@ -28,6 +28,10 @@ export interface ChampionProfile {
   healsOrShields: number;
   ranged: boolean;
   spellOnHit: boolean;
+  attackSpeedCooldown: boolean;
+  cannotBuyBoots: boolean;
+  cannotGainHealth: boolean;
+  critMultiplier: number;
   damagingUltimate: boolean;
   repeatUltimate: boolean;
   /** Plain facts used by the explanations. */
@@ -50,7 +54,16 @@ export function championProfile(kit: ChampionKit): ChampionProfile {
   const facts: string[] = [];
   const reliance = kit.ratings?.["abilityReliance"];
   // The Wiki gives 0–100; without it, a champion whose abilities do most things is assumed ability-reliant.
-  const spellOnHit = kit.abilities.some(a => BASICS.includes(a.slot as typeof BASICS[number]) && (a.cooldown?.[0] ?? 999) <= 6 && /appl(?:ies|ying) on-hit effects/i.test(a.text) && a.scalings.some(s=>s==="AD"||s==="bonusAD"));
+  const kitText = kit.abilities.map(a => a.text).join(" ");
+  const attackSpeedCooldown = kit.abilities.some(a => /attack speed/i.test(a.cooldownFormula ?? "") || /cooldown/i.test(a.text) && /cooldowns?[^\n]{0,160}attack speed|attack speed[^\n]{0,160}(?:cooldown|cast time)/i.test(a.text));
+  // Read the active spell, not a passive whose *following basic attack* applies on-hit.
+  const spellOnHit = !attackSpeedCooldown && kit.abilities.some(a => {
+    const active = (a.text.split(/Active:\s*/i)[1] ?? "").split("\n")[0] ?? "";
+    return BASICS.includes(a.slot as typeof BASICS[number]) && (a.cooldown?.[0] ?? 999) <= 6 && /appl(?:ies|ying) on-hit effects/i.test(active) && a.scalings.some(s => s === "AD" || s === "bonusAD");
+  });
+  const cannotBuyBoots = /cannot (?:purchase|buy) boots/i.test(kitText);
+  const cannotGainHealth = /maximum health cannot increase/i.test(kitText);
+  const critMultiplier = /critical strike chance is doubled/i.test(kitText) ? 2 : 1;
   const reportedReliance = typeof reliance === "number" ? clamp(reliance / 100) : 0.6;
   // A repeatable damaging spell is not an attack-speed steroid, even if it applies on-hit.
   const abilityReliance = spellOnHit ? Math.max(.75, reportedReliance) : reportedReliance;
@@ -78,6 +91,7 @@ export function championProfile(kit: ChampionKit): ChampionProfile {
   const apSlots = count((s) => s === "AP");
   const adSlots = count((s) => s === "AD" || s === "bonusAD" || s === "lethality");
   const critSlots = count((s) => s === "critChance");
+  if (critMultiplier > 1 && !critSlots.includes("P")) critSlots.push("P");
   const asSlots = count((s) => s === "attackSpeed");
   const hpSlots = count((s) => s === "health" || s === "bonusHealth");
   const resSlots = count((s) => s === "armor" || s === "magicResist");
@@ -90,7 +104,7 @@ export function championProfile(kit: ChampionKit): ChampionProfile {
     AD: clamp(Math.max(share(adSlots.length) * (0.4 + abilityReliance), attacksPhysical * 0.9)),
     // Basic-attack champions scale with crit through their attacks; some abilities scale with it too.
     crit: clamp(critSlots.length ? 0.5 + 0.2 * critSlots.length : attacksPhysical * (kit.attackType === "RANGED" ? 0.8 : 0.55)),
-    attackSpeed: clamp(Math.max(attackReliance * 0.9, share(asSlots.length))),
+    attackSpeed: clamp(Math.max(attackReliance * 0.9, share(asSlots.length), attackSpeedCooldown ? .9 : 0)),
     health: share(hpSlots.length),
     resists: share(resSlots.length),
     mana: share(manaSlots.length),
@@ -133,6 +147,10 @@ export function championProfile(kit: ChampionKit): ChampionProfile {
 
   const healsOrShields = clamp(kit.abilities.filter((a) => a.values.some((v) => /^(heal|shield strength|maximum heal|minimum heal|heal per)/i.test(v))).length / 3);
 
+  if (cannotBuyBoots) facts.push(`${kit.name}'s kit prohibits purchasing boots`);
+  if (cannotGainHealth) facts.push(`${kit.name}'s kit converts bonus health instead of gaining maximum health`);
+  if (critMultiplier > 1) facts.push(`${kit.name}'s passive multiplies critical strike chance by ${critMultiplier}`);
+  if (attackSpeedCooldown) facts.push(`${kit.name}'s ability cooldown or cast time scales with attack speed`);
   if (spellOnHit) facts.push(`${kit.name} has a short-cooldown damage spell that applies on-hit effects; attack speed does not reduce its cooldown`);
   const ultimate = first(kit, "R");
   const damagingUltimate = Boolean(ultimate && /(?:deals?|dealing) .{0,80}damage/i.test(ultimate.text));
@@ -150,7 +168,7 @@ export function championProfile(kit: ChampionKit): ChampionProfile {
     manaNeed,
     mana,
     healsOrShields,
-    spellOnHit, damagingUltimate, repeatUltimate,
+    spellOnHit, attackSpeedCooldown, cannotBuyBoots, cannotGainHealth, critMultiplier, damagingUltimate, repeatUltimate,
     ranged: kit.attackType === "RANGED",
     facts,
   };

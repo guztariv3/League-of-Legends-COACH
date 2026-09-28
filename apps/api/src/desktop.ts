@@ -246,7 +246,7 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
     const economy = baseline ? {gold:0,time:150,income:baseline.income,source:"history" as const} : undefined;
     const master = facts ? await championStats(db, me, q.data.position ?? null, patchFromVersion(facts.version)) : null;
     const engine = facts && myKit ? recommendBuild({ me: myKit, enemies: enemyInput, items: facts.items, position: q.data.position ?? null, economy, patch:patchFromVersion(facts.version), evidence:buildEvidence(master,me,q.data.position??null,patchFromVersion(facts.version),opponent) }) : null;
-    const setup = facts && myKit ? recommendSetup({ me: myKit, enemies: enemyInput, runes: facts.runes, spells: facts.spells, position: q.data.position ?? null }) : null;
+    const setup = facts && myKit ? recommendSetup({ me: myKit, enemies: enemyInput, runes: facts.runes, spells: facts.spells, position: q.data.position ?? null, patch:patchFromVersion(facts.version), evidence:buildEvidence(master,me,q.data.position??null,patchFromVersion(facts.version),opponent) }) : null;
     // What Master+ players do with this champion this patch (phase 4): sample-gated purchases also contribute to the engine ranking.
 
     // What keeps happening in the player's own games (phase 5): personalises, never changes the call.

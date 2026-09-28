@@ -109,6 +109,8 @@ export function statGoldValues(items: ItemFacts[]): Map<StatKey, number> {
  */
 export function buildable(item: ItemFacts, catalog: Map<number, ItemFacts>, depth = 0): boolean {
   if (!item.purchasable || depth > 4) return false;
+  // Zero-cost upgrades of completed boots require progression which the input does not prove.
+  if (item.from.some(id => { const base = catalog.get(id); return base?.rank.includes("BOOTS") && base.from.length > 0 && item.gold <= base.gold; })) return false;
   return item.from.every((id) => { const c = catalog.get(id); return c !== undefined && buildable(c, catalog, depth + 1); });
 }
 
