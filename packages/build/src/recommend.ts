@@ -331,9 +331,28 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
   for (const id of owned) { const it = catalog.get(id); if (it) take(itemProfile(it, gold, catalog)); }
 
   const componentState = { ...state, threats: { ...state.threats }, effects: new Set(state.effects) };
+  let plannedInventory = [...(input.owned ?? [])];
+  // Recipe upgrades consume their held components. Their unique effects must not
+  // block the parent, while effects on items left in inventory still conflict.
+  const afterRecipe = (item: ItemFacts, held: number[]) => {
+    const remaining = [...held];
+    const consume = (id: number, path = new Set<number>()) => {
+      const at = remaining.indexOf(id);
+      if (at >= 0) { remaining.splice(at,1); return; }
+      if (path.has(id)) return;
+      const next = new Set(path).add(id);
+      for (const child of catalog.get(id)?.from ?? []) consume(child,next);
+    };
+    for (const id of item.from) consume(id);
+    return remaining;
+  };
+  const conflicts = (ip: ItemProfile) => {
+    const names = new Set(ip.item.effects.filter(ef=>ef.unique && ef.name).map(ef=>ef.name));
+    return afterRecipe(ip.item,plannedInventory).some(id=>catalog.get(id)?.effects.some(ef=>ef.unique && ef.name && names.has(ef.name)));
+  };
   const ruledOut = new Map<number, { id: number; name: string; why: string; score: number }>();
   const candidates = (boots: boolean) => profiles
-    .filter((ip) => ip.boots === boots && !owned.has(ip.item.id) && !picked.has(ip.item.id) && !ip.item.effects.some((ef) => ef.unique && ef.name && state.effects.has(ef.name)))
+    .filter((ip) => ip.boots === boots && !owned.has(ip.item.id) && !picked.has(ip.item.id) && !conflicts(ip))
     .map((ip) => {
       const sc = score(ip, p, e, state);
       if (!boots && input.position === "UTILITY") {
@@ -386,7 +405,7 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
 
   const core: Scored[] = [];
   const picked = new Set<number>();
-  const hasBoots = [...owned].some((id) => catalog.get(id)?.rank.includes("BOOTS"));
+  const hasBoots = [...owned].some((id) => { const item=catalog.get(id); return item?.rank.includes("BOOTS") && item.from.length > 0; });
   let boots: Scored | null = null;
   let runnerUp: Scored | null = null;
   let firstPool: Scored[] = [];
@@ -398,7 +417,8 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
     core.push(best);
     picked.add(best.ip.item.id);
     take(best.ip);
-    if (n === 0 && !hasBoots) { boots = candidates(true)[0] ?? null; if (boots) take(boots.ip); }
+    plannedInventory = [...afterRecipe(best.ip.item,plannedInventory),best.ip.item.id];
+    if (n === 0 && !hasBoots) { boots = candidates(true)[0] ?? null; if (boots) { take(boots.ip); plannedInventory = [...afterRecipe(boots.ip.item,plannedInventory),boots.ip.item.id]; } }
   }
 
   // Situational: a strong threat the core does not answer, with the best item that does.
@@ -408,7 +428,7 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
     if (state.threats[t.kind] < RELEVANT) continue; // already answered by the core
     const who = list(t.sources.slice(0, 3).map((x) => x.name));
     const counter = profiles
-      .filter((ip) => !chosen.has(ip.item.id) && !owned.has(ip.item.id) && ip.counters.some((c) => COUNTERS[c].answers.includes(t.kind)))
+      .filter((ip) => !chosen.has(ip.item.id) && !owned.has(ip.item.id) && !conflicts(ip) && ip.counters.some((c) => COUNTERS[c].answers.includes(t.kind)))
       .map((ip) => score(ip, p, e, state))
       .sort((a, b) => b.score - a.score)[0];
     if (!counter) continue;
@@ -417,7 +437,7 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
     const resist = resistAgainst(t, e);
     const fitting = counter.fit < FITS && resist
       ? profiles
-          .filter((ip) => ip.finished && !chosen.has(ip.item.id) && !owned.has(ip.item.id) && (ip.item.stats[resist]?.flat ?? 0) > 0 && !counterWithoutThreat(ip, e))
+          .filter((ip) => ip.finished && !chosen.has(ip.item.id) && !owned.has(ip.item.id) && !conflicts(ip) && (ip.item.stats[resist]?.flat ?? 0) > 0 && !counterWithoutThreat(ip, e))
           .map((ip) => score(ip, p, e, state))
           .filter((x) => x.fit >= FITS)
           .sort((a, b) => b.score - a.score)[0]
@@ -436,7 +456,7 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
     if (share < 0.6 || situational.length >= 3) continue;
     const stat = kind === "physical" ? "armor" : "magicResistance";
     const answer = profiles
-      .filter((ip) => ip.finished && !chosen.has(ip.item.id) && !owned.has(ip.item.id) && (ip.item.stats[stat]?.flat ?? 0) > 0 && !counterWithoutThreat(ip, e))
+      .filter((ip) => ip.finished && !chosen.has(ip.item.id) && !owned.has(ip.item.id) && !conflicts(ip) && (ip.item.stats[stat]?.flat ?? 0) > 0 && !counterWithoutThreat(ip, e))
       .map((ip) => score(ip, p, e, state))
       .sort((a, b) => b.score - a.score)[0];
     if (!answer) continue;

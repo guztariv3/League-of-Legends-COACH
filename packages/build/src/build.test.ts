@@ -294,3 +294,27 @@ describe("full inventory", () => {
     expect(b.situational).toEqual([]);
   });
 });
+
+describe('owned components and final-item passive restrictions', () => {
+  it.each([['Ahri','MIDDLE',3100],['Jax','TOP',3078]] as const)('allows %s to upgrade owned Sheen into its own recipe', (champion,position,target) => {
+    const pool=items.filter(i=>i.id===target || !i.rank.includes('LEGENDARY'));
+    const b=recommendBuild({me:kit(champion),items:pool,enemies:[],position,owned:[3057],baseline:true});
+    expect(b.first?.id).toBe(target);
+  });
+});
+
+
+it('does not offer a second conflicting Spellblade item that will remain equipped', () => {
+ const pool=items.filter(i=>[3100,3078].includes(i.id) || !i.rank.includes('LEGENDARY'));
+ const b=recommendBuild({me:kit('Ahri'),items:pool,enemies:[],position:'MIDDLE',owned:[3078],baseline:true});
+ expect(b.first).toBeNull();
+ expect(b.next).toEqual([]);
+});
+
+it('can upgrade basic boots, without buying a second pair of upgraded boots', () => {
+ const base={me:kit('Jax'),items,enemies:[],position:'TOP',baseline:true};
+ const b=recommendBuild({...base,owned:[1001]});
+ expect(b.boots).not.toBeNull();
+ expect(b.boots!.id).not.toBe(1001);
+ expect(recommendBuild({...base,owned:[b.boots!.id]}).boots).toBeNull();
+});

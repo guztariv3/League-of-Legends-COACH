@@ -41,3 +41,11 @@ Son referencias generales del campeón/posición consultadas el 28 de septiembre
 Regresiones mecánicas con las fixtures del parche, evidencia insuficiente/parche incorrecto/posición incorrecta, conexión real del prior al score, separación de oponentes en API y ausencia de fallback genérico en el escritorio. Se conservan las pruebas de recetas, inventario, reloj, privacidad y respuestas tardías.
 
 Usar API/web y escritorio de esta misma rama. El instalador solo no actualiza el servidor. Falta probar con League real en Windows, y ampliar la calibración a otros campeones, segundas compras y matchups con muestras suficientes. Mantener PR en borrador, sin fusionar, publicar release ni desplegar Render.
+
+## Owned-component upgrade audit
+
+The existing unique-passive exclusion incorrectly treated passives on consumed recipe components as conflicts with their upgrades. With the current catalog, owning Sheen excluded Lich Bane for Ahri mid and Trinity Force for Jax top even in a controlled candidate pool containing only that final item. Both regression tests fail before the fix and pass after it; they test eligibility, not universal build endorsement.
+
+The exclusion now evaluates only items remaining after consuming the candidate's recipe components. The projected inventory updates after each core/boot selection. Passive conflicts on items that remain equipped continue to exclude the duplicate candidate, and situational options use the same check. This is a generic recipe rule, not a champion-specific override. Owning basic boots also no longer suppresses tier-two boot recommendations; already-owned upgraded boots still prevent a second pair.
+
+Limits: unique-passive names are source metadata and do not represent every item-group restriction. Scoring, mana saturation, threat coverage and power-spike modeling remain approximations. This repair does not add new match data or certify champion/role/matchup optimality.
