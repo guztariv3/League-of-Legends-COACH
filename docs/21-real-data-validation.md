@@ -1,6 +1,6 @@
 # Real-data collection and role coverage
 
-The engine audit (docs/20) is not match evidence. No live Riot key or production database was available in the development environment for this work. No real coverage figures or build optimality are claimed.
+The engine audit (docs/20) is not match evidence. The subsequent read-only production counter export was audited in docs/28 and docs/29; it is not a live database connection or a certification of build optimality. See docs/31 for the staged plan to obtain missing categories without silently changing production.
 
 ## Existing collection
 
@@ -31,11 +31,11 @@ The command reads the API's existing DATABASE_URL or PGLITE_DIR (default apps/ap
 
 The report contains aggregate counters only, with no player identities, keys, account credentials or database URL. Review it and attach stats-coverage.json for assessment. The roster version is recorded separately from the requested patch: update the catalog if a newer patch adds champions. The database's provenance must be checked separately: counters alone cannot certify real Riot input rather than imported or test data.
 
-Each champion × position row reports total games, first-completed-item, full rune-page and spell-pair sample availability. Observed opponents have separate scoped rows; absent opponents have no recorded scoped options. Thresholds follow the current evidence pipeline: displayed options need 8 observations, supported options need 30, and their visible pool needs 100. These are sample gates, not proof of legality, strategic quality or a causal win-rate advantage. Core purchase prefixes, item legality and full rune-page legality require further validation; this report does not certify them. Every row retains optimalityVerified=false.
+Each champion × position row reports total games, first-completed-item, full rune-page and spell-pair sample availability. Observed opponents have separate scoped rows; absent opponents have no recorded scoped options. Thresholds follow the current evidence pipeline: displayed options need 8 observations, supported options need 30, and the comparison pool needs 100 observations before display filtering. These are sample gates, not proof of legality, strategic quality or a causal win-rate advantage. Core purchase prefixes, item legality and full rune-page legality require further validation; this report does not certify them. Every row retains optimalityVerified=false.
 
 ## Known gaps to assess before declaring completion
 
-- Older counted matches are immutable and are not backfilled with the newly added full rune-page/matchup counters. Collect new matches; do not delete shared counters or re-add old matches to force numbers upward.
+- The normal crawler does not revisit older counted matches to add newly introduced categories. A separate bounded recovery tool is prepared in docs/24, but has not been applied to production. Collect new matches or explicitly rehearse controlled recovery; never delete shared counters or re-add old matches to force numbers upward.
 - Before the crawler repair, a null timeline could permanently claim a game without purchase observations. The repair leaves missing matches/timelines unclaimed so subsequent history listings can retry them. It does not repair older counters or promise when the match will reappear. Permanently unavailable matches can remain absent; inspect category coverage rather than treating total games as proof of purchase coverage.
 - The collector can retain the previous patch for display, but this report and recommendation evidence use the requested exact patch only.
 - Compare actual recommended choices against supported samples by champion/role/opponent and examine exceptions. A larger win rate alone does not establish the best first item: completion bias and player selection matter.
