@@ -22,8 +22,10 @@ export function liveDetail(state:GameState|null, coach:LiveCoach|null, plan:Plan
   source,players:{allies:allAllies.length?allAllies.slice(0,5).map(player):[...(plan?.champion?[unknown(plan.champion,true)]:[]),...(plan?.roster?.allies??[]).map(c=>unknown(c))].slice(0,5),enemies:state?.enemies.length?state.enemies.slice(0,5).map(player):(plan?.roster?.enemies??[]).map(c=>unknown(c)).slice(0,5)},
   buyNow:active?p?.now?.buys??coach?.starter?.items.map(i=>({id:i.id,name:i.name,gold:i.gold}))??[]:[],
   spent:p?.now?.spent??coach?.starter?.items.reduce((sum,i)=>sum+i.gold,0)??0,leftover:p?.now?.leftover??(state?.gold==null?null:Math.max(0,state.gold-(coach?.starter?.items.reduce((sum,i)=>sum+i.gold,0)??0))),deferred:p?.deferred??[],
-  recipes:p?.recipes??[],targets:p?.milestones??[b?.first,...b?.next??[]].flatMap(i=>i?[{id:i.id,name:i.name,remaining:i.gold,at:null}]:[]).slice(0,6),
-  starter:b?.starter?.items??[],alternatives:coach?.items?.alternatives.map(i=>({id:i.item.id,name:i.item.name,gold:i.path.remaining,reason:i.reasons.join(' ').slice(0,1600)}))??b?.situational.slice(0,6).map(i=>({id:i.id,name:i.name,gold:i.gold,reason:i.when}))??[],
+  // During a match the desktop coach is authoritative. A missing current result
+  // must not resurrect the pre-game build only on the web.
+  recipes:active?p?.recipes??[]:[],targets:active?p?.milestones??[]:[b?.first,...b?.next??[]].flatMap(i=>i?[{id:i.id,name:i.name,remaining:i.gold,at:null}]:[]).slice(0,6),
+  starter:active?[]:b?.starter?.items??[],alternatives:active?coach?.items?.alternatives.map(i=>({id:i.item.id,name:i.item.name,gold:i.path.remaining,reason:i.reasons.join(' ').slice(0,1600)}))??[]:b?.situational.slice(0,6).map(i=>({id:i.id,name:i.name,gold:i.gold,reason:i.when}))??[],
   runes:runes?[{...runes.keystone,group:runes.primaryTree},...runes.primary.map(r=>({...r,group:runes.primaryTree})),...runes.secondary.map(r=>({...r,group:runes.secondaryTree})),...runes.shards.map(r=>({...r,group:'Shards'}))]:[],
   spells:b?.setup?.spells.map(s=>({key:s.key,name:s.name,why:s.why}))??[],equippedRunes:state?.loadout?.runes??[],equippedSpells:state?.loadout?.spells??[],
   skillOrder:sk?.max??plan?.plan.loadout.maxOrder??[],skillSequence:sk?.sequence??[],skillRanks:state?.abilities?Object.values(state.abilities):[],nextSkill:coach?.decisions.find(d=>d.kind==='skill')?.headline??null,

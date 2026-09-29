@@ -111,3 +111,52 @@ describe('consistent matchup scope across competing item candidates',()=>{
   expect(purchasePrior({...query,evidence:scoped,opponent:'Lux',chosen:[3118],candidate:3100})?.reason).toContain('across matchups');
  });
 });
+
+describe('live follow-up purchases and exclusive penetration families',()=>{
+ const evidence:BuildEvidence={champion:'Ahri',position:'MIDDLE',patch:'16.19',first:[{key:'3118',games:1000,wins:550}],core:[{key:'3118>3100>3089',games:1000,wins:550}]};
+ it('continues using observed purchases after a completed item, without reusing first-item counts',()=>{
+  const input={me:kit('Ahri'),items,owned:[3118,3020,1052],position:'MIDDLE',patch:'16.19',enemies:[{kit:kit('Zed'),laneOpponent:true}]};
+  const b=recommendBuild({...input,evidence});
+  expect(b.audit!.candidates.find(c=>c.id===3100)?.empirical).toBeGreaterThan(0);
+  expect(b.first!.why.join(' ')).toContain('matching completed-item prefix');
+  for(const invalid of [{...evidence,core:[]},{...evidence,position:'TOP'},{...evidence,patch:'16.18'}])
+   expect(recommendBuild({...input,evidence:invalid}).audit).toEqual(recommendBuild(input).audit);
+ });
+ it('matches held completed items irrespective of slot order, without skipping missing prefix items',()=>{
+  const q={evidence,champion:'Ahri',position:'MIDDLE',patch:'16.19',chosen:[],candidate:3089};
+  expect(purchasePrior({...q,held:[3100,3118]})?.bonus).toBeGreaterThan(0);
+  expect(purchasePrior({...q,held:[3118,3100]})).toEqual(purchasePrior({...q,held:[3100,3118]}));
+  expect(purchasePrior({...q,held:[3100]})).toBeNull();
+  expect(purchasePrior({...q,held:[3118,3118]})).toBeNull();
+ });
+ it('never plans both percentage penetration items, including when one is already held',()=>{
+  for(const owned of [[],[3135],[3137],[4630]]){
+   const b=run('Ahri',owned);
+   const planned=[...owned,...[b.first,...b.next].flatMap(x=>x?[x.id]:[])];
+   expect(planned.includes(3135)&&planned.includes(3137)).toBe(false);
+   for(const suggestion of [...b.situational,...b.alternative?[b.alternative]:[]])
+    if(owned.includes(3135)||owned.includes(3137))expect([3135,3137]).not.toContain(suggestion.id);
+  }
+ });
+ it('rejects a duplicate penetration family even when the ranking strongly prefers both',()=>{
+  const pool=items.filter(i=>[3135,3137,4630,3108,1026,1052].includes(i.id));
+  for(const owned of [[],[3135],[3137]]){
+   const b=recommendBuild({me:kit('Ahri'),items:pool,owned,position:'MIDDLE',enemies:[]});
+   const ids=[...owned,...[b.first,...b.next].flatMap(i=>i?[i.id]:[])];
+   expect(ids.filter(id=>id===3135||id===3137)).toHaveLength(1);
+  }
+ });
+ it('allows consumed penetration components to upgrade and permits flat penetration alongside percent',()=>{
+  const pool=items.filter(i=>[3135,4630,3020,1026,1052].includes(i.id));
+  const b=recommendBuild({me:kit('Ahri'),items:pool,owned:[4630,3020],position:'MIDDLE',enemies:[]});
+  expect(b.first?.id).toBe(3135);
+ });
+ it('keeps every champion core free of duplicate percentage penetration families',()=>{
+  for(const me of kits.filter(k=>k.detail==='full')){
+   const b=recommendBuild({me,items,position:'MIDDLE',enemies:[],baseline:true});
+   const selected=[b.first,...b.next].flatMap(x=>x?[items.find(i=>i.id===x.id)!]:[]);
+   for(const stat of ['magicPenetration','armorPenetration'] as const)
+    expect(selected.filter(i=>(i.stats[stat]?.percent??0)>0).length,`${me.id} ${stat}`).toBeLessThanOrEqual(1);
+  }
+ });
+});

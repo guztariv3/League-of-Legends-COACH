@@ -10,6 +10,8 @@ export interface PurchasePrior { bonus:number; reason:string }
 export function purchasePrior(input: {
   evidence?:BuildEvidence; champion:string; position?:string|null; patch?:string;
   opponent?:string|null; chosen:number[]; candidate:number;
+  /** Completed items currently held. Inventory slot order is NOT purchase order. */
+  held?:number[];
 }): PurchasePrior | null {
   const e=input.evidence;
   if (!e || !input.position || !input.patch || e.champion!==input.champion || e.position!==input.position || e.patch!==input.patch) return null;
@@ -18,14 +20,20 @@ export function purchasePrior(input: {
     const counts=new Map<number,{games:number;wins:number}>();
     for(const r of valid(rows)){
       const ids=r.key.split('>').map(Number);
-      if(input.chosen.some((id,i)=>ids[i]!==id))continue;
-      const id=ids[input.chosen.length];if(!id)continue;
+      const held=input.held??[];
+      // Match the observed prefix as a multiset: never infer chronology from slots,
+      // or skip a missing/sold item in order to borrow an unrelated build's evidence.
+      const prefix=ids.slice(0,held.length).sort((a,b)=>a-b);
+      if(prefix.length!==held.length || [...held].sort((a,b)=>a-b).some((id,i)=>prefix[i]!==id))continue;
+      if(input.chosen.some((id,i)=>ids[held.length+i]!==id))continue;
+      const id=ids[held.length+input.chosen.length];if(!id)continue;
       const c=counts.get(id)??{games:0,wins:0};c.games+=r.games;c.wins+=r.wins;counts.set(id,c);
     }
     return counts;
   };
-  const general=options(input.chosen.length ? e.core : e.first);
-  const match=e.matchup && e.matchup.opponent===input.opponent ? options(input.chosen.length ? e.matchup.core : e.matchup.first) : new Map<number,{games:number;wins:number}>();
+  const later=Boolean(input.chosen.length || input.held?.length);
+  const general=options(later ? e.core : e.first);
+  const match=e.matchup && e.matchup.opponent===input.opponent ? options(later ? e.matchup.core : e.matchup.first) : new Map<number,{games:number;wins:number}>();
   const total=(m:typeof general)=>[...m.values()].reduce((n,r)=>n+r.games,0);
   // Choose the scope for the whole comparison, never separately for each candidate.
   // Once a matchup supports a ranking, sparse options get no empirical bonus rather
@@ -41,7 +49,7 @@ export function purchasePrior(input: {
   const advantage=Math.max(-.1,Math.min(.1,shrunk-baseline));
   const bonus=support*(.35*popularity+advantage);
   const scope=scoped?`against ${input.opponent}`:'across matchups';
-  return {bonus,reason:`Observed ${input.chosen.length?'next purchase after this prefix':'first completed item'}: ${row.games} games, ${(100*row.wins/row.games).toFixed(1)}% wins, patch ${e.patch}, ${e.position}, ${scope}. Sample-weighted evidence; outcomes are observational and include completion/survivorship bias.`};
+  return {bonus,reason:`Observed ${later?'next purchase after a matching completed-item prefix':'first completed item'}: ${row.games} games, ${(100*row.wins/row.games).toFixed(1)}% wins, patch ${e.patch}, ${e.position}, ${scope}. Sample-weighted evidence; outcomes are observational and include completion/survivorship bias.`};
 }
 
 /** Setup rows remain exact pages/pairs; components from incompatible pages are never mixed. */

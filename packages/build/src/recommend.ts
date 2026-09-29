@@ -312,6 +312,7 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
       first: null, next: [], boots: null, situational: [], ruledOut: [], certainty: null, alternative: null, adaptation: null };
   }
   const firstCompletedItem = !equipped.some(i=>i.rank.includes("LEGENDARY") && !i.rank.includes("BOOTS"));
+  const heldCore = equipped.filter(i=>i.rank.includes("LEGENDARY") && !i.rank.includes("BOOTS")).map(i=>i.id);
   const profiles = input.items.map((i) => itemProfile(i, gold, catalog))
     .filter((ip) => (ip.finished || (ip.boots && !p.cannotBuyBoots)) && (ip.item.requiredChampion === null || ip.item.requiredChampion === p.id) && ip.item.requiredAlly === null);
 
@@ -348,7 +349,16 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
   };
   const conflicts = (ip: ItemProfile) => {
     const names = new Set(ip.item.effects.filter(ef=>ef.unique && ef.name).map(ef=>ef.name));
-    return afterRecipe(ip.item,plannedInventory).some(id=>catalog.get(id)?.effects.some(ef=>ef.unique && ef.name && names.has(ef.name)));
+    // Percentage penetration families are shop-exclusive even when their named
+    // passives differ or there is no named passive.
+    // Flat penetration is deliberately not included. Consumed recipe pieces do
+    // not block their parent; held components in another branch do.
+    return afterRecipe(ip.item,plannedInventory).some(id=>{
+      const other=catalog.get(id);
+      return other && ((["magicPenetration", "armorPenetration"] as const).some(stat=>
+        (ip.item.stats[stat]?.percent??0)>0 && (other.stats[stat]?.percent??0)>0) ||
+        other.effects.some(ef=>ef.unique && ef.name && names.has(ef.name)));
+    });
   };
   const ruledOut = new Map<number, { id: number; name: string; why: string; score: number }>();
   const candidates = (boots: boolean) => profiles
@@ -388,8 +398,8 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
         sc.timing = timing;
         sc.why.push(timing.reason);
       }
-      if (!boots && firstCompletedItem) {
-        const prior=purchasePrior({evidence:input.evidence,champion:input.me.id,position:input.position,patch:input.patch,opponent:input.enemies.find(x=>x.laneOpponent)?.kit.id,chosen:core.map(x=>x.ip.item.id),candidate:ip.item.id});
+      if (!boots) {
+        const prior=purchasePrior({evidence:input.evidence,champion:input.me.id,position:input.position,patch:input.patch,opponent:input.enemies.find(x=>x.laneOpponent)?.kit.id,held:heldCore,chosen:core.map(x=>x.ip.item.id),candidate:ip.item.id});
         if(prior){sc.empirical=prior.bonus;sc.score+=prior.bonus;sc.why.push(prior.reason);}
       }
       const useless = counterWithoutThreat(ip, e);
