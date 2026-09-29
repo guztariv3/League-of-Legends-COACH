@@ -151,12 +151,10 @@ describe('live follow-up purchases and exclusive penetration families',()=>{
   const b=recommendBuild({me:kit('Ahri'),items:pool,owned:[4630,3020],position:'MIDDLE',enemies:[]});
   expect(b.first?.id).toBe(3135);
  });
- it('keeps every champion core free of duplicate percentage penetration families',()=>{
-  for(const me of kits.filter(k=>k.detail==='full')){
+ for(const me of kits.filter(k=>k.detail==='full'))it(`${me.id}: core has no duplicate percentage penetration family`,()=>{
    const b=recommendBuild({me,items,position:'MIDDLE',enemies:[],baseline:true});
    const selected=[b.first,...b.next].flatMap(x=>x?[items.find(i=>i.id===x.id)!]:[]);
    for(const stat of ['magicPenetration','armorPenetration'] as const)
     expect(selected.filter(i=>(i.stats[stat]?.percent??0)>0).length,`${me.id} ${stat}`).toBeLessThanOrEqual(1);
-  }
  });
 });
