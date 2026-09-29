@@ -121,3 +121,20 @@ it.each(['trees','secondary','shards'])('invalid %s cannot suppress valid champi
  expect(answer.runes!.keystone.why).toContain('across matchups');
  expect(pageKey(answer.runes!)).toBe(key);
 });
+
+it('uses sample-weighted support when choosing between observed keystone/secondary pairs',()=>{
+ const primary=runes.trees[0]!,key=primary.rows[0]![0]!;
+ const allowed=runes.trees.filter(t=>primary.secondary.includes(t.id));
+ const weak=allowed[0]!,strong=allowed[1]!;
+ const neutral={...runes,runes:runes.runes.map(r=>({...r,short:'A neutral effect.'}))};
+ const input={me:kit('Garen'),position:'TOP',patch:'16.19',enemies:[],runes:neutral,spells};
+ const evidence:BuildEvidence={champion:'Garen',position:'TOP',patch:'16.19',first:[],core:[],keystones:[
+  {key:`${key}:${weak.id}`,games:30,wins:15},{key:`${key}:${strong.id}`,games:600,wins:300}
+ ]};
+ const result=recommendSetup({...input,evidence}).runes!;
+ expect(result.keystone.id).toBe(key);
+ expect(result.secondaryTree).toBe(strong.name);
+ expect(result.keystone.why).toContain('600 games');
+ const reversed={...evidence,keystones:evidence.keystones!.map(r=>({...r,games:r.games===30?600:30,wins:r.wins===15?300:15}))};
+ expect(recommendSetup({...input,evidence:reversed}).runes!.secondaryTree).toBe(weak.name);
+});

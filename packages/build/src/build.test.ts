@@ -426,3 +426,14 @@ describe('healing counters require a healing source, not just life-steal compati
   expect(run([catalog.get(1053)!])).toBeGreaterThan(run([]));
  });
 });
+
+it('does not increase flat magic penetration value as enemy MR grows',()=>{
+ const pen={...catalog.get(3135)!,from:[],effects:[],stats:{magicPenetration:{flat:18,percent:0}}};
+ const run=(resist:number,percent=false)=>{
+  const target=percent?{...pen,stats:{magicPenetration:{flat:0,percent:40}}}:pen;
+  const enemyItem={...catalog.get(3047)!,stats:{magicResistance:{flat:resist,percent:0}}};
+  return recommendBuild({me:kit('Syndra'),items:[...items.filter(i=>!i.rank.includes('LEGENDARY')),target],enemies:[{kit:kit('Darius'),items:[enemyItem]}],position:'MIDDLE'}).first!.score;
+ };
+ expect(run(150)).toBeLessThan(run(0));
+ expect(run(150,true)).toBeGreaterThan(run(0,true));
+});

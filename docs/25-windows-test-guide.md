@@ -1,5 +1,7 @@
 # Guía única de Windows — KOI Master d0951a1
 
+**Referencia histórica.** Esta versión no incluye las correcciones posteriores. Para la revisión actual, consultar `30-current-status-and-handoff.md` y usar el SHA y el instalador emparejados en la última entrega del PR #51.
+
 Versión congelada: `d0951a1ead1e56badcc0f4d0f8dcea952cc2246b`.
 CI e instalador de esta versión: aprobados y comprobados el 28 de septiembre de 2026.
 Esta guía no actualiza Render, no fusiona PRs ni ejecuta recuperación histórica.

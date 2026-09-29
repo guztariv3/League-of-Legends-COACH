@@ -166,12 +166,30 @@ function recommendRunes(data: RuneData, k: KitNeeds, e: EnemyPicture, observatio
   const rated = (r: RuneFacts) => ({ r, ...scoreText(r.short, k, e), ...(eligible(r) ? {} : {score: -Infinity}) });
   const bestOf = (ids: number[]) => ids.map((id) => byId.get(id)).filter((r): r is RuneFacts => r !== undefined).map(rated).sort((a, b) => b.score - a.score || a.r.id - b.r.id)[0];
   // The primary tree is the one whose whole page (keystone, which weighs most, plus its best rune per row) fits best.
-  const pages = data.trees.map((t) => {
+  let pages = data.trees.map((t) => {
     const allowedKeys=(t.rows[0]??[]).filter(id=>observations.length>0 || !keystones.length || keystones.some(o=>Number(o.key.split(':')[0])===id));
     const key = bestOf(allowedKeys);
     const rows = t.rows.slice(1).map(bestOf).filter((x) => x !== undefined);
-    return { t, key, rows, total: (key ? key.score * 2 : -Infinity) + rows.reduce((sum, x) => sum + x.score, 0) };
+    return { t, key, rows, secondaryId:undefined as number|undefined, total: (key ? key.score * 2 : -Infinity) + rows.reduce((sum, x) => sum + x.score, 0) };
   }).sort((a, b) => b.total - a.total || a.t.id - b.t.id);
+  if (!observations.length && keystones.length) {
+    // Rank each observed key/tree pair as a unit. The sample bonus must affect
+    // the comparison, rather than merely admitting a pair and then ignoring it.
+    const supported:typeof pages=[];
+    for(const observation of keystones){
+      const [id,secondaryId]=observation.key.split(":").map(Number);
+      const t=data.trees.find(t=>t.rows[0]?.includes(id!));
+      const rune=byId.get(id!);
+      if(!t || !rune)continue;
+      const key=rated(rune),rows=t.rows.slice(1).map(bestOf).filter(x=>x!==undefined);
+      for(const secondary of data.trees.filter(s=>t.secondary.includes(s.id) && (secondaryId===undefined || s.id===secondaryId))){
+        const picks=secondary.rows.slice(1).map(bestOf).filter((x):x is ReturnType<typeof rated>=>x!==undefined && Number.isFinite(x.score)).sort((a,b)=>b.score-a.score).slice(0,2);
+        if(rows.length!==3 || picks.length!==2 || !Number.isFinite(key.score) || rows.some(r=>!Number.isFinite(r.score)))continue;
+        supported.push({t,key,rows,secondaryId:secondary.id,total:key.score*2+rows.reduce((n,r)=>n+r.score,0)+picks.reduce((n,r)=>n+r.score,0)+observation.bonus*4});
+      }
+    }
+    if(supported.length)pages=supported.sort((a,b)=>b.total-a.total || a.t.id-b.t.id || a.key!.r.id-b.key!.r.id || a.secondaryId!-b.secondaryId!);
+  }
   const best = pages[0];
   if (!best?.key) return null;
   const tree = best.t;
@@ -181,7 +199,7 @@ function recommendRunes(data: RuneData, k: KitNeeds, e: EnemyPicture, observatio
   // Secondary: the allowed tree whose two best runes (from different rows) add up to the most.
   let secondary: { tree: string; picks: ReturnType<typeof rated>[]; total: number } | null = null;
   const observedSecondary=new Set(keystones.filter(o=>Number(o.key.split(':')[0])===key.r.id).map(o=>Number(o.key.split(':')[1])).filter(Boolean));
-  for (const t of data.trees.filter((x) => x.id !== tree.id && tree.secondary.includes(x.id) && (observations.length>0 || !observedSecondary.size || observedSecondary.has(x.id)))) {
+  for (const t of data.trees.filter((x) => x.id !== tree.id && tree.secondary.includes(x.id) && (best.secondaryId!==undefined ? x.id===best.secondaryId : (observations.length>0 || !observedSecondary.size || observedSecondary.has(x.id))))) {
     const perRow = t.rows.slice(1).map(bestOf).filter((x) => x !== undefined).sort((a, b) => b.score - a.score);
     const picks = perRow.slice(0, 2);
     const total = picks.reduce((s, x) => s + x.score, 0);

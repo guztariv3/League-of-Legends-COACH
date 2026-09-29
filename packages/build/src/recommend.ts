@@ -139,11 +139,16 @@ function score(ip: ItemProfile, p: ChampionProfile, e: EnemyPicture, s: State): 
   const lines = ip.stats.map((l) => {
     const stat = l.key.split(":")[0] as ItemStat;
     const usable = stat === "criticalStrikeChance" ? clamp((100-s.critChance) / Math.max(1,l.amount*p.critMultiplier)) : 1;
-    return {...l,stat,value:l.gold*(w[stat]??0)*usable};
+    // Flat penetration removes a fixed amount; it must not inherit the
+    // rising anti-resistance weight used for percentage penetration.
+    const weight = stat === "magicPenetration" && l.key.endsWith(":flat")
+      ? p.scales.AP*p.offense*p.damage.magic*.4/(1+e.purchasedResists.magicResistance/100)
+      : (w[stat]??0);
+    return {...l,stat,value:l.gold*weight*usable,usableWeight:weight*usable};
   });
   const statValue = lines.reduce((sum, l) => sum + l.value, 0) / cost;
   const rawGold = lines.reduce((sum, l) => sum + l.gold, 0);
-  const fit = rawGold > 0 ? lines.reduce((sum, l) => sum + l.gold * Math.min(1, w[l.stat] ?? 0), 0) / rawGold : 0;
+  const fit = rawGold > 0 ? lines.reduce((sum, l) => sum + l.gold * Math.min(1, l.usableWeight), 0) / rawGold : 0;
   let counterValue = 0;
   const why: string[] = [];
 
