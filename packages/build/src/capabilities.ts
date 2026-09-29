@@ -34,7 +34,10 @@ export const THREAT_ONLY: Counter[] = ["critReduction", "grievousWounds", "antiS
 /** Health-based damage: "X% of the target's maximum/current/missing health" as damage (not as a trigger condition). */
 const TARGET_HEALTH = /(?:target'?s?|their|each target'?s?|enemy'?s?) (?:maximum|max|current|missing) health/i;
 const healthDamage = (t: string) =>
-  TARGET_HEALTH.test(t) && /damage/i.test(t) && !/(?:at or )?below [\d.]+% of|within [\d.]+ seconds? inflicts/i.test(t);
+  TARGET_HEALTH.test(t) && /damage/i.test(t) && !/(?:at or )?below [\d.]+% of|within [\d.]+ seconds? inflicts/i.test(t)
+  // Amplifying a fixed hit as a target loses health is an execute mechanic,
+  // not damage proportional to the target's health pool.
+  && !/increased by[^.]{0,100}(?:target'?s? |their )missing health/i.test(t);
 
 /** Each detector reads one sentence at a time, so words from different effects never combine. */
 const DETECT: [Counter, (t: string) => boolean][] = [

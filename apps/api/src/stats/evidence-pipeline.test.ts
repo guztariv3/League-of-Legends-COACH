@@ -8,6 +8,24 @@ let database: Database;
 beforeAll(async () => { database = await openDatabase(undefined, undefined); });
 afterAll(async () => { await database.close(); });
 
+it('reconciles provider capitalization before sample gates without mixing roles',async()=>{
+ const base={patch:'16.19',position:'JUNGLE'};
+ await database.db.insert(schema.statsCounts).values([
+  ...['FiddleSticks','Fiddlesticks'].flatMap(champion=>[
+   {...base,champion,kind:'games',key:'',games:60,wins:30},
+   {...base,champion,kind:'first_item',key:'3118',games:60,wins:30},
+   {...base,champion,kind:'matchup_first_item',key:'MasterYi|3118',games:60,wins:30},
+  ]),
+  {...base,champion:'FiddleSticks',position:'MIDDLE',kind:'games',key:'',games:5,wins:3},
+ ]);
+ const stats=(await championStats(database.db,'Fiddlesticks',null,'16.19'))!;
+ expect(stats.games).toBe(120);expect(stats.position).toBe('JUNGLE');
+ const evidence=buildEvidence(stats,'Fiddlesticks','JUNGLE','16.19','Masteryi')!;
+ expect(evidence.first).toEqual([{key:'3118',games:120,wins:60}]);
+ expect(evidence.matchup?.first).toEqual(evidence.first);
+ expect(await championStats(database.db,'Fiddlesticks','MIDDLE','16.19')).toBeNull();
+});
+
 it('keeps rare complete paths until matching next purchases have been aggregated', async () => {
   // Synthetic regression: 20 disjoint three-item paths, five games each.
   // Every path shares the same first two purchases: 100 supported next purchases.

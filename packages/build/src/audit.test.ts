@@ -42,6 +42,19 @@ describe('first-spike mechanics regressions (real patch fixture)',()=>{
 const evidence:BuildEvidence={champion:'Ahri',position:'MIDDLE',patch:'16.19',first:[{key:'3118',games:800,wins:408},{key:'3100',games:200,wins:106}],core:[],matchup:{opponent:'Zed',first:[{key:'3118',games:20,wins:10},{key:'3100',games:2,wins:2}],core:[]}};
 const query={evidence,champion:'Ahri',position:'MIDDLE',patch:'16.19',opponent:'Zed',chosen:[],candidate:3118};
 describe('sample-weighted purchase observations (fictional statistical fixtures)',()=>{
+ it('anchors different champion roles to supported legal purchases rather than a generic rush',()=>{
+  for(const [champion,position,id] of [['Aatrox','TOP',3161],['Ekko','JUNGLE',3152],['Caitlyn','BOTTOM',3031],['Lulu','UTILITY',3504]] as const){
+   const evidence:BuildEvidence={champion,position,patch:'16.19',first:[{key:String(id),games:120,wins:61}],core:[]};
+   const b=recommendBuild({me:kit(champion),items,position,patch:'16.19',evidence,enemies:[]});
+   expect(b.first?.id,champion).toBe(id);
+   expect(b.first?.why.join(' ')).toContain('sufficiently sampled');
+  }
+ });
+ it('preserves substantial recipe investment as an explicit departure from observed purchases',()=>{
+  const evidence:BuildEvidence={champion:'Ahri',position:'MIDDLE',patch:'16.19',first:[{key:'2503',games:120,wins:61}],core:[]};
+  const b=recommendBuild({me:kit('Ahri'),items,owned:[3802,1026],position:'MIDDLE',patch:'16.19',evidence,enemies:[]});
+  expect(b.audit?.candidates.some(c=>c.id===3118)).toBe(true);
+ });
  it('uses champion/role evidence when matchup samples are too small',()=>{
   const p=purchasePrior(query)!;expect(p.bonus).toBeGreaterThan(0);expect(p.reason).toContain('800 games');expect(p.reason).toContain('across matchups');
  });

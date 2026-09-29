@@ -51,6 +51,16 @@ describe('entire patch roster × explicit position (mechanical invariants, not o
 });
 
 describe('mechanics and multi-role isolation',()=>{
+ it('uses a sampled keystone without claiming the remaining page was observed',()=>{
+  const evidence:BuildEvidence={champion:'Aatrox',position:'TOP',patch:'16.19',first:[],core:[],keystones:[{key:'8010:8400',games:180,wins:90}]};
+  const r=recommendSetup({me:kit('Aatrox'),position:'TOP',patch:'16.19',evidence,enemies,runes,spells}).runes!;
+  expect(r.keystone.id).toBe(8010);
+  expect(r.secondaryTree).toBe(runes.trees.find(t=>t.id===8400)!.name);
+  expect(r.keystone.why).toContain('Observed keystone only');
+  expect(r.keystone.why).toContain('not an observed complete page');
+  const wrongRole=recommendSetup({me:kit('Aatrox'),position:'JUNGLE',patch:'16.19',evidence,enemies,runes,spells}).runes!;
+  expect(wrongRole.keystone.why).not.toContain('Observed keystone only');
+ });
  it('uses kit restrictions and cooldown scalings rather than champion-name exceptions',()=>{
   expect(championProfile(kit('Cassiopeia')).cannotBuyBoots).toBe(true);
   expect(championProfile(kit('Pyke')).cannotGainHealth).toBe(true);

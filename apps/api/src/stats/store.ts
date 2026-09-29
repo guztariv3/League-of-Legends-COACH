@@ -75,15 +75,26 @@ export function previousPatch(patch: string): string | null {
 export async function championStats(db: Db, champion: string, position: string | null, currentPatch: string): Promise<ChampionStats | null> {
   const prev = previousPatch(currentPatch);
   const c = schema.statsCounts;
+  // Provider and catalog capitalization can differ. Preserve role/patch
+  // boundaries while reading historical counters under either spelling.
+  const sameChampion = sql`lower(${c.champion}) = ${champion.toLowerCase()}`;
   for (const [patch, patchLabel] of [[currentPatch, "current"], ...(prev ? [[prev, "previous"]] : [])] as [string, "current" | "previous"][]) {
     let pos = position;
     if (!pos) {
       const totals = await db.select({ position: c.position, games: c.games }).from(c)
-        .where(and(eq(c.patch, patch), eq(c.champion, champion), eq(c.kind, "games"), eq(c.key, "")));
-      pos = totals.sort((a, b) => b.games - a.games)[0]?.position ?? null;
+        .where(and(eq(c.patch, patch), sameChampion, eq(c.kind, "games"), eq(c.key, "")));
+      const byRole = new Map<string,number>();
+      for (const row of totals) byRole.set(row.position,(byRole.get(row.position)??0)+row.games);
+      pos = [...byRole].sort((a,b)=>b[1]-a[1])[0]?.[0] ?? null;
       if (!pos) continue;
     }
-    const rows = await db.select().from(c).where(and(eq(c.patch, patch), eq(c.champion, champion), eq(c.position, pos)));
+    const stored = await db.select().from(c).where(and(eq(c.patch, patch), sameChampion, eq(c.position, pos)));
+    const merged = new Map<string,typeof stored[number]>();
+    for (const row of stored) {
+      const id=JSON.stringify([row.kind,row.key.toLowerCase()]),prior=merged.get(id);
+      merged.set(id,prior?{...prior,games:prior.games+row.games,wins:prior.wins+row.wins,minuteSum:prior.minuteSum+row.minuteSum,minuteN:prior.minuteN+row.minuteN}:{...row});
+    }
+    const rows=[...merged.values()];
     const total = rows.find((r) => r.kind === "games" && r.key === "");
     if (!total || total.games < MIN_GAMES) continue;
     const byKind: ChampionStats["byKind"] = {};

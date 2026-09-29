@@ -33,6 +33,29 @@ const TANKS = ["Malphite", "Ornn", "Sejuani", "Braum", "Orianna"];
 const CC_TEAM = ["Leona", "Nautilus", "Sejuani", "Morgana", "Ashe"];
 const HEALERS = ["Soraka", "Aatrox", "Vladimir", "Yuumi", "DrMundo"];
 
+describe('roster audit: passive triggers and capped stats',()=>{
+ it('does not call an execute amplifier percentage-health antitank damage',()=>{
+  expect(profileOf(6672).counters).not.toContain('maxHealthDamage');
+  expect(profileOf(3153).counters).toContain('maxHealthDamage');
+ });
+ it('distinguishes self shields from shields or heals on another ally',()=>{
+  for(const id of ['Riven','Mordekaiser','Yone']) expect(championProfileOf(id).allyHealShield,id).toBe(false);
+  for(const id of ['Lulu','Nami','Ivern','Senna']) expect(championProfileOf(id).allyHealShield,id).toBe(true);
+ });
+ it('cannot manufacture an ally-heal trigger just by selecting support',()=>{
+  const proc=items.find(i=>i.id===3504)!;
+  const shop=items.map(i=>i.id===proc.id?{...i,stats:{...i.stats,abilityPower:{flat:2000,percent:0}}}:i);
+  const b=recommendBuild({me:kit('Riven'),items:shop,enemies:[],position:'UTILITY'});
+  expect([b.first,...b.next].some(i=>i?.id===proc.id)).toBe(false);
+ });
+ it('stops crediting additional critical chance beyond the cap',()=>{
+  const options={me:kit('Jinx'),items,enemies:[],position:'BOTTOM'};
+  const b=recommendBuild({...options,owned:[3031,6676,3094,3036]});
+  const why=[b.first,...b.next].flatMap(i=>i?.why??[]).join(' ');
+  expect(why).not.toMatch(/Gives[^:]*critical strike chance/);
+ });
+});
+
 describe("A — a champion that needs mana gets it covered", () => {
   const b = build("Smolder", AD_TEAM, { opponent: "Jinx", position: "BOTTOM" });
   it("reads the mana need from the kit's costs and pool", () => {

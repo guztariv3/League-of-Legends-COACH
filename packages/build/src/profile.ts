@@ -26,6 +26,8 @@ export interface ChampionProfile {
   mana: { rotation: number; pool: number; costs: { slot: string; cost: number }[] } | null;
   /** Its abilities heal or shield (it values heal and shield power). */
   healsOrShields: number;
+  /** The kit can heal or shield another ally, not only its owner. */
+  allyHealShield: boolean;
   ranged: boolean;
   spellOnHit: boolean;
   attackSpeedCooldown: boolean;
@@ -146,6 +148,9 @@ export function championProfile(kit: ChampionKit): ChampionProfile {
   }
 
   const healsOrShields = clamp(kit.abilities.filter((a) => a.values.some((v) => /^(heal|shield strength|maximum heal|minimum heal|heal per)/i.test(v))).length / 3);
+  const allyHealShield = kit.abilities.some(a =>
+    a.values.some(v => /^(heal|shield strength|maximum heal|minimum heal|heal per)/i.test(v))
+    && /\ball(?:y|ies|ied)\b/i.test(a.text));
 
   if (cannotBuyBoots) facts.push(`${kit.name}'s kit prohibits purchasing boots`);
   if (cannotGainHealth) facts.push(`${kit.name}'s kit converts bonus health instead of gaining maximum health`);
@@ -168,6 +173,7 @@ export function championProfile(kit: ChampionKit): ChampionProfile {
     manaNeed,
     mana,
     healsOrShields,
+    allyHealShield,
     spellOnHit, attackSpeedCooldown, cannotBuyBoots, cannotGainHealth, critMultiplier, damagingUltimate, repeatUltimate,
     ranged: kit.attackType === "RANGED",
     facts,

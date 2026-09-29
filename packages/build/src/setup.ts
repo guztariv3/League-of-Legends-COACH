@@ -159,7 +159,7 @@ function legalObservedPage(key: string, data: RuneData, k: KitNeeds): boolean {
   return ids.slice(2,8).every(id=>{const rune=data.runes.find(r=>r.id===id);return !!rune && eligibleRune(rune,k);});
 }
 
-function recommendRunes(data: RuneData, k: KitNeeds, e: EnemyPicture, observations: ReturnType<typeof setupObservations>): RuneRecommendation | null {
+function recommendRunes(data: RuneData, k: KitNeeds, e: EnemyPicture, observations: ReturnType<typeof setupObservations>, keystones: ReturnType<typeof setupObservations>): RuneRecommendation | null {
   const byId = new Map(data.runes.map((r) => [r.id, r]));
   // The summary says what the rune is for; the long text lists details that would add noise.
   const eligible = (r: RuneFacts) => eligibleRune(r,k);
@@ -167,7 +167,8 @@ function recommendRunes(data: RuneData, k: KitNeeds, e: EnemyPicture, observatio
   const bestOf = (ids: number[]) => ids.map((id) => byId.get(id)).filter((r): r is RuneFacts => r !== undefined).map(rated).sort((a, b) => b.score - a.score || a.r.id - b.r.id)[0];
   // The primary tree is the one whose whole page (keystone, which weighs most, plus its best rune per row) fits best.
   const pages = data.trees.map((t) => {
-    const key = bestOf(t.rows[0] ?? []);
+    const allowedKeys=(t.rows[0]??[]).filter(id=>observations.length>0 || !keystones.length || keystones.some(o=>Number(o.key.split(':')[0])===id));
+    const key = bestOf(allowedKeys);
     const rows = t.rows.slice(1).map(bestOf).filter((x) => x !== undefined);
     return { t, key, rows, total: (key ? key.score * 2 : -Infinity) + rows.reduce((sum, x) => sum + x.score, 0) };
   }).sort((a, b) => b.total - a.total || a.t.id - b.t.id);
@@ -179,7 +180,8 @@ function recommendRunes(data: RuneData, k: KitNeeds, e: EnemyPicture, observatio
 
   // Secondary: the allowed tree whose two best runes (from different rows) add up to the most.
   let secondary: { tree: string; picks: ReturnType<typeof rated>[]; total: number } | null = null;
-  for (const t of data.trees.filter((x) => x.id !== tree.id && tree.secondary.includes(x.id))) {
+  const observedSecondary=new Set(keystones.filter(o=>Number(o.key.split(':')[0])===key.r.id).map(o=>Number(o.key.split(':')[1])).filter(Boolean));
+  for (const t of data.trees.filter((x) => x.id !== tree.id && tree.secondary.includes(x.id) && (observations.length>0 || !observedSecondary.size || observedSecondary.has(x.id)))) {
     const perRow = t.rows.slice(1).map(bestOf).filter((x) => x !== undefined).sort((a, b) => b.score - a.score);
     const picks = perRow.slice(0, 2);
     const total = picks.reduce((s, x) => s + x.score, 0);
@@ -219,7 +221,7 @@ function recommendRunes(data: RuneData, k: KitNeeds, e: EnemyPicture, observatio
     return score(page.keystone.id) * 2 + [...page.primary, ...page.secondary].reduce((n,r)=>n+score(r.id),0)
       + page.shards.reduce((n,r)=>{const shard=shardById.get(r.id);return n+(shard ? shardValue(`${shard.name} ${shard.text}`)[0] : -Infinity);},0);
   };
-  let answer = fallback, bestScore = mechanicalScore(fallback);
+  let answer = fallback, bestScore = observations.length ? -Infinity : mechanicalScore(fallback);
   for (const observation of observations) {
     if (!legalObservedPage(observation.key,data,k)) continue;
     const ids = observation.key.split(">").map(Number);
@@ -231,7 +233,13 @@ function recommendRunes(data: RuneData, k: KitNeeds, e: EnemyPicture, observatio
     if (score > bestScore) { bestScore=score;answer=page;answer.keystone.why += ` ${observation.reason}`; }
   }
   answer.keystone.why += ` ${positionReason(k.position)}`;
-  if (answer === fallback) answer.keystone.why += " Mechanic-based page; no observed complete page displaced it. This is not a matchup win-rate prediction.";
+  if (answer === fallback) {
+    const secondaryId=data.trees.find(t=>t.name===answer.secondaryTree)?.id;
+    const observedKey=keystones.find(o=>Number(o.key.split(':')[0])===answer.keystone.id && (!o.key.includes(':') || Number(o.key.split(':')[1])===secondaryId));
+    answer.keystone.why += observedKey
+      ? ` ${observedKey.reason}${observedKey.key.includes(':')?' The secondary tree is part of this observation.':''} Remaining rune choices are mechanics-based; this is not an observed complete page.`
+      : " Mechanic-based page; no observed complete page displaced it. This is not a matchup win-rate prediction.";
+  }
   return answer;
 }
 
@@ -295,7 +303,10 @@ export function recommendSetup(input: SetupInput): SetupRecommendation {
   const e = enemyPicture(input.enemies);
   const evidence = {evidence:input.evidence,champion:input.me.id,position,patch:input.patch,opponent:input.enemies.find(x=>x.laneOpponent)?.kit.id};
   return {
-    runes: recommendRunes(input.runes, k, e, setupObservations({...evidence,kind:'runePages',acceptKey:key=>legalObservedPage(key,input.runes,k)})),
+    runes: recommendRunes(input.runes, k, e, setupObservations({...evidence,kind:'runePages',acceptKey:key=>legalObservedPage(key,input.runes,k)}),setupObservations({...evidence,kind:'keystones',acceptKey:key=>{
+      const [id,secondary]=key.split(':').map(Number),rune=input.runes.runes.find(r=>r.id===id);
+      return /^\d+(?::\d+)?$/.test(key) && input.runes.trees.some(t=>t.rows[0]?.includes(id!) && (secondary===undefined || t.secondary.includes(secondary))) && !!rune && eligibleRune(rune,k);
+    }})),
     spells: recommendSpells(input.spells, k, e, position ?? "", setupObservations({...evidence,kind:'spells'})),
   };
 }

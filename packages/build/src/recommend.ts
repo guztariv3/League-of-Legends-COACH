@@ -136,7 +136,11 @@ interface Scored {
 function score(ip: ItemProfile, p: ChampionProfile, e: EnemyPicture, s: State): Scored {
   const w = statWeights(p, e, s);
   const cost = Math.max(ip.item.gold, 1);
-  const lines = ip.stats.map((l) => ({ ...l, stat: l.key.split(":")[0] as ItemStat, value: l.gold * (w[l.key.split(":")[0] as ItemStat] ?? 0) }));
+  const lines = ip.stats.map((l) => {
+    const stat = l.key.split(":")[0] as ItemStat;
+    const usable = stat === "criticalStrikeChance" ? clamp((100-s.critChance) / Math.max(1,l.amount*p.critMultiplier)) : 1;
+    return {...l,stat,value:l.gold*(w[stat]??0)*usable};
+  });
   const statValue = lines.reduce((sum, l) => sum + l.value, 0) / cost;
   const rawGold = lines.reduce((sum, l) => sum + l.gold, 0);
   const fit = rawGold > 0 ? lines.reduce((sum, l) => sum + l.gold * Math.min(1, w[l.stat] ?? 0), 0) / rawGold : 0;
@@ -366,9 +370,15 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
     });
   };
   const ruledOut = new Map<number, { id: number; name: string; why: string; score: number }>();
-  const candidates = (boots: boolean) => profiles
+  const candidates = (boots: boolean) => {
+    const scored = profiles
     .filter((ip) => ip.boots === boots && !owned.has(ip.item.id) && !picked.has(ip.item.id) && !conflicts(ip))
     .map((ip) => {
+      // Self-healing or a self-shield does not activate effects requiring a
+      // heal/shield on another champion. A role label cannot supply that trigger.
+      const allyTrigger = /healing or shielding (?:an? )?allied champion/i.test(ip.item.effects.map(x=>x.text).join(" "));
+      const allyEffectFromInventory = plannedInventory.some(id => catalog.get(id)?.effects.some(effect => /allies[^.]{0,80}heal|heal[^.]{0,80}(?:target )?allied champion/i.test(effect.text)));
+      if (allyTrigger && !p.allyHealShield && !allyEffectFromInventory) return null;
       const sc = score(ip, p, e, state);
       if (!boots && input.position === "UTILITY") {
         // Role affects utility/accessibility, never fabricates a gold-per-minute estimate.
@@ -425,6 +435,22 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
     })
     .filter((x): x is Scored => x !== null)
     .sort((a, b) => b.score - a.score || a.ip.item.gold - b.ip.item.gold || a.ip.item.id - b.ip.item.id);
+    if (boots) return scored;
+    const supported = scored.filter(x=>x.empirical !== undefined);
+    if (!supported.length) return scored;
+    // A generic kit score must not silently displace a sufficiently observed
+    // purchase with an unobserved rush. Keep adaptations when visible urgency
+    // or an already substantially completed recipe supplies a concrete reason.
+    const lane=input.enemies.find(x=>x.laneOpponent);
+    const laneThreat=lane?enemyPicture([lane]):null;
+    return scored.filter(x=>{
+      if(x.empirical !== undefined){x.why.push("Compared among sufficiently sampled, eligible purchases for this champion, role and purchase stage.");return true;}
+      const urgent=lane && (lane.kills??0)-(lane.deaths??0)>=3 && laneThreat && x.ip.counters.some(c=>COUNTERS[c].answers.some(k=>laneThreat.threats[k].weight>=.5));
+      const committed=x.timing && x.timing.remaining<x.ip.item.gold*.5;
+      if(urgent || committed){x.why.push(urgent?"Visible lane urgency permits a situational departure from sampled purchases.":"Most of this recipe is already owned; completion remains an alternative to sampled purchases.");return true;}
+      return false;
+    });
+  };
 
   const core: Scored[] = [];
   const picked = new Set<number>();
