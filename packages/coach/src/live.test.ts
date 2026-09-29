@@ -72,7 +72,7 @@ describe("live coach", () => {
     expect(c.purchase?.milestones.map((m) => m.name)).toEqual(["Morellonomicon", "Mercury's Treads", "Rabadon's Deathcap"]);
     expect(c.purchase?.milestones[0]?.remaining).toBe(2950 - 850);
     expect(c.purchase?.pace).toBeGreaterThan(0);
-    expect(c.purchase?.milestones[1]!.at!).toBeGreaterThan(c.purchase!.milestones[0]!.at!);
+    expect(c.purchase?.milestones[1]!.at).toBeNull();
   });
 
   it("with enough gold, the item decision says what to buy now", () => {

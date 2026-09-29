@@ -17,7 +17,8 @@ export interface PurchasePlan {
    * at your pace. Null when waiting would not change the purchase much.
    */
   wait: { extra: number; buys: Buy[]; seconds: number | null } | null;
-  /** When each target item would be finished, at your pace, in order. */
+  /** Ordered targets. Only the next unpaid target has a conditional ETA;
+   * immediately affordable completions have at=time, later targets have at=null. */
   milestones: { id: number; name: string; remaining: number; at: number | null }[];
   /** Gold earned per minute so far this game (null too early to tell). */
   pace: number | null;
@@ -238,20 +239,25 @@ export function planPurchases(input: {
   const ordered = [...new Map(priority.map(t=>[t.id,t])).values()];
   const pace = goldPace(time, gold, itemGold);
 
-  // When each target would be finished, in order, at the current pace.
+  // A snapshot-derived pace is not a forecast of the whole match. Estimate
+  // only the next unpaid target; retain costs/order for later decisions.
   const milestones: PurchasePlan["milestones"] = [];
   const pool = [...inventory];
   // Follow the recommended purchases before forecasting: gold spent on another
   // target is no longer available for this one, and consumed pieces cannot count twice.
   const projected = [...(now?.inventory ?? inventory)];
   let owed = (now?.spent ?? 0) - (gold ?? 0);
+  let forecastUsed = false;
   for (const t of ordered) {
     const remaining = cost(tree(t, catalog, pool));
     if (remaining === 0) continue;
     owed += cost(tree(t, catalog, projected));
     projected.push(t.id);
     pool.push(t.id);
-    milestones.push({ id: t.id, name: t.name, remaining, at: pace ? time + Math.max(0, owed) / (pace / 60) : null });
+    const completesNow = now?.completes.includes(t.name) ?? false;
+    const at = completesNow ? time : !forecastUsed && pace && owed > 0 ? time + owed / (pace / 60) : null;
+    if (!completesNow) forecastUsed = true;
+    milestones.push({ id: t.id, name: t.name, remaining, at });
   }
 
   if (gold === null) return { now: null, wait: null, milestones, pace, recipes: recipesFor(targets,inventory,catalog), route: [], deferred: [] };

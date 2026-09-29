@@ -175,7 +175,7 @@ function BuyNow({ p, time, art }: { p: PurchasePlan; time: number; art: Art }) {
         </p>
       )}
       {p.milestones.length > 0 && (
-        <ul className="milestones" aria-label="When your items arrive">
+        <ul className="milestones" aria-label="Upcoming item costs and next-item estimate">
           {p.milestones.slice(0, 3).map((m, i) => (
             <li key={m.id}>
               <ItemArt id={m.id} name={m.name} size={20} art={art} />
@@ -185,7 +185,7 @@ function BuyNow({ p, time, art }: { p: PurchasePlan; time: number; art: Art }) {
           ))}
         </ul>
       )}
-      {p.pace !== null && <p className="quiet small">At your pace of about {Math.round(p.pace)} gold per minute: the gold and items you hold, over the minutes played. Consumables and sold items aren't counted, so this is an estimate, not a guaranteed completion time.</p>}
+      {p.pace !== null && <p className="quiet small">Observed pace: about {Math.round(p.pace)} gold per minute from held gold and items. Only the next unpaid target gets a conditional estimate; later items show their remaining cost. Consumables, sales and future income changes are not captured. This is not a deadline or a prediction that the game will last that long.</p>}
     </section>
   );
 }

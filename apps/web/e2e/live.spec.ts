@@ -5,7 +5,8 @@ test("private Live renders shared advice and hides it on pause, reconnect and st
  const player=`Live${info.project.name}`;
  let frame:LiveFrame|null={version:1,streamId:"0d400d84-a7b4-46c2-a4e6-f019a772186f",sequence:1,capturedAt:Date.now(),phase:"live",champion:"Ahri",position:"MIDDLE",patch:"16.19.1",time:600,gold:850,allies:["LeeSin"],enemies:["Zed"],headline:"Shared desktop decision",sections:[{title:"What matters now",primary:true,lines:["Stay behind your minion wave."]},{title:"Equipped runes and summoner spells",lines:["Electrocute","Flash + Ignite"]}]};
  let stale=false;
- await page.route("**/api/live",route=>route.fulfill({json:{frame,stale}}));
+ let sharing=false;
+ await page.route("**/api/live",route=>route.fulfill({json:{frame:sharing?frame:null,stale}}));
  await page.goto("/");
  await page.getByText("Development sign-in (private prototype only)").click();
  await page.getByLabel("Your name").fill(player);
@@ -14,6 +15,7 @@ test("private Live renders shared advice and hides it on pause, reconnect and st
  await page.getByRole("button",{name:"Link and analyze"}).click();
  await expect(page.getByText(/Based on \d+ analyzable games/)).toBeVisible({timeout:30000});
  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth-document.documentElement.clientWidth)).toBeLessThanOrEqual(2);
+ sharing=true;
  await page.getByRole("navigation",{name:"Main"}).getByRole("link",{name:"Live",exact:true}).click();
  await expect(page.getByRole("heading",{name:"Shared desktop decision"})).toBeVisible();
  await expect(page.getByText("Stay behind your minion wave.")).toBeVisible();

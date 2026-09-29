@@ -1,12 +1,28 @@
 import { LiveCompanion } from "./LiveDetail";
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { Link } from "react-router";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { Link, useNavigate } from "react-router";
 import type { LiveFrame } from "@coach/ui";
 import { api } from "../api";
 import { ChampionIcon } from "../assets";
 const Context=createContext<{frame:LiveFrame|null;stale:boolean}>({frame:null,stale:false});
 export function LiveProvider({children}:{children:ReactNode}) {
  const [value,setValue]=useState<{frame:LiveFrame|null;stale:boolean}>({frame:null,stale:false});
+ const navigate=useNavigate();
+ const followed=useRef({stream:"",selection:false,live:false});
+ useEffect(()=>{
+  const frame=value.frame;
+  // A lost connection is not a new game. Do not repeatedly pull the user back
+  // when they intentionally browse elsewhere, or when polling resumes.
+  if(value.stale || !frame)return;
+  if(frame.phase==="idle" || frame.phase==="ended"){
+   followed.current={stream:frame.streamId,selection:false,live:false};return;
+  }
+  if(frame.streamId!==followed.current.stream || (frame.phase==="draft" && followed.current.live))followed.current={stream:frame.streamId,selection:false,live:false};
+  const stage=frame.phase==="live" ? "live" : ["draft","pregame","loading"].includes(frame.phase) ? "selection" : null;
+  if(!stage || followed.current[stage] || (stage==="selection" && followed.current.live))return;
+  followed.current[stage]=true;
+  navigate("/live");
+ },[value,navigate]);
  useEffect(()=>{let stopped=false;let timer:ReturnType<typeof setTimeout>;
   const loop=async()=>{try{const r=await api.live();if(!stopped)setValue(r);}catch{if(!stopped)setValue({frame:null,stale:true});}
    if(!stopped)timer=setTimeout(loop,document.hidden ? 10000:2000);

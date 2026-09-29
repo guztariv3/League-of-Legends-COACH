@@ -106,18 +106,40 @@ describe("gold pace and when items arrive", () => {
     expect(pace).toBeCloseTo(350, 0);
   });
 
-  it("puts the items in order, each later than the one before, at the current pace", () => {
+  it("preserves target order but estimates only the next unpaid target", () => {
     const p = plan([MORELLO, ZHONYA], 400, [], 65 + 600, 3500 + STARTING_GOLD - 400);
     expect(p.pace).toBeGreaterThan(0);
     expect(p.milestones.map((m) => m.id)).toEqual([MORELLO, ZHONYA]);
     expect(p.milestones[0]!.at!).toBeGreaterThan(665);
-    expect(p.milestones[1]!.at!).toBeGreaterThan(p.milestones[0]!.at!);
+    expect(p.milestones[1]!.at).toBeNull();
     // Morellonomicon: its full price minus the 400 you hold, at 350 gold per minute.
     expect(p.milestones[0]!.at! - 665).toBeCloseTo(((item(MORELLO).gold - 400) / p.pace!) * 60, 0);
   });
 
   it("gives no times without a pace, and no purchase without gold", () => {
     const p = plan([MORELLO], null, [], 30, 0);
+    expect(p.now).toBeNull();
+    expect(p.milestones[0]!.at).toBeNull();
+  });
+
+  it("does not extend a slow snapshot pace into a full-build schedule", () => {
+    const p = plan([MORELLO, ZHONYA], 400, [], 900, 1300);
+    expect(p.milestones[0]!.at).not.toBeNull();
+    // A late mathematical estimate is not clamped to a made-up match deadline.
+    expect(p.milestones[0]!.at!).toBeGreaterThan(1800);
+    expect(p.milestones[1]!.at).toBeNull();
+    expect(p.milestones[1]!.remaining).toBe(item(ZHONYA).gold);
+  });
+
+  it("marks an affordable completion as now even before income can be estimated", () => {
+    const p = plan([MORELLO, ZHONYA], item(MORELLO).gold, [], 120, 0);
+    expect(p.pace).toBeNull();
+    expect(p.milestones[0]!.at).toBe(120);
+    expect(p.milestones[1]!.at).toBeNull();
+  });
+
+  it("does not promise completion now when full slots prevent the purchase", () => {
+    const p = plan([MORELLO], 5000, Array(6).fill(1055), 900, 2700);
     expect(p.now).toBeNull();
     expect(p.milestones[0]!.at).toBeNull();
   });
@@ -220,7 +242,7 @@ it("does not use gold spent on a later target to predict an earlier target's com
  const p=planPurchases({targets:[a,b],inventory:[],gold:400,time:900,itemGold:2000,catalog:local,utility:{1:.1,2:3,3:1,4:1}});
  expect(p.now!.buys.map(x=>x.id)).toEqual([2]);
  expect(p.milestones[0]!.at!-900).toBeCloseTo(1000/p.pace!*60,5);
- expect(p.milestones[1]!.at!-900).toBeCloseTo(1800/p.pace!*60,5);
+ expect(p.milestones[1]!.at).toBeNull();
 });
 
 it("shows a nearby completion even when the upgrade costs less than 300 gold", () => {

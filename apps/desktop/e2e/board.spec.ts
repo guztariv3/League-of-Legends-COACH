@@ -188,7 +188,7 @@ test("in game with the site connected: Items follows the site's build engine", a
   // What your gold buys now toward it, and when the items arrive at your pace.
   const shop = board.getByRole("region", { name: "Shopping plan" });
   await expect(shop).toContainText("Buy now");
-  await expect(shop.getByRole("list", { name: "When your items arrive" })).toContainText("Rabadon's Deathcap");
+  await expect(shop.getByRole("list", { name: "Upcoming item costs and next-item estimate" })).toContainText("Rabadon's Deathcap");
   await expect(shop).toContainText(/gold per minute/);
   await page.screenshot({ path: "test-results/board-buynow.png", fullPage: true });
   // Only champions, item ids and kill/death counts go to the site.
