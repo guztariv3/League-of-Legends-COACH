@@ -56,7 +56,7 @@ describe("A — a champion that needs mana gets it covered", () => {
 describe("B — several tanks call for penetration or health-based damage", () => {
   for (const me of ["Ahri", "Zed", "Caitlyn"]) {
     it(`${me} against a tank line`, () => {
-      const b = build(me, TANKS);
+      const b = recommendBuild({me:kit(me),items,enemies:TANKS.map(id=>({kit:kit(id),items:[catalog.get(3065)!,catalog.get(3075)!]}))});
       expect(b.threats.find((t) => t.kind === "tanks")!.sources.length).toBeGreaterThanOrEqual(3);
       const answers = core(b).filter((x) => stat(x!.id, "magicPenetration") + stat(x!.id, "armorPenetration") > 0 || profileOf(x!.id).counters.includes("maxHealthDamage"));
       expect(answers.length, JSON.stringify(core(b).map((x) => x!.name))).toBeGreaterThan(0);
@@ -331,4 +331,44 @@ describe('conditional purchases in a solo lane', () => {
     const b=build('Ahri',HEALERS,{position:'MIDDLE',opponent:'Vladimir'});
     expect(recommended(b).some(x=>profileOf(x!.id).counters.includes('grievousWounds'))).toBe(true);
   });
+});
+
+describe('resistance-specific and role-consistent recommendations', () => {
+  it('does not treat purchased armor or health as magic resistance', () => {
+    const armor=enemyPicture([{kit:kit('Darius'),items:[catalog.get(3047)!,catalog.get(3078)!]}]);
+    expect(armor.purchasedResists).toEqual({armor:25,magicResistance:0});
+    const mr=enemyPicture([{kit:kit('Darius'),items:[catalog.get(3065)!]}]);
+    expect(mr.purchasedResists.magicResistance).toBeGreaterThan(0);
+    expect(armor.threats.tanks.sources[0]!.why).toContain('0 magic resist');
+  });
+  it('keeps an MR spell shield conditional against mainly physical damage without evidence', () => {
+    const b=build('Ahri',AD_TEAM,{position:'MIDDLE',opponent:'Zed'});
+    expect(core(b).some(x=>profileOf(x!.id).counters.includes('spellShield') && stat(x!.id,'magicResistance')>0)).toBe(false);
+  });
+  it('applies the ally-trigger discount to situational options too', () => {
+    const dependent=catalog.get(4005)!;
+    const main=[1,2,3].map(n=>({...dependent,id:99000+n,name:`Main ${n}`,gold:2000,from:[],stats:{abilityPower:{flat:1000,percent:0}},effects:[]}));
+    const run=(effects:typeof dependent.effects)=>recommendBuild({me:kit('Ahri'),position:'MIDDLE',enemies:TANKS.map(id=>({kit:kit(id)})),items:[...main,{...dependent,from:[],effects}]}).situational.find(x=>x.id===4005)!;
+    const dependentPick=run(dependent.effects);
+    const independentPick=run(dependent.effects.map(e=>({...e,text:e.text.replace(/Allied champions/gi,'You')})));
+    expect(dependentPick).toBeDefined();
+    expect(dependentPick.why.join(' ')).toContain('requires an allied champion');
+    expect(dependentPick.score).toBeLessThan(independentPick.score);
+  });
+});
+
+it('does not fill an alternative slot with an ill-fitting tank counter after choosing armor',()=>{
+ const b=build('Ahri',['Darius','Viego','Zed','Caitlyn','Lulu'],{position:'MIDDLE',opponent:'Zed'});
+ expect(b.situational.map(x=>x.id)).not.toContain(3143);
+});
+
+it('increases magic penetration value for MR, not for purchased armor',()=>{
+ const pen={...catalog.get(3135)!,from:[],effects:[]};
+ const run=(stats:typeof pen.stats)=>{
+  const enemyItem={...catalog.get(3047)!,stats};
+  return recommendBuild({me:kit('Ahri'),items:[...items.filter(i=>!i.rank.includes('LEGENDARY')),pen],enemies:[{kit:kit('Darius'),items:[enemyItem]}],position:'MIDDLE'}).first!.score;
+ };
+ const baseline=run({});
+ expect(run({armor:{flat:100,percent:0}})).toBe(baseline);
+ expect(run({magicResistance:{flat:100,percent:0}})).toBeGreaterThan(baseline);
 });

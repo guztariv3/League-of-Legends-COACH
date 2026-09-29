@@ -30,3 +30,17 @@ The simulated solo-lane example selected a healing-reduction legendary because t
 - Regression tests cover the solo-lane/team-healing distinction, continued conditional antiheal availability, ally-triggered solo value, and saving surplus gold. Existing cross-target completion and inventory-consumption tests remain in force; the shared-route test supplies a material utility advantage to justify the switch under the new policy.
 
 These changes do not replace the statistical data pipeline or certify every champion/role/matchup. Both API and desktop must use this revision for consistent results; an unchanged production deployment will continue its previous recommendations.
+
+## Resistance, fallback and later-slot review
+
+- Penetration scoring now separates purchased armor from purchased magic resistance. Health/armor alone cannot raise the magic-penetration weight. The signal is the highest purchased resistance on a revealed opponent; base/per-level resistances and actual target access are not modeled here. Enemy threat explanations list armor and MR separately.
+- MR spell-shield core picks require either eligible purchase evidence or at least a 30% estimated enemy magic-damage share. They remain situational options; this conservative threshold is not an empirically learned build rule.
+- Ally-trigger discount now lives in the shared score function, so components, core and alternatives use it consistently. Ill-fitting tank counters are omitted when a compatible defensive replacement is unavailable/already selected.
+- Later-slot recipe costs use projected inventory after earlier recipes consume components. Their recall wallet and completion time are explicitly unknown; current money is not reused. The separate shopping planner still projects times from its stated income assumption.
+- Every materialized pick states when no eligible purchase evidence was used, including later and situational items.
+
+Statistics audit: `/api/desktop/items` reads `championStats` and passes `buildEvidence` to the engine. This accepts only matching champion/role/current patch, preserves raw counters, and separates first items from matching completed-item sequences. A scope needs 100 observations and an option needs 30; supported matchup data wins over general-role data. Popularity, sample size and shrunk observed WR contribute a bonus, not a causal win prediction. Components use mechanical utility, not component WR. The screenshot simulation supplies no evidence object. Production sample availability was not queried in this review; earlier user exports are historical and do not prove current full matchup coverage.
+
+Regression coverage includes separate resistances, physical-heavy core guard, ally-trigger parity in alternatives, consumed-component costs/unknown future wallets and unsuitable fallback omission. The existing tank test now supplies real resistance items rather than requiring penetration solely from champion class.
+
+Validation of this follow-up: three regressions fail on the preceding revision and pass after the fixes. Full local suite: 815 passed, one PostgreSQL-only skip. A final added armor-versus-MR scoring regression passed in the focused 53-test build/economy run. Typecheck and both Vite builds passed. The reproduced no-evidence example selects Malignance, then conditional Zhonya's Hourglass and Lich Bane; immediate purchase is Lost Chapter. This output is not an optimality claim or a Render deployment.

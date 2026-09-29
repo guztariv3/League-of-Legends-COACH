@@ -42,3 +42,13 @@ describe("contextual provisional draft",()=>{
   const d=draftRead(me,[],[enemy]);expect(d.versus).toContain("Leona");expect(JSON.stringify(me)).toBe(before);
  });
 });
+
+it('does not credit a consumed component or today\'s wallet to later targets',()=>{
+ const part=items.find(i=>i.id===1052)!;
+ const a={...cheap,from:[part.id]}, b={...expensive,from:[part.id]};
+ const result=recommendBuild({me,enemies:[],position:'MIDDLE',items:[part,a,b],owned:[part.id],economy:{gold:500,time:900,income:300}});
+ const later=result.next[0]!;
+ expect(later.timing!.remaining).toBe(later.gold);
+ expect(later.timing!.seconds).toBeNull();
+ expect(later.why.join(' ')).toContain('after completing earlier targets');
+});

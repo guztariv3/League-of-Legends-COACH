@@ -31,6 +31,7 @@ export interface EnemyPicture {
   threats: Record<ThreatKind, Threat>;
   profiles: ChampionProfile[];
   laneOpponent: string | null;
+  purchasedResists: { armor: number; magicResistance: number };
 }
 
 const clamp = (x: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, x));
@@ -63,6 +64,7 @@ export function enemyPicture(enemies: EnemyInput[]): EnemyPicture {
 
   let phys = 0, magic = 0, tru = 0, total = 0;
   const profiles: ChampionProfile[] = [];
+  const purchasedResists = { armor: 0, magicResistance: 0 };
   let laneOpponent: string | null = null;
   for (const e of enemies) {
     const p = championProfile(e.kit);
@@ -98,13 +100,16 @@ export function enemyPicture(enemies: EnemyInput[]): EnemyPicture {
     const cc = slots(e.kit, HARD_CC);
     add("cc", p.name, cc.length * 0.25, `crowd control on ${list(cc)}`, w);
 
-    const resists = stat(items, "armor") + stat(items, "magicResistance");
+    const armor = stat(items, "armor"), mr = stat(items, "magicResistance");
+    purchasedResists.armor = Math.max(purchasedResists.armor, armor);
+    purchasedResists.magicResistance = Math.max(purchasedResists.magicResistance, mr);
+    const resists = armor + mr;
     const health = stat(items, "health");
     // Built to take hits: the Wiki's top toughness rating, or armor, magic resist and health from items.
     const tankKit = clamp((p.frontline - 0.5) / 0.5);
     const tank = Math.max(tankKit, clamp(resists / 150 + health / 2000));
     add("tanks", p.name, tank, resists + health > 0 && tank > tankKit
-      ? `${resists} armor and magic resist and ${health} health from items`
+      ? `${armor} armor, ${mr} magic resist and ${health} health from items`
       : "built to take hits (Wiki toughness rating)", w);
 
     add("attackSpeed", p.name, clamp((p.attackReliance - 0.4) / 0.5), "relies on basic attacks", w);
@@ -119,5 +124,5 @@ export function enemyPicture(enemies: EnemyInput[]): EnemyPicture {
     sources: acc[k].sources.sort((a, b) => b.x - a.x).map(({ name, why }) => ({ name, why })),
   }])) as Record<ThreatKind, Threat>;
   const t = total || 1;
-  return { damage: { physical: phys / t, magic: magic / t, true: tru / t }, threats, profiles, laneOpponent };
+  return { damage: { physical: phys / t, magic: magic / t, true: tru / t }, threats, profiles, laneOpponent, purchasedResists };
 }
