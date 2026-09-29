@@ -25,6 +25,10 @@ async function main() {
   try { await client.exec('BEGIN READ ONLY'); rows=(await client.query<CoverageCount>(query,[patch])).rows; }
   finally { await client.close(); }
  }
+ if(process.argv.includes('--raw')) {
+  console.log(JSON.stringify({schemaVersion:1,patch,complete:true,generatedAt:new Date().toISOString(),source:'existing_database_counters',rows}));
+  return;
+ }
  const coverage=coverageReport(rows,champions,patch);
  console.log(JSON.stringify({patch,rosterSnapshot:snapshot.meta.ddragonVersion,generatedAt:new Date().toISOString(),
   source:'existing_database_counters',provenance:'Counters alone cannot certify that a database contains real Riot matches.',
