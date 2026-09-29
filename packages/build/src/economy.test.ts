@@ -52,3 +52,33 @@ it('does not credit a consumed component or today\'s wallet to later targets',()
  expect(later.timing!.seconds).toBeNull();
  expect(later.why.join(' ')).toContain('after completing earlier targets');
 });
+
+it('does not rank an unavailable recipe piece as an affordable purchase',()=>{
+ const part={...seed,id:990101,gold:300,from:[],purchasable:false};
+ const target={...seed,id:990102,gold:2000,from:[part.id]};
+ const t=itemTiming(target,[part,target],[],{gold:500,time:600,income:300},()=>100);
+ expect(t.affordable).toBe(0);
+ expect(t.componentFit).toBe(0);
+ // A piece acquired through another mechanism still reduces the upgrade cost.
+ expect(itemTiming(target,[part,target],[part.id],undefined,()=>100).remaining).toBe(1700);
+});
+it('does not give component utility to purchases blocked by six occupied slots',()=>{
+ const part={...seed,id:990201,gold:300,from:[]};
+ const target={...seed,id:990202,gold:1000,from:[part.id]};
+ const other={...seed,id:990203,gold:100,from:[]};
+ const shop=[part,target,other];
+ const full=itemTiming(target,shop,Array(6).fill(other.id),{gold:500,time:600,income:300},()=>100);
+ expect(full.affordable).toBe(0);
+ expect(full.componentFit).toBe(0);
+ const upgrade=itemTiming(target,shop,[part.id,...Array(5).fill(other.id)],{gold:700,time:600,income:300},()=>100);
+ expect(upgrade.affordable).toBe(1);
+ expect(upgrade.componentFit).toBe(100);
+});
+it('can buy the second copy of a component when the recipe needs two and one is owned',()=>{
+ const part={...seed,id:990301,gold:300,from:[]};
+ const target={...seed,id:990302,gold:1000,from:[part.id,part.id]};
+ const t=itemTiming(target,[part,target],[part.id],{gold:300,time:600,income:300},()=>2);
+ expect(t.remaining).toBe(700);
+ expect(t.affordable).toBe(1);
+ expect(t.componentFit).toBe(2);
+});

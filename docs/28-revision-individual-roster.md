@@ -55,3 +55,13 @@ La comparación con el escenario neutral deja de afirmar que una secuencia heur�
 Validación del seguimiento: la regresión falla antes de la corrección y pasa después; 450 pruebas del motor aprobadas. Tras ajustar el texto, 127 pruebas de motor y coach aprobadas; typecheck correcto. El CI de 26c65bd pasó; el nuevo commit requiere su propia validación. No hubo despliegue, fusión ni recuperación histórica.
 
 Comparación adicional de ambas versiones: 1.720 escenarios de los 173 campeones y cinco roles, con inventario vacío o el primer componente directo del objetivo anterior cuando existe, y rival de línea observado. No cambiaron las secuencias ni sus puntuaciones en esta muestra. La regresión controlada demuestra el defecto, pero esta comparación no demuestra una mejora estratégica del roster. No confundir ausencia de cambios con ausencia del defecto en otros inventarios.
+
+## Seguimiento: disponibilidad real de componentes
+
+El cálculo de economía utilizado para puntuar objetos podía dar valor inmediato a piezas que el plan de compra no permitía adquirir: piezas no vendidas y piezas bloqueadas por las seis casillas ocupadas. Además, deduplicar el árbol por ID ocultaba la segunda copia necesaria cuando una receta exigía dos y el jugador ya tenía una.
+
+Ahora se asignan las piezas del inventario a ocurrencias de la receta una sola vez. Cada opción debe venderse, caber en el presupuesto y disponer de una casilla después de consumir sus propios componentes. Los abalorios no ocupan una casilla normal. Un componente no vendible que ya esté equipado conserva su descuento al mejorarlo. No se supone que el jugador venda objetos para liberar espacio.
+
+Tres regresiones reproducen los fallos antes de corregirlos. Validación final: 577 pruebas de motor, compras y coach aprobadas; typecheck correcto. El script `scripts/audit-recipe-affordability.ts` compara el cálculo de economía con la compra inmediata del planificador: 1.356 escenarios del catálogo, sin discrepancias. Ejecutar desde `apps/api` con `node --import tsx ../../scripts/audit-recipe-affordability.ts`.
+
+Esta corrección compartida por todos los campeones evita valorar compras imposibles u omitir duplicados necesarios. No valida qué pieza aporta más a una pelea, la secuencia óptima del campeón ni los casos sin estadísticas. No se afirma que los 1.356 escenarios cubran todas las combinaciones de inventario. El CI y el instalador de e292c1e pasaron; esta revisión requiere CI nuevo. Sin despliegue, fusión ni backfill.
