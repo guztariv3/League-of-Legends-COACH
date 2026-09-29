@@ -25,7 +25,7 @@ export function LiveProvider({children}:{children:ReactNode}) {
  },[value,navigate]);
  useEffect(()=>{let stopped=false;let timer:ReturnType<typeof setTimeout>;
   const loop=async()=>{try{const r=await api.live();if(!stopped)setValue(r);}catch{if(!stopped)setValue({frame:null,stale:true});}
-   if(!stopped)timer=setTimeout(loop,document.hidden ? 10000:2000);
+   if(!stopped)timer=setTimeout(loop,document.hidden ? 2000:1000);
   };void loop();return()=>{stopped=true;clearTimeout(timer);};},[]);
  return <Context.Provider value={value}>{children}</Context.Provider>;
 }

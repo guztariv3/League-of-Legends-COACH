@@ -258,7 +258,7 @@ function LiveWindow() {
       if (r.ok) markAcquired(r.data, readAt);
       setChampSelect(r.ok ? r.data : null);
       // Faster inside champion select, slow when the client is closed.
-      timer = setTimeout(loop, !r.ok ? 10_000 : r.data.phase === "ChampSelect" ? 400 : 2000);
+      timer = setTimeout(loop, !r.ok ? 2000 : r.data.phase === "ChampSelect" ? 400 : 2000);
     };
     void loop();
     return () => { stopped = true; clearTimeout(timer); };

@@ -59,6 +59,7 @@ export function useLiveRelay(input:RelayInput) {
  const stream=useRef(crypto.randomUUID()); const sequence=useRef(0);
  const lastGame=useRef<GameState|null>(null);
  const wasEnabled=useRef(false);
+ const wake=useRef<(()=>void)|null>(null);
  useEffect(()=>{
   if(!input.link){setStatus(OFF);return;}
   let stopped=false; let timer:ReturnType<typeof setTimeout>;
@@ -79,7 +80,7 @@ export function useLiveRelay(input:RelayInput) {
   }
   wasEnabled.current=true;
   let terminalSent=false;
-  const loop=async()=>{
+  const publishOnce=async()=>{
    if(stopped)return;
    if(clock.needsSync(stampNow())){
     setStatus(st=>st.state==="connected" ? st : {state:"syncing",text:"checking the time with the website…"});
@@ -135,8 +136,22 @@ export function useLiveRelay(input:RelayInput) {
     : {state:"offline",text:"can't reach the website. Retrying…"});
    if(!stopped)timer=setTimeout(loop,phase==="idle"||phase==="ended" ? 10000:1500);
   };
+  let running=false, pending=false;
+  const loop=async()=>{
+   if(stopped)return;
+   if(running){pending=true;return;}
+   running=true;
+   try { await publishOnce(); }
+   finally {
+    running=false;
+    if(pending && !stopped){pending=false;clearTimeout(timer);timer=setTimeout(loop,150);}
+   }
+  };
+  wake.current=()=>{clearTimeout(timer);if(running)pending=true;else timer=setTimeout(loop,150);};
   void loop();
-  return()=>{stopped=true;clearTimeout(timer);};
+  return()=>{stopped=true;wake.current=null;clearTimeout(timer);};
  },[input.link?.origin,input.link?.token,input.enabled]);
+ // Phase/pick changes bypass the idle timer; the plan result gets its own update.
+ useEffect(()=>{wake.current?.();},[input.select?.phase,input.select?.me?.championId,input.select?.me?.locked,input.draft,Boolean(input.state?.me),input.ended]);
  return status;
 }
