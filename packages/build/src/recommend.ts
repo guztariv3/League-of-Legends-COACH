@@ -338,7 +338,14 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
     state.manaNeed *= clamp(1 - ip.mana / 600);
     for (const ef of ip.item.effects) if (ef.unique && ef.name) state.effects.add(ef.name);
   };
-  for (const id of owned) { const it = catalog.get(id); if (it) take(itemProfile(it, gold, catalog)); }
+  const refreshState = (inventory: number[]) => {
+    state.threats = Object.fromEntries(Object.entries(e.threats).map(([k,t])=>[k,t.weight])) as Record<ThreatKind,number>;
+    state.manaNeed = p.manaNeed;
+    state.critChance = 0;
+    state.effects.clear();
+    for (const id of inventory) { const it = catalog.get(id); if (it) take(itemProfile(it,gold,catalog)); }
+  };
+  refreshState(input.owned ?? []);
 
   const componentState = { ...state, threats: { ...state.threats }, effects: new Set(state.effects) };
   let plannedInventory = [...(input.owned ?? [])];
@@ -465,9 +472,9 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
     if (n === 0) {runnerUp = pool[1] ?? null;firstPool=pool.slice(0,10); }
     core.push(best);
     picked.add(best.ip.item.id);
-    take(best.ip);
     plannedInventory = [...afterRecipe(best.ip.item,plannedInventory),best.ip.item.id];
-    if (n === 0 && !hasBoots) { boots = candidates(true)[0] ?? null; if (boots) { take(boots.ip); plannedInventory = [...afterRecipe(boots.ip.item,plannedInventory),boots.ip.item.id]; } }
+    refreshState(plannedInventory);
+    if (n === 0 && !hasBoots) { boots = candidates(true)[0] ?? null; if (boots) { plannedInventory = [...afterRecipe(boots.ip.item,plannedInventory),boots.ip.item.id]; refreshState(plannedInventory); } }
   }
 
   // Situational: a strong threat the core does not answer, with the best item that does.
@@ -543,10 +550,10 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
       standard: same,
       standardCore,
       note: same
-        ? `Nothing in the enemy team changes ${p.name}'s standard core (${standardCore.map((x) => x.name).join(", ")}): continue with it.`
+        ? `The neutral-scenario sequence is unchanged (${standardCore.map((x) => x.name).join(", ")}). ${core.every(x=>x.empirical!==undefined) ? "Each purchase has eligible observations for its matching prefix." : "This includes provisional mechanics-based choices; reassess later purchases as the game changes."}`
         : changedFirst
-          ? `${first.ip.item.name} instead of the standard ${changedFirst.name}: ${lower(changeReason(first, e) ?? "it fits this enemy team better")}`
-          : `Same first item as the standard core; the later items change for this game.`,
+          ? `${first.ip.item.name} instead of the neutral-scenario ${changedFirst.name}: ${lower(changeReason(first, e) ?? "it fits this enemy team better")}`
+          : `Same first item as the neutral scenario; later targets are conditional on this game.`,
     };
   }
 

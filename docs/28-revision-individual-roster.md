@@ -41,3 +41,17 @@ node --import tsx ../../scripts/audit-export-recommendations.ts /ruta/export.jso
 El informe individual incluye una fila por campeón, cinco filas de roles por campeón, escenarios y compras. La revisión pendiente incluye calidad estratégica de las elecciones posteriores, roles escasos, todos los estados de matchup, mecánicas incompletas y validación con League real. No se deben equiparar pruebas automatizadas en verde con haber resuelto estos puntos.
 
 Validación local: suite completa de 829 pruebas aprobadas y una de PostgreSQL omitida; después del ajuste del formato de runas, 225 pruebas enfocadas aprobadas y una omitida. Typecheck y compilaciones web/escritorio correctos. El CI del nuevo commit debe verificarse por separado.
+
+## Seguimiento: compras posteriores e inventario proyectado
+
+La secuencia del escenario principal tiene 229 primeros objetos, 96 segundos y 48 terceros respaldados por observaciones elegibles. Hay 626 primeros, 759 segundos y 807 terceros emitidos únicamente por mecánicas. Estas cifras corresponden a las elecciones del escenario, no a todos los prefijos posibles de la base. No se debe extrapolar la cobertura del primer objeto a la build completa.
+
+Se reprodujo un fallo de estado: al completar una receta, el motor sumaba las estadísticas del objeto final sin retirar las del componente consumido. La siguiente compra se valoraba contra un inventario ficticio. Una regresión con crítico recibió puntuación 0,28 en esa proyección y 0,70 después de equipar realmente el mismo objeto terminado.
+
+Ahora el estado se recalcula desde el inventario que queda después de cada receta, incluyendo botas. Se cuentan también las copias múltiples realmente equipadas; el conjunto de IDs se conserva solo para evitar recomendaciones duplicadas. Esto corrige el cálculo de crítico, necesidades de maná y amenazas ya cubiertas, sin introducir excepciones por campeón.
+
+La comparación con el escenario neutral deja de afirmar que una secuencia heurística es el build estándar que debe continuarse. Explica que las compras sin observaciones son provisionales y deben revisarse durante la partida.
+
+Validación del seguimiento: la regresión falla antes de la corrección y pasa después; 450 pruebas del motor aprobadas. Tras ajustar el texto, 127 pruebas de motor y coach aprobadas; typecheck correcto. El CI de 26c65bd pasó; el nuevo commit requiere su propia validación. No hubo despliegue, fusión ni recuperación histórica.
+
+Comparación adicional de ambas versiones: 1.720 escenarios de los 173 campeones y cinco roles, con inventario vacío o el primer componente directo del objetivo anterior cuando existe, y rival de línea observado. No cambiaron las secuencias ni sus puntuaciones en esta muestra. La regresión controlada demuestra el defecto, pero esta comparación no demuestra una mejora estratégica del roster. No confundir ausencia de cambios con ausencia del defecto en otros inventarios.

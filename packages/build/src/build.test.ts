@@ -285,9 +285,9 @@ describe("certainty, alternatives and the standard build (phase 3)", () => {
       const a = b.adaptation!;
       expect(a.standardCore.length, me).toBeGreaterThan(0);
       if (a.standard) {
-        expect(a.note, me).toMatch(/continue with it/);
+        expect(a.note, me).toContain("provisional mechanics-based choices");
       } else if (a.standardCore[0]!.id !== b.first!.id) {
-        expect(a.note, me).toContain(`instead of the standard ${a.standardCore[0]!.name}`);
+        expect(a.note, me).toContain(`instead of the neutral-scenario ${a.standardCore[0]!.name}`);
         // The reason names an enemy champion or the enemy's damage: never a generic stat line.
         expect(en.some((id) => a.note.includes(kit(id).name)) || /enemy damage/.test(a.note), `${me}: ${a.note}`).toBe(true);
       }
@@ -394,4 +394,17 @@ it('increases magic penetration value for MR, not for purchased armor',()=>{
  const baseline=run({});
  expect(run({armor:{flat:100,percent:0}})).toBe(baseline);
  expect(run({magicResistance:{flat:100,percent:0}})).toBeGreaterThan(baseline);
+});
+
+it('scores the next slot from the completed inventory, not the consumed component plus its upgrade',()=>{
+ const parent={...catalog.get(3031)!,from:[1018],effects:[],stats:{attackDamage:{flat:2000,percent:0},criticalStrikeChance:{flat:25,percent:0}}};
+ const next={...catalog.get(3094)!,from:[],effects:[],stats:{criticalStrikeChance:{flat:25,percent:0}}};
+ const shop=[...items.filter(i=>!i.rank.includes('LEGENDARY')&&!i.rank.includes('BOOTS')),parent,next];
+ const input={me:kit('Yasuo'),items:shop,enemies:[],position:'MIDDLE',baseline:true};
+ const projected=recommendBuild({...input,owned:[1018]});
+ const completed=recommendBuild({...input,owned:[parent.id]});
+ expect(projected.first?.id).toBe(parent.id);
+ expect(projected.next[0]?.id).toBe(next.id);
+ expect(completed.first?.id).toBe(next.id);
+ expect(projected.next[0]?.score).toBe(completed.first?.score);
 });
