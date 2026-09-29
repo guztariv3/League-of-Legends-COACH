@@ -223,17 +223,7 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
     const known = (xs: string[]) => xs.map(resolve).filter((x): x is string => x !== null);
     const opponent = q.data.opponent ? resolve(q.data.opponent) ?? undefined : undefined;
     const enemies = known(q.data.enemies);
-    if (c.req.query("preview") === "1") {
-      const facts = await deps.gameFacts?.get(200) ?? null;
-      const kits = new Map((facts?.kits ?? []).map(k=>[k.id,k]));
-      const mine = kits.get(me);
-      const allies=known(q.data.allies), enemyKits=enemies.flatMap(e=>kits.get(e)?[kits.get(e)!]:[]);
-      // Candidate lanes are inferred from known champion positions, never asserted as assigned roles.
-      const probable=opponent ?? (q.data.position ? enemyKits.filter(k=>k.positions.some(p=>p.toUpperCase()===q.data.position)).map(k=>k.id) : []);
-      const likely=typeof probable === "string" ? probable : probable.length===1 ? probable[0] : undefined;
-      return c.json({champion:me,draftState,roster:{allies,enemies},draftRead:mine ? draftRead(mine,allies.flatMap(a=>kits.get(a)?[kits.get(a)!]:[]),enemyKits,likely):null,
-        plan:prepareGame({myChampion:me,allies,enemies},[],bundle).plan,build:null});
-    }
+    // Hover and lock-in use the same recommendation engine; the client labels hover as provisional.
     const { analyses } = await deps.services.profileAnalyses(device.userId);
     const { draft, plan } = prepareGame({ myChampion: me, allies: known(q.data.allies), enemies, laneOpponent: opponent }, analyses, bundle);
 

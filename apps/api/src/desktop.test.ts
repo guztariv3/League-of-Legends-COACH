@@ -145,6 +145,11 @@ describe("desktop pairing", () => {
     // The pre-game build for real champions: starting items, first item with its reasons, rule-outs.
     const tank = await call("/desktop/plan?me=Malphite&enemies=Syndra,Brand,Lux,Veigar,Annie&opponent=Syndra&position=top", { headers: auth });
     expect(tank.res.status).toBe(200);
+    const hover = await call("/desktop/plan?me=Malphite&enemies=Syndra,Brand,Lux,Veigar,Annie&opponent=Syndra&position=top&preview=1", { headers: auth });
+    expect(hover.res.status).toBe(200);
+    expect(hover.body.build?.first?.id).toBe(tank.body.build.first.id);
+    expect(hover.body.build?.setup?.runes?.keystone.id).toBe(tank.body.build.setup.runes.keystone.id);
+    expect(hover.body.build?.setup?.spells).toHaveLength(2);
     expect(tank.body.build.champion).toBe("Malphite");
     expect(tank.body).toHaveProperty("memory"); // phase 5: patterns from the player's games (or null)
     expect(tank.body.build.enemiesKnown).toBe(5);

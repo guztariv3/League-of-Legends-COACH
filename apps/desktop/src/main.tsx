@@ -407,7 +407,7 @@ function LiveWindow() {
               {!csPlan && <p role="status">{rivals.link ? "Reading your provisional pick…" : "Connect the desktop to your account to load Draft Coach."}</p>}
               {!champSelect?.me?.locked && csPlan?.draftRead && <DraftCard read={csPlan.draftRead} />}
               {!champSelect?.me?.locked && csPlan && !csPlan.draftRead && <p>Detailed draft knowledge is unavailable.</p>}
-              {champSelect?.me?.locked && <>{csPlan?.build && <PreGameBuildView build={csPlan.build} art={art} />}<PlanTab plan={csPlan} connected={Boolean(rivals.link)} /></>}
+              {csPlan && <>{!champSelect?.me?.locked && <p className="quiet">Provisional recommendations — update as picks change.</p>}{csPlan?.build && <PreGameBuildView build={csPlan.build} art={art} />}{champSelect?.me?.locked && <PlanTab plan={csPlan} connected={Boolean(rivals.link)} />}</>}
             </>
           )}
           <p className="quiet small">Read from your League client, read-only: nothing is changed there, and only champions are used, never other players' names.</p>

@@ -295,7 +295,9 @@ fn reduce_session(session: &serde_json::Value) -> serde_json::Value {
         (Some(a), _) => {
             let locked = a.get("completed").and_then(|v| v.as_bool()).unwrap_or(false);
             let current = me.map(|p| id(p.get("championId"))).unwrap_or(0);
-            (if locked && current > 0 { current } else { id(a.get("championId")) }, locked)
+            let action = id(a.get("championId"));
+            let intent = me.map(|p| id(p.get("championPickIntent"))).unwrap_or(0);
+            (if locked && current > 0 { current } else if action > 0 { action } else if current > 0 { current } else { intent }, locked)
         },
         (None, Some(p)) if id(p.get("championId")) > 0 => (id(p.get("championId")), false),
         (None, Some(p)) => (id(p.get("championPickIntent")), false),
@@ -479,6 +481,18 @@ mod tests {
         let lock = reduce_session(&base(true));
         assert_eq!(lock["me"]["championId"], 103);
         assert_eq!(lock["me"]["locked"], true);
+    }
+
+    #[test]
+    fn empty_pick_action_preserves_declared_champion() {
+        let s = serde_json::json!({
+            "localPlayerCellId": 2,
+            "myTeam": [{"cellId": 2, "championId": 0, "championPickIntent": 103}],
+            "actions": [[{"actorCellId": 2, "type": "pick", "championId": 0, "isInProgress": true, "completed": false}]]
+        });
+        let r = reduce_session(&s);
+        assert_eq!(r["me"]["championId"], 103);
+        assert_eq!(r["me"]["locked"], false);
     }
 
     /// With no game running, a read must fail fast (never block the Coach).

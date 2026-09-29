@@ -39,3 +39,12 @@ describe('actual build → desktop coach → serialized web Live detail',()=>{
   expect(live.targets).toEqual([]);expect(live.buyNow).toEqual([]);expect(live.alternatives).toEqual([]);expect(live.starter).toEqual([]);
  });
 });
+
+it('keeps detected picks visible when the draft plan is unavailable',()=>{
+ const d=liveDetail(null,null,null,'draft','synthetic',[],{phase:'ChampSelect',me:{championId:103,locked:false,position:'middle'},allies:[64],enemies:[238]});
+ expect(d.players.allies.map(p=>p.champion)).toEqual(['103','64']);
+ expect(d.players.allies[0]?.isMe).toBe(true);
+ expect(d.players.enemies.map(p=>p.champion)).toEqual(['238']);
+ expect(d.runes).toEqual([]);
+ expect(d.targets).toEqual([]);
+});

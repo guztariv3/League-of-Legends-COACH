@@ -118,12 +118,12 @@ export function useLiveRelay(input:RelayInput) {
    // the site's: the server's current time minus the capture's age.
    const now=stampNow();
    const frame:LiveFrame={version:1,streamId:stream.current,sequence:++sequence.current,capturedAt:clock.capturedAt(phase==="reconnecting" ? now : acquired??now,now)!,phase,
-    champion:s?.me?.championId??v.draft?.champion??null,position:s?.me?.position??v.select?.me?.position??null,patch:v.patch,
+    champion:s?.me?.championId??v.draft?.champion??(v.select?.me?.championId ? String(v.select.me.championId):null),position:s?.me?.position??v.select?.me?.position??null,patch:v.patch,
     time:s?.time??null,gold:s?.gold??null,
-    allies:s?.allies.map(p=>p.championId)??v.draft?.roster?.allies??[],enemies:s?.enemies.map(p=>p.championId)??v.draft?.roster?.enemies??[],
+    allies:s?.allies.map(p=>p.championId)??v.draft?.roster?.allies??v.select?.allies?.map(String)??[],enemies:s?.enemies.map(p=>p.championId)??v.draft?.roster?.enemies??v.select?.enemies?.map(String)??[],
     headline:phase==="live" ? out?.now?.headline??"No urgent recommendation." : phase==="draft" ? "Provisional pick — draft still developing" : phase==="pregame" ? "Champion locked — prepare your game" : phase==="ended" ? "Match ended" : phase==="paused" ? "Coach paused" : phase==="reconnecting" ? "Waiting for fresh game data" : phase==="loading" ? "Match loading" : "No active shared game",
     sections:sections.slice(0,16),};
-   if(["live","draft","pregame"].includes(phase))frame.detail=liveDetail(s,phase==="live" ? out?.coach??null:null,phase==="live" ? v.plan:v.draft,phase,v.patch?.includes("synthetic") ? "synthetic":(phase === "live" ? v.contextual : Boolean(v.draft?.build)) ? "contextual":"limited",v.rivals);
+   if(["live","draft","pregame"].includes(phase))frame.detail=liveDetail(s,phase==="live" ? out?.coach??null:null,phase==="live" ? v.plan:v.draft,phase,v.patch?.includes("synthetic") ? "synthetic":(phase === "live" ? v.contextual : Boolean(v.draft?.build)) ? "contextual":"limited",v.rivals,v.select);
    if(phase==="idle"){frame.champion=null;frame.position=null;frame.allies=[];frame.enemies=[];frame.time=null;frame.gold=null;}
    const result=await publishLive(link.origin,link.token,frame);
    if(result.ok && phase === "ended")terminalSent=true;
