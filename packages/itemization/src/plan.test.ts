@@ -197,7 +197,8 @@ it("does not gain artificial priority by buying a shared component through an ea
   const make=(id:number,gold:number,from:number[]=[])=>({...item(WAND),id,name:`Priority ${id}`,gold,from});
   const shared=make(1,100), earlier=make(2,2000,[1]), chosen=make(3,400,[1]);
   const local={...catalog,items:new Map([shared,earlier,chosen].map(i=>[i.id,i]))};
-  const p=planPurchases({targets:[earlier,chosen],inventory:[],gold:400,time:900,itemGold:0,catalog:local,utility:{1:1,2:1,3:1}});
+  // The later target must now justify delaying the first; retain the route-invariance check.
+  const p=planPurchases({targets:[earlier,chosen],inventory:[],gold:400,time:900,itemGold:0,catalog:local,utility:{1:1,2:1,3:3}});
   expect(p.now!.completes).toEqual([chosen.name]);
   // Both routes end with the same object and spend the same gold: no unnecessary intermediate click.
   expect(p.now!.buys.map(b=>b.id)).toEqual([chosen.id]);
@@ -248,4 +249,13 @@ it("allocates a retained shared piece to only one deferred target after shopping
  const p=planPurchases({targets:[a,b,c],inventory:[1],gold:400,time:900,itemGold:1000,catalog:local,utility:{1:1,2:1,3:1,4:10}});
  expect(p.now!.buys.map(x=>x.id)).toEqual([4]);
  expect(p.deferred).toEqual([a.name]);
+});
+
+it('saves surplus gold instead of opening an equally useful unrelated recipe', () => {
+  const make=(id:number,gold:number,from:number[]=[])=>({id,name:`Item ${id}`,gold,from,tags:[],stats:{},maps:[11],completed:from.length>0,boots:false,antiHeal:false});
+  const pieces=[make(1,800),make(2,850),make(3,2700,[1,2]),make(4,400),make(5,2400,[4])];
+  const local={...catalog,items:new Map(pieces.map(i=>[i.id,i]))};
+  const p=planPurchases({targets:[pieces[2]!,pieces[4]!],inventory:[],gold:1250,time:900,itemGold:0,catalog:local,utility:{1:1.1,2:1,3:1,4:1,5:1}});
+  expect(p.now!.buys.map(x=>x.id)).toEqual([1]);
+  expect(p.now!.leftover).toBe(450);
 });

@@ -19,3 +19,14 @@ Four focused regression cases fail against the previous implementation and pass 
 ## Limits
 
 No live Render statistics or Windows client were used in this verification. Earlier screenshots used a manually assembled web fixture and are not proof of end-to-end synchronization. The engine remains heuristic when matching evidence is unavailable. Cross-target spending explanations and the amount of on-screen detail need separate follow-up; this change does not certify the optimal build for every matchup. No deployment, release, or installer is included.
+
+## Conditional purchases and recipe commitment
+
+The simulated solo-lane example selected a healing-reduction legendary because the enemy team contained healing and the item's AP/haste were gold-efficient. It did not establish that healing was deciding the lane or fights. The same stat-efficiency scoring overvalued a cheap ally-triggered damage item, and the shopper spent leftover gold on its components before finishing the first target.
+
+- Healing-reduction items stay out of the scheduled core without a strong current lane-healing signal or eligible purchase evidence. They remain conditional alternatives against relevant team healing. This is a conservative heuristic, not direct measurement of healing prevented or proof of optimal timing.
+- Ally-triggered damage payoffs are discounted outside the support role based on effect text, without champion or item IDs. Existing role/patch/prefix evidence can still influence the ranking. Text recognition is incomplete and is not a general simulation of item effects.
+- Cross-recipe purchases now pay an opportunity cost for gold diverted from the first unfinished recipe. A sufficiently more useful purchase can still complete another item while retaining existing components. Equal-value spare components no longer justify delay by themselves. The 1.1 multiplier is a conservative policy parameter, not a learned win-rate result.
+- Regression tests cover the solo-lane/team-healing distinction, continued conditional antiheal availability, ally-triggered solo value, and saving surplus gold. Existing cross-target completion and inventory-consumption tests remain in force; the shared-route test supplies a material utility advantage to justify the switch under the new policy.
+
+These changes do not replace the statistical data pipeline or certify every champion/role/matchup. Both API and desktop must use this revision for consistent results; an unchanged production deployment will continue its previous recommendations.

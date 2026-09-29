@@ -318,3 +318,17 @@ it('can upgrade basic boots, without buying a second pair of upgraded boots', ()
  expect(b.boots!.id).not.toBe(1001);
  expect(recommendBuild({...base,owned:[b.boots!.id]}).boots).toBeNull();
 });
+
+describe('conditional purchases in a solo lane', () => {
+  it('keeps team healing reduction situational against a non-healing lane opponent', () => {
+    const b = recommendBuild({me:kit('Ahri'),items,position:'MIDDLE',owned:[1052,3020,1082],
+      enemies:['Darius','Viego','Zed','Caitlyn','Lulu'].map(id=>({kit:kit(id),laneOpponent:id==='Zed',items:id==='Viego'?[catalog.get(3153)!]:[]}))});
+    expect(core(b).some(x=>profileOf(x!.id).counters.includes('grievousWounds'))).toBe(false);
+    expect(b.situational.some(x=>profileOf(x.id).counters.includes('grievousWounds'))).toBe(true);
+    expect(core(b).map(x=>x!.id)).not.toContain(4005);
+  });
+  it('still offers healing reduction against a healing lane opponent', () => {
+    const b=build('Ahri',HEALERS,{position:'MIDDLE',opponent:'Vladimir'});
+    expect(recommended(b).some(x=>profileOf(x!.id).counters.includes('grievousWounds'))).toBe(true);
+  });
+});

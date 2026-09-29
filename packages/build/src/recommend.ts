@@ -365,6 +365,12 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
     .filter((ip) => ip.boots === boots && !owned.has(ip.item.id) && !picked.has(ip.item.id) && !conflicts(ip))
     .map((ip) => {
       const sc = score(ip, p, e, state);
+      const effectText = ip.item.effects.map(x => x.text).join(" ");
+      // An ally-triggered payoff is not reliable personal damage in a solo role.
+      if (!boots && input.position !== "UTILITY" && /allied champion[^.]{0,160}(?:damage|detonat|consum)|(?:damage|detonat|consum)[^.]{0,160}allied champion/i.test(effectText)) {
+        sc.score *= .5;
+        sc.why.push("Its payoff requires an allied champion; solo-role value is discounted until that cooperation is established.");
+      }
       if (!boots && input.position === "UTILITY") {
         // Role affects utility/accessibility, never fabricates a gold-per-minute estimate.
         const text = ip.item.effects.map(x => x.text).join(" ");
@@ -403,6 +409,11 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
         if(prior){sc.empirical=prior.bonus;sc.score+=prior.bonus;sc.why.push(prior.reason);}
       }
       const useless = counterWithoutThreat(ip, e);
+      if (!boots && ip.counters.includes("grievousWounds") && !sc.empirical) {
+        const lane = input.enemies.find(x => x.laneOpponent);
+        const urgent = lane && enemyPicture([lane]).threats.healing.weight >= .5;
+        if (!urgent) return null; // Still eligible for the situational alternatives below.
+      }
       if (useless) {
         const kind = COUNTERS[useless].answers[0]!;
         ruledOut.set(ip.item.id, { id: ip.item.id, name: ip.item.name, why: `Its passive ${COUNTERS[useless].says}, and ${NO_THREAT[kind]}.`, score: sc.statValue });
@@ -458,7 +469,9 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
       ...pick(answer),
       when: fitting
         ? `Against the ${threatPhrase(t.kind)} from ${who}: ${resist === "armor" ? "armor" : "magic resist"} with stats ${p.name} uses (${counter.ip.item.name} counters it directly but is built for tanky champions).`
-        : `Against the ${threatPhrase(t.kind)} from ${who}.`,
+        : t.kind === "healing"
+          ? `If healing from ${who} is deciding fights; this is a situational alternative, not the next scheduled purchase.`
+          : `Against the ${threatPhrase(t.kind)} from ${who}.`,
     });
     if (situational.length >= 3) break;
   }

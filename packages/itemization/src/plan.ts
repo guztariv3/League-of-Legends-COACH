@@ -169,6 +169,8 @@ function bestBuy(targets: CatalogItem[], inventory: number[], gold: number, cata
   }
   const inventoryValue = (held:number[]) => [...held].sort((a,b)=>a-b).reduce((sum,id)=>sum+(catalog.items.get(id)?.gold ?? 0)*worth(id)*(priorities.get(id) ?? 0),0);
   const initialValue=inventoryValue(inventory);
+  const primary = targets.find(t => !inventory.includes(t.id));
+  const primaryCost = primary ? cost(tree(primary,catalog,[...inventory])) : 0;
   // A completion bonus is fixed at the start, never enlarged by splitting a purchase into steps.
   const completionBonus=new Map(targets.slice(0,6).map(t=>[t.id,worth(t.id)>0 ? cost(tree(t,catalog,[...inventory]))*.1 : 0]));
   const valueOf = (held:number[]) => inventoryValue(held)-initialValue +
@@ -184,9 +186,17 @@ function bestBuy(targets: CatalogItem[], inventory: number[], gold: number, cata
         const fit = fitPurchases([node], state.inventory, catalog);
         if (!fit) continue;
         const completed = node === root;
-        const value = valueOf(fit.inventory);
+        // Spending outside the current recipe delays its completion. Charge that
+        // opportunity cost, so spare gold alone cannot justify opening another tree.
+        // A substantially more useful purchase can still overcome this cost.
+        const remaining = primary ? cost(tree(primary,catalog,[...fit.inventory])) : 0;
+        const diverted = Math.max(0,state.spent + price - (primaryCost - remaining));
+        const delayCost = remaining > 0 && primary ? diverted * worth(primary.id) * 1.1 : 0;
+        const value = valueOf(fit.inventory) - delayCost;
         if (value <= state.value) continue;
-        const reason = index === 0 ? 'Advances your current target with useful stats.' : `Prioritized by the contextual item scores; re-evaluate after this purchase.`;
+        const reason = index === 0 ? 'Advances your current target with useful stats.' : remaining > 0
+          ? 'Its estimated immediate utility outweighs delaying the current target; keep the unfinished components and re-evaluate after buying.'
+          : 'The current target is complete; advances the next recipe.';
         const step: Search = { inventory: fit.inventory, spent: state.spent + price, value,
           buys: [...state.buys, {id:node.item.id,name:node.item.name,gold:price,targetId:target.id,targetName:target.name,reason}],
           completes: completed ? [...state.completes,target.name] : state.completes };
