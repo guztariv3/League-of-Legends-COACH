@@ -408,3 +408,21 @@ it('scores the next slot from the completed inventory, not the consumed componen
  expect(completed.first?.id).toBe(next.id);
  expect(projected.next[0]?.score).toBe(completed.first?.score);
 });
+
+describe('healing counters require a healing source, not just life-steal compatibility',()=>{
+ it.each(['Akshan','Ashe','Graves','Riven','Samira'])('does not treat %s applying life steal as innate healing',(id)=>{
+  const p=enemyPicture([{kit:kit(id),laneOpponent:true}]);
+  expect(p.threats.healing.weight).toBe(0);
+  expect(p.threats.healing.sources).toEqual([]);
+ });
+ it('retains direct heals and innate life steal while excluding compatible attacks',()=>{
+  expect(enemyPicture([{kit:kit('Smolder')}]).threats.healing.sources[0]?.why).toBe('R heals');
+  expect(enemyPicture([{kit:kit('Volibear')}]).threats.healing.sources[0]?.why).toBe('W heals');
+  expect(enemyPicture([{kit:kit('Olaf')}]).threats.healing.weight).toBeGreaterThan(0);
+  expect(enemyPicture([{kit:kit('XinZhao')}]).threats.healing.sources[0]?.why).toBe('P heals');
+ });
+ it('values an antiheal component when healing is actually supplied by an item',()=>{
+  const run=(held:typeof items)=>recommendBuild({me:kit('Orianna'),items,position:'MIDDLE',enemies:[{kit:kit('Akshan'),laneOpponent:true,items:held}]}).componentUtility![3916]!;
+  expect(run([catalog.get(1053)!])).toBeGreaterThan(run([]));
+ });
+});

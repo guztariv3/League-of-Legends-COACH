@@ -41,10 +41,18 @@ const HEALS = /\b(heals?|healing|restores? .{0,20}health|life steal|lifesteal|om
 const SHIELDS = /\b(shield(?:s|ed)? (?:himself|herself|itself|themselves|an ally|allies|nearby allies)|grants? (?:a |him |her |them )?shield|gains? a shield|shield strength)\b/i;
 
 /** Ability slots (P, Q, W, E, R) whose text or values match. */
-function slots(kit: ChampionKit, test: RegExp): string[] {
+function slots(kit: ChampionKit, test: RegExp, textOf: (text:string)=>string = text=>text): string[] {
   const hit = new Set<string>();
-  for (const a of kit.abilities) if (test.test(a.text) || a.values.some((v) => test.test(v))) hit.add(a.slot);
+  for (const a of kit.abilities) if (test.test(textOf(a.text)) || a.values.some((v) => test.test(textOf(v)))) hit.add(a.slot);
   return [...hit];
+}
+
+/** An attack can apply an externally supplied healing stat without granting it.
+ * Keep direct heals and granted innate sustain; supplied item sustain is counted separately. */
+function intrinsicHealingText(text:string):string {
+  return text
+    .replace(/\b(?:appl(?:y|ies|ying)|benefits? from)\s+(?:life steal|lifesteal|omnivamp)\b[^.;\n]*/gi, "")
+    .replace(/\bheals?\b[^;\n]{0,160}?\bof (?:his|her|their|its) (?:life steal|lifesteal|omnivamp)\b/gi, "");
 }
 
 const stat = (items: ItemFacts[], k: keyof ItemFacts["stats"], part: "flat" | "percent" = "flat") =>
@@ -88,7 +96,7 @@ export function enemyPicture(enemies: EnemyInput[]): EnemyPicture {
       ? `${critItems}% critical strike chance from items`
       : p.scales.crit >= 0.6 && p.attackReliance < 0.6 ? "abilities scale with critical strike chance" : "relies on basic attacks, which can critically strike", w);
 
-    const heal = slots(e.kit, HEALS);
+    const heal = slots(e.kit, HEALS, intrinsicHealingText);
     const healItems = stat(items, "lifesteal", "percent") + stat(items, "omnivamp", "percent");
     add("healing", p.name, Math.max(heal.length * 0.22, clamp(healItems / 15)), healItems > 0
       ? `${healItems}% life steal and omnivamp from items`

@@ -65,3 +65,17 @@ Ahora se asignan las piezas del inventario a ocurrencias de la receta una sola v
 Tres regresiones reproducen los fallos antes de corregirlos. Validación final: 577 pruebas de motor, compras y coach aprobadas; typecheck correcto. El script `scripts/audit-recipe-affordability.ts` compara el cálculo de economía con la compra inmediata del planificador: 1.356 escenarios del catálogo, sin discrepancias. Ejecutar desde `apps/api` con `node --import tsx ../../scripts/audit-recipe-affordability.ts`.
 
 Esta corrección compartida por todos los campeones evita valorar compras imposibles u omitir duplicados necesarios. No valida qué pieza aporta más a una pelea, la secuencia óptima del campeón ni los casos sin estadísticas. No se afirma que los 1.356 escenarios cubran todas las combinaciones de inventario. El CI y el instalador de e292c1e pasaron; esta revisión requiere CI nuevo. Sin despliegue, fusión ni backfill.
+
+## Seguimiento: curación real frente a compatibilidad con robo de vida
+
+El detector trataba frases como «aplica robo de vida» como una fuente de curación propia del kit. Eso aumentaba la amenaza de curación aun sin un objeto o habilidad que proporcionara esa estadística y podía aumentar el valor de anticuración.
+
+Ahora se excluyen las cláusulas de compatibilidad y las curaciones expresadas únicamente como una fracción del robo de vida externo. Se conservan curaciones directas y robo de vida otorgado por el propio kit; los objetos del rival continúan aportando sus estadísticas de curación por separado. No hay excepciones por ID de campeón.
+
+Comparación de los 173 kits en tres estados (sin objetos, con componente de robo de vida y con objeto terminado): 519 casos, ocho cambian, todos sin objetos. Akshan, Ashe, Graves, Riven y Samira dejan de recibir curación innata por esa compatibilidad; Smolder conserva R, Volibear W y Xin Zhao P. Los estados con los dos objetos examinados conservan el resultado anterior. Son datos del catálogo incluido, no una estimación de curación real por segundo.
+
+Regresiones anteriores a la corrección fallaban en la atribución de curación a Akshan y en la atribución extra a Smolder. Las pruebas finales cubren los cinco kits sin curación intrínseca detectada, la conservación de curaciones propias y el aumento de utilidad de un componente de anticuración cuando el rival sí compra robo de vida. Validación local: 584 pruebas de motor, compras y coach aprobadas; typecheck correcto.
+
+Esto elimina una razón falsa para anticuración; no prohíbe situacionalmente ese objeto si existe otra fuente de curación o evidencia elegible. Las recomendaciones siguen siendo heurísticas donde faltan muestras; quedan otros límites de interpretación del texto, activación, frecuencia y magnitud de los efectos.
+
+CI anterior (a44bd45): tipos/pruebas/E2E, Rust, imagen de producción e instalador aprobados. El job PostgreSQL aprobó sus siete pruebas pero falló por un evento 57P01 durante el borrado forzado de la base temporal. Se retira FORCE después de cerrar el pool: no se fuerzan conexiones y una fuga real debe hacer fallar la limpieza. Esa modificación solo afecta al test; necesita verificarse en PostgreSQL de CI. Sin acceso ni cambios en Render.

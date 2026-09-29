@@ -37,7 +37,10 @@ beforeEach(async()=>{
 afterEach(async()=>{
  await opened?.close();
  if(admin) {
-  try { if(testDatabase) await admin.query(`DROP DATABASE "${testDatabase}" WITH (FORCE)`); }
+  // The application pool has been drained above. Do not force-terminate a
+  // socket still finishing its graceful close: that can emit a late 57P01.
+  // A genuinely leaked connection must fail cleanup instead of being hidden.
+  try { if(testDatabase) await admin.query(`DROP DATABASE "${testDatabase}"`); }
   finally {await admin.end();admin=undefined;testDatabase=undefined;testUrl=undefined;}
  }
 });
