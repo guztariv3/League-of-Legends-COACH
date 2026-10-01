@@ -577,6 +577,7 @@ td .loadout { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
 /* right panel: radar + primary role table + performance */
 .pf-panel { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius-m); overflow: hidden; }
 .pf-panel-top { display: grid; grid-template-columns: 300px minmax(0, 1fr); border-bottom: 1px solid var(--border); }
+.pf-gpi, .pf-role-table { min-width: 0; }
 .pf-gpi { border-right: 1px solid var(--border); }
 .pf-h { display: flex; align-items: center; gap: 8px; margin: 0; padding: 12px 14px; font-size: 12px; font-weight: 700; text-transform: uppercase; color: var(--text-primary); border-bottom: 1px solid var(--border); }
 .pf-h .link-btn { text-transform: none; font-weight: 400; font-size: 13px; }
@@ -637,12 +638,12 @@ td .loadout { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
 .lp-table { grid-column: 1 / -1; padding: 8px 14px 12px; border-top: 1px solid var(--border); }
 
 @media (max-width: 1180px) {
-  .pf-panel-top { grid-template-columns: 1fr; }
+  .pf-panel-top { grid-template-columns: minmax(0, 1fr); }
   .pf-gpi { border-right: 0; border-bottom: 1px solid var(--border); }
   .pf-perf { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 1000px) {
-  .pf-top, .pf-overview { grid-template-columns: 1fr; }
+  .pf-top, .pf-overview { grid-template-columns: minmax(0, 1fr); }
   .pf-main { margin-top: 0; }
   .pf-refresh { left: 32px; bottom: auto; top: 14px; }
   .lp-gains { grid-template-columns: 1fr; }
@@ -659,7 +660,6 @@ td .loadout { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
 .pf-rt tbody td { border-radius: 0 !important; }
 
 /* ------------------------------------------------------------------ profile overview tab */
-.pf-overview { grid-template-columns: 300px minmax(0, 1fr); }
 .ov-filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .ov-select { height: 40px; min-width: 160px; background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--border); border-radius: var(--radius-s); padding: 0 12px; font: inherit; font-size: 14px; font-weight: 500; }
 .ov-roles { display: flex; border: 1px solid var(--border); border-radius: var(--radius-s); overflow: hidden; }
@@ -769,3 +769,7 @@ i.ov-day { display: inline-block; width: 11px; height: 11px; vertical-align: -1p
   .ov-champ input { width: 100%; }
   .ov-champ { flex: 1; }
 }
+
+/* Live state stays visible on phones as well as desktop. */
+.live-banner { display: block; margin-left: var(--rail); padding: 8px 24px; color: var(--accent); background: var(--surface-1); font-weight: 700; border-bottom: 1px solid var(--border); }
+@media (max-width: 760px) { .live-banner { margin-left: 0; padding: 8px 14px; } }

@@ -145,6 +145,14 @@ describe("review regressions", () => {
     expect(second[0]!.signal.key).not.toBe(first[0]!.signal.key);
   });
 
+  it("drops queued notices when paused and does not replay them on resume", () => {
+    const e = new LiveEngine(cfg);
+    e.tick(base(500, 5, 5), DEFAULT_CONTROLS, null);
+    expect(e.tick(base(502, 6, 6), DEFAULT_CONTROLS, null).deliveries).toHaveLength(1);
+    e.tick(base(504, 6, 6), { ...DEFAULT_CONTROLS, paused: true }, null);
+    expect(e.tick(base(545, 6, 6), DEFAULT_CONTROLS, null).deliveries).toHaveLength(0);
+  });
+
   it("speaks normally in a second game within the same session", () => {
     const e = new LiveEngine(cfg);
     e.tick(base(1500, 5, 5), DEFAULT_CONTROLS, null);

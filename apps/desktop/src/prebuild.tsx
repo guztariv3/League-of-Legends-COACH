@@ -5,6 +5,7 @@ export interface ItemPick { id: number; name: string; gold: number; score: numbe
 export interface RunePick { id: number; name: string; why: string }
 export interface PreGameBuild {
   champion: string;
+  economyNotes?: string[];
   kit: string[];
   enemyDamage: { physical: number; magic: number; true: number };
   threats: { kind: string; weight: number; sources: { name: string; why: string }[] }[];
@@ -108,6 +109,7 @@ export function PreGameBuildView({ build, art }: { build: PreGameBuild; art: Art
   return (
     <section className="prebuild" aria-label="Build for this game">
       <h3 className="label">Build for this game</h3>
+      {build.economyNotes && <details className="prebuild-block"><summary>Economy and recall scenarios</summary>{build.economyNotes.map((line,i)=><p key={i}>{line}</p>)}</details>}
       {build.enemiesKnown < 5 && (
         <p className="quiet small">
           {build.enemiesKnown === 0

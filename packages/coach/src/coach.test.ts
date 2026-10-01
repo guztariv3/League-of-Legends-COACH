@@ -28,6 +28,16 @@ describe("decision contract", () => {
     expect(pickNow([])).toBeNull();
   });
 
+  it("replaces an existing item with a warning or closing window at the same priority", () => {
+    const item = d("item", "important", 0.9);
+    const moment = d("moment", "important", 0.7, "moment");
+    const warning = d("warning", "important", 0.6, "warning");
+    expect(pickNow([item, moment], item.id)?.id).toBe(moment.id);
+    expect(pickNow([item, moment, warning], item.id)?.id).toBe(warning.id);
+    expect(pickNow([item, moment, warning], moment.id)?.id).toBe(warning.id);
+    expect(pickNow([item], warning.id)?.id).toBe(item.id);
+  });
+
   it("flags a changed recommendation of the same kind as an adjustment", () => {
     expect(isAdjustment(d("item:1", "info", 1), d("item:2", "info", 1))).toBe(true);
     expect(isAdjustment(d("item:1", "info", 1), d("item:1", "info", 1))).toBe(false);

@@ -147,6 +147,7 @@ fn site_origin(raw: &str) -> Result<String, String> {
 async fn site_json(res: reqwest::Response) -> Result<serde_json::Value, String> {
     match res.status().as_u16() {
         200..=299 => res.json().await.map_err(|_| "unexpected_response".to_string()),
+        400 => Err("rejected".into()),
         401 => Err("unauthorized".into()),
         429 => Err("rate_limited".into()),
         _ => Err("server_error".into()),
@@ -188,10 +189,10 @@ async fn desktop_build(state: tauri::State<'_, AppState>, base_url: String, toke
 
 /// The Coach's game plan for the champions of the game that is starting (champions only), with the device token.
 #[tauri::command]
-async fn desktop_plan(state: tauri::State<'_, AppState>, base_url: String, token: String, me: String, allies: String, enemies: String, opponent: String, position: String) -> Result<serde_json::Value, String> {
+async fn desktop_plan(state: tauri::State<'_, AppState>, base_url: String, token: String, me: String, allies: String, enemies: String, opponent: String, position: String, preview: Option<bool>, draft_context: Option<String>) -> Result<serde_json::Value, String> {
     let origin = site_origin(&base_url)?;
     let res = state.site.get(format!("{origin}/api/desktop/plan"))
-        .query(&[("me", me.as_str()), ("allies", allies.as_str()), ("enemies", enemies.as_str()), ("opponent", opponent.as_str()), ("position", position.as_str())])
+        .query(&[("me", me.as_str()), ("allies", allies.as_str()), ("enemies", enemies.as_str()), ("opponent", opponent.as_str()), ("position", position.as_str()), ("preview", if preview.unwrap_or(false) { "1" } else { "0" }), ("draftContext",draft_context.as_deref().unwrap_or(""))])
         .bearer_auth(token)
         .send().await.map_err(|_| "offline".to_string())?;
     site_json(res).await
@@ -199,11 +200,31 @@ async fn desktop_plan(state: tauri::State<'_, AppState>, base_url: String, token
 
 /// What to buy next, from the site's build engine: only champion ids, item ids and kill/death counts are sent.
 #[tauri::command]
-async fn desktop_items(state: tauri::State<'_, AppState>, base_url: String, token: String, me: String, mine: String, enemies: String, opponent: String, position: String, opening: bool) -> Result<serde_json::Value, String> {
+async fn desktop_items(state: tauri::State<'_, AppState>, base_url: String, token: String, me: String, mine: String, enemies: String, opponent: String, position: String, opening: bool, economy: Option<String>) -> Result<serde_json::Value, String> {
     let origin = site_origin(&base_url)?;
     let res = state.site.get(format!("{origin}/api/desktop/items"))
-        .query(&[("me", me.as_str()), ("mine", mine.as_str()), ("enemies", enemies.as_str()), ("opponent", opponent.as_str()), ("position", position.as_str()), ("opening", if opening { "1" } else { "0" })])
+        .query(&[("me", me.as_str()), ("mine", mine.as_str()), ("enemies", enemies.as_str()), ("opponent", opponent.as_str()), ("position", position.as_str()), ("opening", if opening { "1" } else { "0" }), ("economy", economy.as_deref().unwrap_or(""))])
         .bearer_auth(token)
+        .send().await.map_err(|_| "offline".to_string())?;
+    site_json(res).await
+}
+
+/// The site's clock, so Live frames can be stamped in server time (the PC clock may be off).
+#[tauri::command]
+async fn desktop_time(state: tauri::State<'_, AppState>, base_url: String, token: String) -> Result<serde_json::Value, String> {
+    let origin = site_origin(&base_url)?;
+    let res = state.site.get(format!("{origin}/api/desktop/time"))
+        .bearer_auth(token).timeout(Duration::from_secs(4))
+        .send().await.map_err(|_| "offline".to_string())?;
+    site_json(res).await
+}
+
+#[tauri::command]
+async fn desktop_live(state: tauri::State<'_, AppState>, base_url: String, token: String, frame: serde_json::Value) -> Result<serde_json::Value, String> {
+    let origin = site_origin(&base_url)?;
+    if frame.to_string().len() > 65536 { return Err("unexpected_response".into()); }
+    let res = state.site.post(format!("{origin}/api/desktop/live"))
+        .bearer_auth(token).json(&frame).timeout(Duration::from_secs(4))
         .send().await.map_err(|_| "offline".to_string())?;
     site_json(res).await
 }
@@ -265,14 +286,18 @@ fn reduce_session(session: &serde_json::Value) -> serde_json::Value {
     let my_pick = session.get("actions").and_then(|v| v.as_array()).into_iter().flatten()
         .filter_map(|group| group.as_array()).flatten()
         .filter(|a| a.get("actorCellId").and_then(|v| v.as_i64()) == me_cell && a.get("type").and_then(|v| v.as_str()) == Some("pick"))
-        .filter(|a| id(a.get("championId")) > 0)
+        .filter(|a| id(a.get("championId")) > 0 || a.get("isInProgress").and_then(|v| v.as_bool()).unwrap_or(false))
         .last()
         .cloned();
     let my_team = team("myTeam");
     let me = my_team.iter().find(|p| p.get("cellId").and_then(|v| v.as_i64()) == me_cell);
     let (champion, locked) = match (&my_pick, me) {
-        (Some(a), _) => (id(a.get("championId")), a.get("completed").and_then(|v| v.as_bool()).unwrap_or(false)),
-        (None, Some(p)) if id(p.get("championId")) > 0 => (id(p.get("championId")), true),
+        (Some(a), _) => {
+            let locked = a.get("completed").and_then(|v| v.as_bool()).unwrap_or(false);
+            let current = me.map(|p| id(p.get("championId"))).unwrap_or(0);
+            (if locked && current > 0 { current } else { id(a.get("championId")) }, locked)
+        },
+        (None, Some(p)) if id(p.get("championId")) > 0 => (id(p.get("championId")), false),
         (None, Some(p)) => (id(p.get("championPickIntent")), false),
         (None, None) => (0, false),
     };
@@ -289,6 +314,9 @@ fn reduce_session(session: &serde_json::Value) -> serde_json::Value {
         })),
         "allies": allies,
         "enemies": enemies,
+        "bans": session.get("bans").map(|b| serde_json::json!({ "allies": b.get("myTeamBans"), "enemies": b.get("theirTeamBans") })),
+        "timerPhase": session.get("timer").and_then(|t| t.get("phase")),
+        "alliedPositions": my_team.iter().map(|p| serde_json::json!({ "championId": id(p.get("championId")), "position": p.get("assignedPosition").and_then(|v| v.as_str()).unwrap_or("") })).collect::<Vec<_>>(),
     })
 }
 
@@ -338,6 +366,7 @@ async fn desktop_home(state: tauri::State<'_, AppState>, base_url: String, token
 
 fn site_client() -> reqwest::Client {
     reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(Duration::from_secs(10))
         // A free Render instance can take a while to wake up.
         .timeout(Duration::from_secs(60))
@@ -371,7 +400,7 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
     builder
         .manage(AppState { http: live_client(), lcu: lcu_client(), site: site_client(), sys: Mutex::new(sys) })
-        .invoke_handler(tauri::generate_handler![live_snapshot, system_load, check_update, install_update, desktop_claim, desktop_scout, desktop_build, desktop_plan, desktop_items, set_overlay, lcu_champ_select, desktop_home])
+        .invoke_handler(tauri::generate_handler![live_snapshot, system_load, check_update, install_update, desktop_claim, desktop_scout, desktop_build, desktop_plan, desktop_items, desktop_live, desktop_time, set_overlay, lcu_champ_select, desktop_home])
         .run(tauri::generate_context!())
         .expect("error while running KOI Master desktop");
 }

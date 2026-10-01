@@ -65,7 +65,12 @@ export class Notifier {
   }
 
   process(signals: LiveSignal[], state: GameState, controls: LiveControls, safeMode: boolean): Delivery[] {
-    if (controls.paused) return [];
+    if (controls.paused) {
+      // Pausing (also used during reconnection) must not replay queued notices later.
+      for (const signal of [...this.held, ...signals]) this.seen.add(signal.key);
+      this.held = [];
+      return [];
+    }
     const now = state.time;
     const candidates = [...this.held, ...signals].filter((s) => {
       if (this.seen.has(s.key)) return false;

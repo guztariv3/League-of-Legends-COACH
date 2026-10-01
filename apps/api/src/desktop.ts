@@ -1,6 +1,10 @@
+import { economyBaseline } from "./economy-baseline.js";
+import { bodyLimit } from "hono/body-limit";
+import { LiveFrameSchema, LIVE_TTL_MS, freshFrame } from "./live-frame.js";
+import { sql } from "drizzle-orm";
 import { randomBytes, randomInt } from "node:crypto";
 import { GAME_DATA_ATTRIBUTION, type GameFactsSource, type KnowledgeRegistry } from "@coach/knowledge";
-import { recommendBuild, recommendSetup, teamNeeds } from "@coach/build";
+import { recommendBuild, recommendSetup, teamNeeds, draftRead, itemTiming } from "@coach/build";
 import { championPool, styleNote } from "@coach/coach";
 import { patchFromVersion } from "@coach/domain";
 import { challengeTitle, evaluateChallenge, type ChallengeKind, type GoalMetric } from "@coach/insights";
@@ -44,6 +48,21 @@ function newCode(): string {
 export function desktopSessionRoutes({ db }: { db: Db }) {
   const r = new Hono<AuthVars>();
 
+  r.get("/live", async c => {
+    c.header("Cache-Control", "no-store");
+    const [row] = await db.select({ payload: schema.liveFrames.payload, receivedAt: schema.liveFrames.receivedAt, capturedAt: schema.liveFrames.capturedAt })
+      .from(schema.liveFrames).innerJoin(schema.deviceLinks, eq(schema.deviceLinks.id, schema.liveFrames.deviceId))
+      .where(and(eq(schema.liveFrames.userId, c.get("userId")), isNull(schema.deviceLinks.revokedAt), gt(schema.liveFrames.receivedAt,new Date(Date.now()-86400000))))
+      .orderBy(sql`CASE WHEN ${schema.liveFrames.receivedAt} > ${new Date(Date.now()-LIVE_TTL_MS)} AND ${schema.liveFrames.payload}->>'phase' NOT IN ('idle','ended') THEN 0 WHEN ${schema.liveFrames.payload}->>'phase' = 'ended' THEN 1 ELSE 2 END`, desc(schema.liveFrames.receivedAt)).limit(1);
+    if (!row) return c.json({ frame: null, stale: false });
+    const parsed = LiveFrameSchema.safeParse(row.payload);
+    if (!parsed.success) return c.json({ frame: null, stale: true });
+    const stale = Date.now()-row.receivedAt.getTime()>LIVE_TTL_MS || !freshFrame(row.capturedAt.getTime(),Date.now());
+    // A stale frame is never presented as live advice. Completed summaries expire after one day.
+    const ended = parsed.data.phase === "ended" && Date.now()-row.receivedAt.getTime()<86400000;
+    return c.json({ frame: stale && !ended ? null : parsed.data, stale: stale && !ended });
+  });
+
   r.post("/desktop/pair", async (c) => {
     const code = newCode();
     await db.insert(schema.deviceLinks).values({
@@ -68,6 +87,7 @@ export function desktopSessionRoutes({ db }: { db: Db }) {
     if (!z.uuid().safeParse(id).success) return c.json({ error: "not_found" }, 404);
     const done = await db.update(schema.deviceLinks).set({ revokedAt: new Date(), tokenHash: null, codeHash: null })
       .where(and(eq(schema.deviceLinks.id, id), eq(schema.deviceLinks.userId, c.get("userId")))).returning();
+    if (done.length) await db.delete(schema.liveFrames).where(eq(schema.liveFrames.deviceId,id));
     return done.length ? c.json({ ok: true }) : c.json({ error: "not_found" }, 404);
   });
 
@@ -75,7 +95,7 @@ export function desktopSessionRoutes({ db }: { db: Db }) {
 }
 
 /** Routes the desktop app calls with its own credentials (code or device token). */
-export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowledge: KnowledgeRegistry; services: Services; gameFacts?: GameFactsSource }) {
+export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowledge: KnowledgeRegistry; services: Services; gameFacts?: GameFactsSource; onMatchEnd?: (userId:string)=>Promise<void> }) {
   const { db } = deps;
   const r = new Hono();
   const perIp = new AttemptLimiter(10, 60_000);
@@ -113,6 +133,40 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
     return device;
   };
   const disconnected = (c: Context) => c.json({ error: "unauthenticated", message: "This app is no longer connected. Connect it again from the website." }, 401);
+
+  /**
+   * The site's clock, for the companion to convert its capture times into server time (PCs with a
+   * wrong clock can still share). It changes nothing about freshness: frames are still judged by
+   * absolute server time, so an old capture or a replayed request never becomes current.
+   */
+  const timeRate = new AttemptLimiter(30, 60_000);
+  r.get("/desktop/time", async c => {
+    const device = await deviceFor(c);
+    if (!device) return disconnected(c);
+    if (!timeRate.allow(device.id)) return c.json({ error: "rate_limited" }, 429);
+    c.header("Cache-Control", "no-store");
+    return c.json({ serverTime: Date.now() });
+  });
+
+  const endRate = new AttemptLimiter(1, 120_000);
+  const liveRate = new AttemptLimiter(90, 60_000);
+  r.post("/desktop/live", bodyLimit({ maxSize: 64 * 1024 }), async c => {
+    const device = await deviceFor(c);
+    if (!device) return disconnected(c);
+    if (!liveRate.allow(device.id)) return c.json({ error: "rate_limited" },429);
+    const parsed = LiveFrameSchema.safeParse(await c.req.json().catch(()=>null));
+    if (!parsed.success) return c.json({ error: "invalid_frame" },400);
+    // capturedAt is in server time (the companion converts it with /desktop/time): absolute age check.
+    if (!freshFrame(parsed.data.capturedAt,Date.now())) return c.json({ error: "stale_frame", serverTime: Date.now() },400);
+    const frame=parsed.data, now=new Date();
+    const values={deviceId:device.id,userId:device.userId,streamId:frame.streamId,sequence:frame.sequence,capturedAt:new Date(frame.capturedAt),receivedAt:now,payload:frame};
+    const saved=await db.insert(schema.liveFrames).values(values).onConflictDoUpdate({
+      target:schema.liveFrames.deviceId, set:values,
+      setWhere: sql`${schema.liveFrames.capturedAt} <= ${values.capturedAt} AND (${schema.liveFrames.streamId} <> ${frame.streamId} OR ${schema.liveFrames.sequence} < ${frame.sequence})`,
+    }).returning({id:schema.liveFrames.deviceId});
+    if(saved.length && frame.phase === "ended" && endRate.allow(device.userId)) void deps.onMatchEnd?.(device.userId).catch(()=>{});
+    return c.json({ok:true,accepted:saved.length>0,serverTime:Date.now()});
+  });
 
   r.get("/desktop/scout", async (c) => {
     const device = await deviceFor(c);
@@ -158,12 +212,28 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
     const bundle = deps.knowledge.active();
     const byKey = new Map((bundle?.champions ?? []).map((ch) => [String(ch.key), ch.id]));
     const resolve = (x: string) => (/^\d+$/.test(x) ? byKey.get(x) ?? null : x);
+    const rawContext=c.req.query("draftContext");
+    let context:unknown; try {context=rawContext && rawContext.length<=2500 ? JSON.parse(rawContext) : null;} catch {context=null;}
+    const dc=z.object({bans:z.object({allies:z.array(z.number().int()).max(10).nullable(),enemies:z.array(z.number().int()).max(10).nullable()}).nullable().optional(),timerPhase:z.string().max(40).nullable().optional(),alliedPositions:z.array(z.object({championId:z.number().int(),position:z.string().max(30)})).max(5).optional()}).safeParse(context);
+    const banNames=(ids:number[]|null|undefined)=>(ids??[]).filter(id=>id>0).map(id=>resolve(String(id))??"Unknown champion");
+    const draftState=dc.success ? {phase:dc.data.timerPhase??null,allyBans:banNames(dc.data.bans?.allies),enemyBans:banNames(dc.data.bans?.enemies),roles:(dc.data.alliedPositions??[]).filter(p=>p.championId>0).map(p=>`${resolve(String(p.championId))??"Unknown champion"}: ${p.position||"role unknown"}`)} : undefined;
     const me = resolve(q.data.me);
     if (!me) return c.json({ error: "unknown_champion" }, 400);
     const known = (xs: string[]) => xs.map(resolve).filter((x): x is string => x !== null);
     const opponent = q.data.opponent ? resolve(q.data.opponent) ?? undefined : undefined;
-    const { analyses } = await deps.services.profileAnalyses(device.userId);
     const enemies = known(q.data.enemies);
+    if (c.req.query("preview") === "1") {
+      const facts = await deps.gameFacts?.get(200) ?? null;
+      const kits = new Map((facts?.kits ?? []).map(k=>[k.id,k]));
+      const mine = kits.get(me);
+      const allies=known(q.data.allies), enemyKits=enemies.flatMap(e=>kits.get(e)?[kits.get(e)!]:[]);
+      // Candidate lanes are inferred from known champion positions, never asserted as assigned roles.
+      const probable=opponent ?? (q.data.position ? enemyKits.filter(k=>k.positions.some(p=>p.toUpperCase()===q.data.position)).map(k=>k.id) : []);
+      const likely=typeof probable === "string" ? probable : probable.length===1 ? probable[0] : undefined;
+      return c.json({champion:me,draftState,roster:{allies,enemies},draftRead:mine ? draftRead(mine,allies.flatMap(a=>kits.get(a)?[kits.get(a)!]:[]),enemyKits,likely):null,
+        plan:prepareGame({myChampion:me,allies,enemies},[],bundle).plan,build:null});
+    }
+    const { analyses } = await deps.services.profileAnalyses(device.userId);
     const { draft, plan } = prepareGame({ myChampion: me, allies: known(q.data.allies), enemies, laneOpponent: opponent }, analyses, bundle);
 
     // The pre-game build (runs on the server with the full game data; null until it is loaded).
@@ -171,7 +241,9 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
     const kits = new Map((facts?.kits ?? []).map((k) => [k.id, k]));
     const myKit = kits.get(me);
     const enemyInput = enemies.map((e) => kits.get(e)).filter((k) => k !== undefined).map((k) => ({ kit: k, laneOpponent: k.id === opponent }));
-    const engine = facts && myKit ? recommendBuild({ me: myKit, enemies: enemyInput, items: facts.items, position: q.data.position ?? null }) : null;
+    const baseline = facts ? await economyBaseline(db, analyses, me, q.data.position, patchFromVersion(facts.version)) : null;
+    const economy = baseline ? {gold:0,time:150,income:baseline.income,source:"history" as const} : undefined;
+    const engine = facts && myKit ? recommendBuild({ me: myKit, enemies: enemyInput, items: facts.items, position: q.data.position ?? null, economy }) : null;
     const setup = facts && myKit ? recommendSetup({ me: myKit, enemies: enemyInput, runes: facts.runes, spells: facts.spells, position: q.data.position ?? null }) : null;
     // What Master+ players do with this champion this patch (phase 4): evidence beside the engine, never the decision.
     const master = facts ? await championStats(db, me, q.data.position ?? null, patchFromVersion(facts.version)) : null;
@@ -192,9 +264,22 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
     // A recurring mistake with this champion is the most useful "avoid" line: it is about this player.
     const own = memory?.patterns.find((p) => p.kind === "mistake" && p.scope === "champion");
     const gamePlan = own ? { ...plan, avoid: { text: own.text, basis: "observation" as const, why: own.why } } : plan;
+    const economyNotes = baseline ? [
+      `Historical baseline: ${baseline.games} games, same ${baseline.scope}, patch ${baseline.patch}. About ${baseline.income} gold/min (${baseline.incomeRange.join("–")} across the middle half of games) and ${baseline.cs} CS/min in early intervals without your kills or assists.`,
+      "This includes observed farm, passive and other non-kill income. It is conditional, not a promise of future earnings. Item estimates start after the opening purchase; starting-item leftovers are unknown.",
+      ...baseline.recallBudgets.map(gold=> {
+        const candidates=[engine?.first,engine?.alternative].filter(p=>p!=null);
+        const options=candidates.map(p=>{const item=facts?.items.find(i=>i.id===p.id);if(!item||!facts)return "";
+          const timing=itemTiming(item,facts.items,[],{gold,time:0,income:baseline.income,source:"history"},()=>0);
+          return `${p.name}: ${timing.affordable} recipe choices fit; about ${Math.ceil((timing.seconds??0)/60)} further min without owned components`;});
+        return `Observed recall-budget scenario ${gold} gold: ${options.join("; ")}. Budget is a pre-recall snapshot, not an exact checkout balance.`;
+      }),
+      "Opponent wallet and next purchase are unknown. Live comparisons use visible completed items; no enemy completion time is invented.",
+    ] : ["Not enough current-patch timeline data for your role to estimate a personal non-kill income baseline. Pre-game completion times remain unknown."];
     const build = facts && myKit && engine
       ? {
           ...engine,
+          economyNotes,
           // Runes and summoner spells, decided the same way (packages/build/src/setup.ts).
           setup,
           stats,
@@ -207,7 +292,7 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
           attribution: GAME_DATA_ATTRIBUTION,
         }
       : null;
-    return c.json({ champion: me, plan: gamePlan, keyPoints: draft.keyPoints, limits: draft.limits, build, memory });
+    return c.json({ champion: me, draftState, playerContext:[`${analyses.filter(a=>a.championName===me&&a.analyzable).length} analyzed games on this champion.`, ...(memory?.patterns.slice(0,2).map(p=>`${p.text}: ${p.why}`)??[])], roster: {allies:known(q.data.allies), enemies}, draftRead: myKit ? draftRead(myKit, known(q.data.allies).flatMap(a => kits.get(a) ? [kits.get(a)!] : []), enemyInput.map(e => e.kit), opponent) : null, plan: gamePlan, keyPoints: draft.keyPoints, limits: draft.limits, build, memory });
   });
 
   /**
@@ -235,9 +320,10 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
       opponent: id.optional(),
       position: z.enum(["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"]).optional(),
       opening: z.enum(["0", "1"]).optional(),
+      economy: z.string().max(500).optional().transform(v => { try { return v ? JSON.parse(v) : undefined; } catch { return null; } }).pipe(z.object({ gold: z.number().min(0).max(100000).nullable(), time: z.number().min(0).max(30000), income: z.number().min(0).max(5000).nullable(), opponentCompleted: z.boolean().optional() }).optional()),
     }).safeParse({
       me: c.req.query("me"), mine: c.req.query("mine") ?? "", enemies: c.req.query("enemies") ?? "", opponent: c.req.query("opponent") || undefined,
-      position: c.req.query("position")?.toUpperCase() || undefined, opening: c.req.query("opening") || undefined,
+      economy: c.req.query("economy"), position: c.req.query("position")?.toUpperCase() || undefined, opening: c.req.query("opening") || undefined,
     });
     if (!q.success) return c.json({ error: "invalid_query" }, 400);
     const facts = await deps.gameFacts?.get(2500) ?? null;
@@ -251,7 +337,7 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
       return kit ? [{ kit, items: e.items.map((i) => byId.get(i)).filter((i) => i !== undefined), kills: e.kills, deaths: e.deaths, laneOpponent: e.champion === q.data.opponent }] : [];
     });
     const build = recommendBuild({
-      me: myKit, enemies, items: facts.items, owned: q.data.mine, position: q.data.position ?? null, starter: q.data.opening === "1",
+      me: myKit, enemies, items: facts.items, owned: q.data.mine, position: q.data.position ?? null, starter: q.data.opening === "1", economy: q.data.economy,
     });
     return c.json({ build: { ...build, version: facts.version, enemiesKnown: enemies.length, attribution: GAME_DATA_ATTRIBUTION } });
   });

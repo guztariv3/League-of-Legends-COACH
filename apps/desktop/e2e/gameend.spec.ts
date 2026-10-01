@@ -7,7 +7,7 @@ import { expect, test } from "@playwright/test";
  */
 test("desktop: a finished game resets the window to Home, and the next game starts clean", async ({ page }) => {
   await page.addInitScript(() => {
-    const w = window as unknown as { __phase: "game" | "end" | "closed" | "next"; __TAURI_INTERNALS__: unknown };
+    const w = window as unknown as { __phase: "game" | "end" | "closed" | "next" | "transient"; __TAURI_INTERNALS__: unknown };
     w.__phase = "game";
     const snapshot = (kills: number, time: number, events: { EventID: number; EventName: string; EventTime: number }[]) => ({
       activePlayer: { riotId: "Yo#EUW", level: 9, currentGold: 500 },
@@ -51,6 +51,15 @@ test("desktop: a finished game resets the window to Home, and the next game star
   await page.goto("/");
   await expect(page.getByText("● In game")).toBeVisible();
   await expect(nav.getByRole("tab", { name: "Items" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByLabel("Your game")).toContainText("7/0/0");
+
+  // A transient API read failure hides stale advice but keeps the current match.
+  await setPhase("transient");
+  await expect(page.getByRole("status")).toContainText("Reconnecting", { timeout: 10_000 });
+  await expect(nav.getByRole("tab", { name: "Items" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByLabel("Your game")).toContainText("7/0/0");
+  await setPhase("game");
+  await expect(page.getByText(/Reconnecting to the game/)).toHaveCount(0, { timeout: 10_000 });
   await expect(page.getByLabel("Your game")).toContainText("7/0/0");
 
   // The victory screen: back to Home with the player's profile, and nothing from the match left.

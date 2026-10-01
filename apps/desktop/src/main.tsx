@@ -1,8 +1,10 @@
 import { StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { DEFAULT_CONTROLS, laneOpponent, LiveEngine, modeInfo, type Delivery, type EngineTick, type Intensity, type LiveControls } from "@coach/live";
+import { ConnectionHealth, DEFAULT_CONTROLS, laneOpponent, LiveEngine, modeInfo, stampNow, type Delivery, type EngineTick, type Intensity, type LiveControls } from "@coach/live";
 import { STARTER_WINDOW_SEC, type EngineItems } from "@coach/coach";
-import { CoachAvatar } from "@coach/ui";
+import { goldPace } from "@coach/itemization";
+import { markAcquired, useLiveRelay, type Output } from "./live-relay";
+import { CoachAvatar, DraftCard } from "@coach/ui";
 import { checkUpdate, fetchBuild, fetchItems, fetchPlan, inTauri, installUpdate, readChampSelect, readLoad, readSnapshot, setOverlay, windowControl, type ChampSelect, type UpdateInfo } from "./bridge";
 import { Board, ChampArt, PlanTab, useArt, useCatalog, type BoardTab, type PersonalBuild, type PlanResponse } from "./board";
 import { PreGameBuildView } from "./prebuild";
@@ -49,19 +51,27 @@ function LiveWindow() {
   const [mode, setMode] = useState<Mode>("waiting");
   const [view, setView] = useState<View>("home");
   const [tick, setTick] = useState<EngineTick | null>(null);
+  const [reconnecting, setReconnecting] = useState(false);
   const [message, setMessage] = useState<(Delivery & { shownAt: number }) | null>(null);
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const [updateState, setUpdateState] = useState<"idle" | "installing" | "failed">("idle");
   const [homeKey, setHomeKey] = useState(0);
+  const [ended, setEnded] = useState(false);
+  const [shareLive, setShareLive] = useState(() => localStorage.getItem("live.share") === "on");
+  const coachOutput = useRef<Output | null>(null);
   const rivals = useRivals(mode);
   const art = useArt(rivals.scout?.assets ?? null);
   const catalog = useCatalog(art);
   const [showConnect, setShowConnect] = useState(false);
   const [build, setBuild] = useState<PersonalBuild | null | "loading">(null);
-  const [plan, setPlan] = useState<PlanResponse | null>(null);
+  const planOwner = rivals.link ? `${rivals.link.origin}:${rivals.link.token}` : null;
+  const [planResponse, setPlanResponse] = useState<{owner:string;value:PlanResponse}|null>(null);
+  const plan = planResponse?.owner === planOwner ? planResponse.value : null;
+  const setPlan = (value:PlanResponse|null) => setPlanResponse(value && planOwner ? {owner:planOwner,value} : null);
   // Item names arrive with the game's own data; the engine fills this map as it reads.
   const itemNames = useRef(new Map<number, string>());
   const controlsRef = useRef(controls);
+  const suppressNextNotice = useRef(false);
   controlsRef.current = controls;
 
   useEffect(() => {
@@ -72,8 +82,11 @@ function LiveWindow() {
    * A match is over (end screen, or the game closed): every piece of live state is dropped, not
    * hidden, so nothing from it can leak into the next game, and the window goes back to Home.
    */
-  const resetMatch = () => {
+  const resetMatch = (confirmedEnd = false) => {
+    setEnded(confirmedEnd);
+    coachOutput.current = null;
     setTick(null);
+    setReconnecting(false);
     setMessage(null);
     setBuild(null);
     setPlan(null);
@@ -91,7 +104,10 @@ function LiveWindow() {
     let engine: LiveEngine | null = null;
     // After the end screen the game keeps answering until it closes; those reads are ignored.
     let finished = false;
+    let endedTime: number | null = null;
     let live = false;
+    const connection = new ConnectionHealth();
+    let interrupted = false;
 
     const start = async () => {
       // The demo (synthetic generator) is loaded only when asked for, keeping the live window light.
@@ -112,24 +128,47 @@ function LiveWindow() {
         if (stopped) return;
         const load = await readLoad();
         let raw: unknown = null;
+        // When this snapshot is read: its age travels with it to web Live (never re-stamped later).
+        const readAt = stampNow();
         if (demo) raw = demo.snapshot();
         else {
           const snap = await readSnapshot();
           if (snap.ok) raw = snap.data;
         }
         if (stopped) return;
+        const gameTime = (raw as {gameData?:{gameTime?:number}} | null)?.gameData?.gameTime;
+        const nextGame = finished && endedTime !== null && typeof gameTime === "number" && gameTime >= 0 && gameTime < endedTime - 30;
         if (raw === null) {
-          // No game (or it closed): a match that was running ends here too.
-          if (live) { live = false; engine = null; resetMatch(); }
+          const health = connection.observe(false, Date.now());
+          if (live) {
+            interrupted = true;
+            setReconnecting(true);
+            setMessage(null);
+            // A confirmed GameEnd is immediate; an inaccessible API gets a grace period.
+            if (health === "ended") { live = false; engine = null; resetMatch(); }
+          }
           finished = false;
         } else if (!demo && gameEnded(raw)) {
-          if (!finished) { live = false; engine = null; finished = true; resetMatch(); }
-        } else if (!finished) {
-          if (!engine) { engine = newEngine(); live = true; if (!demo) { setMode("live"); setView("items"); } }
-          const t = engine.tick(raw, controlsRef.current, load);
-          setTick(t);
-          const d = t.deliveries[0];
-          if (d) setMessage({ ...d, shownAt: t.state.time });
+          if (!finished) { live = false; engine = null; finished = true; endedTime = typeof gameTime === "number" ? gameTime : null; resetMatch(true); }
+        } else if (!finished || nextGame) {
+          finished = false;
+          if (!engine) { engine = newEngine(); live = true; if (!demo) { setEnded(false); setMode("live"); setView("items"); } }
+          // Do not replay notifications accumulated during a connection interruption.
+          const t = engine.tick(raw, { ...controlsRef.current, paused: controlsRef.current.paused || interrupted || suppressNextNotice.current }, load);
+          suppressNextNotice.current = false;
+          const health = connection.observe(!t.degraded, Date.now());
+          setReconnecting(Boolean(t.degraded));
+          if (t.degraded) {
+            interrupted = true;
+            setMessage(null);
+            if (health === "ended") { live = false; engine = null; resetMatch(); }
+          } else {
+            interrupted = false;
+            markAcquired(t.state, readAt);
+            setTick(t);
+            const d = t.deliveries[0];
+            if (d && !controlsRef.current.paused) setMessage({ ...d, shownAt: t.state.time });
+          }
         }
         // Waiting for a game: poll slowly. In game: the engine's pace (slower in Safe Mode).
         if (!stopped) timer = setTimeout(loop, raw === null || finished ? 5000 : demo ? 500 : engine?.safeMode.pollMs ?? 1000);
@@ -139,6 +178,8 @@ function LiveWindow() {
     void start();
     return () => { stopped = true; clearTimeout(timer); };
   }, [mode === "demo", focusCs]);
+
+  useEffect(() => { if (controls.paused) { setMessage(null); suppressNextNotice.current = true; } }, [controls.paused]);
 
   // Messages fade out on their own; the Coach is mostly silent.
   useEffect(() => {
@@ -161,7 +202,7 @@ function LiveWindow() {
   }, [rivals.link, myChampion, buildMode]);
 
   // The overlay shows only while a real game is running, and only if the player turned it on.
-  const overlayVisible = overlay && mode === "live" && !controls.paused;
+  const overlayVisible = overlay && mode === "live" && !controls.paused && !reconnecting;
   useEffect(() => { void setOverlay(overlayVisible); }, [overlayVisible]);
   useEffect(() => { try { localStorage.setItem(OVERLAY_KEY, overlay ? "on" : "off"); } catch { /* per-viewer convenience only */ } }, [overlay]);
 
@@ -174,7 +215,7 @@ function LiveWindow() {
     if (!link || !planKey || !st?.me) return;
     let stopped = false;
     const opponent = laneOpponent(st)?.championId ?? null;
-    void fetchPlan<PlanResponse>(link.origin, link.token, { me: st.me.championId, allies: st.allies.map((a) => a.championId), enemies: st.enemies.map((e) => e.championId), opponent })
+    void fetchPlan<PlanResponse>(link.origin, link.token, { me: st.me.championId, allies: st.allies.map((a) => a.championId), enemies: st.enemies.map((e) => e.championId), opponent, position: st.me.position })
       .then((r) => { if (!stopped) setPlan(r.ok ? r.data : null); });
     return () => { stopped = true; };
   }, [rivals.link, planKey]);
@@ -184,36 +225,38 @@ function LiveWindow() {
   const [engine, setEngine] = useState<EngineItems | null>(null);
   const opening = Boolean(st?.me && st.time < STARTER_WINDOW_SEC && st.me.itemGold < 300);
   const engineKey = st?.me && st.map === 11 && st.enemies.length
-    ? [st.me.championId, st.me.position ?? "", opening ? "open" : "", [...st.me.items].sort().join("."), "|",
+    ? [st.me.championId, st.me.position ?? "", Math.floor((st.gold ?? 0)/100), Math.floor(st.time/15), opening ? "open" : "", [...st.me.items].sort().join("."), "|",
        ...st.enemies.map((e) => `${e.championId}:${[...e.items].sort().join(".")}:${e.kills}:${e.deaths}`)].join(",")
     : null;
   useEffect(() => {
     const link = rivals.link;
-    if (!link || !engineKey || !st?.me) { if (!engineKey) setEngine(null); return; }
+    if (!link || !engineKey || !st?.me) { setEngine(null); return; }
     let stopped = false;
     const me = st.me;
     const enemies = st.enemies.map((e) => ({ championId: e.championId, items: e.items, kills: e.kills, deaths: e.deaths }));
     const opponent = laneOpponent(st)?.championId ?? null;
     const t = setTimeout(() => {
-      void fetchItems<{ build: EngineItems | null }>(link.origin, link.token, { me: me.championId, mine: me.items, enemies, opponent, position: me.position || null, opening })
-        .then((r) => { if (!stopped && r.ok) setEngine(r.data.build); });
-    }, 1500);
+      void fetchItems<{ build: EngineItems | null }>(link.origin, link.token, { me: me.championId, mine: me.items, enemies, opponent, position: me.position || null, opening, economy: {gold:st.gold,time:st.time,income:goldPace(st.time,st.gold,me.itemGold),opponentCompleted: Boolean(laneOpponent(st)?.items.some(id=>catalog?.items.get(id)?.completed))} })
+        .then((r) => { if (!stopped) setEngine(r.ok ? r.data.build : null); });
+    }, 250);
     return () => { stopped = true; clearTimeout(t); };
   }, [rivals.link, engineKey]);
 
   // Champion select (D-13): read-only polling of the League Client while no game is running.
   const [champSelect, setChampSelect] = useState<ChampSelect | null>(null);
-  const [csPlan, setCsPlan] = useState<PlanResponse | null>(null);
+  const [csResponse, setCsResponse] = useState<{key:string; plan:PlanResponse} | null>(null);
   useEffect(() => {
     if (!inTauri || mode !== "waiting") { setChampSelect(null); return; }
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
     const loop = async () => {
+      const readAt = stampNow();
       const r = await readChampSelect();
       if (stopped) return;
+      if (r.ok) markAcquired(r.data, readAt);
       setChampSelect(r.ok ? r.data : null);
       // Faster inside champion select, slow when the client is closed.
-      timer = setTimeout(loop, !r.ok ? 10_000 : r.data.phase === "ChampSelect" ? 2000 : 4000);
+      timer = setTimeout(loop, !r.ok ? 10_000 : r.data.phase === "ChampSelect" ? 400 : 2000);
     };
     void loop();
     return () => { stopped = true; clearTimeout(timer); };
@@ -222,25 +265,34 @@ function LiveWindow() {
   const inSelect = mode === "waiting" && champSelect?.phase === "ChampSelect";
   // Entering champion select opens the Draft section; leaving it without a game goes back Home.
   useEffect(() => {
-    if (inSelect) setView("draft");
+    if (inSelect) { setEnded(false); setView("draft"); }
     else setView((v) => (v === "draft" ? "home" : v));
   }, [inSelect]);
   const csMe = inSelect ? champSelect?.me?.championId ?? 0 : 0;
   const csPosition = champSelect?.me?.position ?? "";
-  const csKey = csMe ? [csMe, csPosition, "|", ...(champSelect?.allies ?? []), "|", ...(champSelect?.enemies ?? [])].join(",") : null;
+  const csKey = csMe ? [csMe, csPosition, champSelect?.me?.locked ? "locked" : "hover", "|", ...(champSelect?.allies ?? []), "|", ...(champSelect?.enemies ?? []),JSON.stringify([champSelect?.bans,champSelect?.timerPhase,champSelect?.alliedPositions])].join(",") : null;
+  const csOwnerKey = csKey && planOwner ? `${planOwner}:${csKey}` : null;
+  const csPlan = csResponse?.key === csOwnerKey ? csResponse.plan : null;
+  const draftCache = useRef(new Map<string,{at:number;plan:PlanResponse}>());
   useEffect(() => {
+    setCsResponse(null);
     const link = rivals.link;
-    if (!link || !csKey || !champSelect) { if (!csKey) setCsPlan(null); return; }
+    if (!link || !csKey || !champSelect) { if (!csKey) setCsResponse(null); return; }
     let stopped = false;
-    // Hovers change quickly: wait a moment before asking for a plan.
+    const cacheKey = `${link.origin}:${link.token}:${csKey}`;
+    const cached = draftCache.current.get(cacheKey);
+    if (cached && Date.now()-cached.at<30000) { setCsResponse({key:cacheKey,plan:cached.plan}); return; }
+    // Hovers change quickly: wait briefly before asking for a plan.
     const t = setTimeout(() => {
       void fetchPlan<PlanResponse>(link.origin, link.token, {
         me: String(csMe), allies: (champSelect.allies ?? []).map(String), enemies: (champSelect.enemies ?? []).map(String), opponent: null,
-        position: csPosition || null,
-      }).then((r) => { if (!stopped) setCsPlan(r.ok ? r.data : null); });
-    }, 700);
+        position: csPosition || null, preview: !champSelect.me?.locked, draftContext:{bans:champSelect.bans,timerPhase:champSelect.timerPhase,alliedPositions:champSelect.alliedPositions},
+      }).then((r) => { if (!stopped) { setCsResponse(r.ok ? {key:cacheKey,plan:r.data} : null); if(r.ok){if(draftCache.current.size>30)draftCache.current.clear();draftCache.current.set(cacheKey,{at:Date.now(),plan:r.data});} } });
+    }, 150);
     return () => { stopped = true; clearTimeout(t); };
   }, [rivals.link, csKey]);
+
+  const liveShareStatus = useLiveRelay({enabled:shareLive,link:rivals.link,state:mode==="live" ? tick?.state??null:null,select:champSelect,draft:csPlan,plan,patch:art.version,paused:controls.paused,reconnecting,ended,output:coachOutput,demo:mode==="demo"});
 
   // Updates are checked at start-up and offered only outside a game (the game always comes first).
   useEffect(() => { void checkUpdate().then(setUpdate); }, []);
@@ -349,8 +401,11 @@ function LiveWindow() {
                   <span className="quiet small">{champSelect?.me?.locked ? "locked in" : "hovering"}{champSelect?.me?.position ? ` · ${champSelect.me.position}` : ""}</span>
                 </div>
               )}
-              {csPlan?.build && <PreGameBuildView build={csPlan.build} art={art} />}
-              <PlanTab plan={csPlan} connected={Boolean(rivals.link)} />
+              {csPlan?.draftState && <details><summary>Draft state and roles</summary><p>{csPlan.draftState.phase}</p><p>Allied bans: {csPlan.draftState.allyBans.join(", ")||"None reported"}</p><p>Enemy bans: {csPlan.draftState.enemyBans.join(", ")||"None reported"}</p><p>{csPlan.draftState.roles.join(" · ")}</p><p>Enemy roles remain uncertain until reported.</p></details>}
+              {!csPlan && <p role="status">{rivals.link ? "Reading your provisional pick…" : "Connect the desktop to your account to load Draft Coach."}</p>}
+              {!champSelect?.me?.locked && csPlan?.draftRead && <DraftCard read={csPlan.draftRead} />}
+              {!champSelect?.me?.locked && csPlan && !csPlan.draftRead && <p>Detailed draft knowledge is unavailable.</p>}
+              {champSelect?.me?.locked && <>{csPlan?.build && <PreGameBuildView build={csPlan.build} art={art} />}<PlanTab plan={csPlan} connected={Boolean(rivals.link)} /></>}
             </>
           )}
           <p className="quiet small">Read from your League client, read-only: nothing is changed there, and only champions are used, never other players' names.</p>
@@ -361,7 +416,7 @@ function LiveWindow() {
           last recommendation); other sections only hide it. */}
       {inGame && tick?.state.me && (
         <div hidden={!boardView}>
-          <Board state={tick.state} art={art} catalog={catalog} demo={mode === "demo"} build={mode === "demo" ? null : build} connected={Boolean(rivals.link) && mode !== "demo"} overlay={overlayVisible} plan={mode === "demo" ? null : plan} engine={mode === "demo" ? null : engine} tab={boardView ?? "items"} />
+          <Board onOutput={(coach,now,time)=>{coachOutput.current={coach,now,time};}} state={tick.state} art={art} catalog={catalog} demo={mode === "demo"} build={mode === "demo" ? null : build} connected={Boolean(rivals.link) && mode !== "demo"} overlay={overlayVisible} plan={mode === "demo" ? null : plan} engine={mode === "demo" ? null : engine} suspended={reconnecting ? "reconnecting" : controls.paused ? "paused" : null} tab={boardView ?? "items"} />
         </div>
       )}
 
@@ -399,6 +454,9 @@ function LiveWindow() {
             The Coach only reads the data the game itself publishes and never gives you orders. It does not track enemy ultimates or summoner spells.
           </p>
           <h2 className="label">Website connection</h2>
+          <label><input type="checkbox" checked={shareLive} onChange={e=>{setShareLive(e.target.checked);localStorage.setItem("live.share",e.target.checked ? "on":"off");}} /> Share this game with my private web Live page</label>
+          <p className="quiet small" role="status">Connection: {liveShareStatus.text}</p>
+          <p className="quiet small">Shares champion picks, visible match information and Coach recommendations with your linked account. Keep this app open. League credentials stay on this computer.</p>
           {rivals.link
             ? <ConnectForm link={rivals.link} problem={rivals.problem} onConnect={rivals.connect} onDisconnect={rivals.disconnect} />
             : <p className="quiet">Not connected. Use the <strong>Connect</strong> button on Home.</p>}
@@ -411,7 +469,7 @@ function LiveWindow() {
 
       {shown !== "settings" && (
         <section className={`stage${inGame ? " stage-compact" : ""}`} aria-live="polite">
-          {message && !controls.muted ? (
+          {message && !controls.muted && !controls.paused && !reconnecting ? (
             <div className="presence">
               <CoachAvatar expression={message.signal.category.startsWith("enemy") ? "concerned" : "happy"} />
               <div className={`message${message.compact ? " compact" : ""}`}>

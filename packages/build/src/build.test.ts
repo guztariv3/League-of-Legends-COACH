@@ -281,3 +281,16 @@ describe("certainty, alternatives and the standard build (phase 3)", () => {
     expect(build("Ahri", []).adaptation).toBeNull();
   });
 });
+
+
+describe("full inventory", () => {
+  it("does not invent a seventh completed item or an automatic sale", () => {
+    const owned = items.filter((i) => profileOf(i.id).finished).slice(0, 6).map((i) => i.id);
+    expect(owned).toHaveLength(6);
+    const b = build("Ahri", AD_TEAM, { owned });
+    expect(b.first).toBeNull();
+    expect(b.next).toEqual([]);
+    expect(b.boots).toBeNull();
+    expect(b.situational).toEqual([]);
+  });
+});

@@ -29,6 +29,7 @@ export interface PlayerState {
 }
 
 export interface GameState {
+  loadout?: { runes: {id:number;name:string}[]; spells:string[] } | null;
   time: number;
   mode: string | null;
   /** Map id as reported by the game (11 = Summoner's Rift, 12 = Howling Abyss). */
@@ -117,8 +118,13 @@ export function reduceState(prev: GameState, data: AllGameData, ctx: StateContex
   const abilities: AbilityRanks | null = a && (a.Q || a.W || a.E || a.R)
     ? { q: a.Q?.abilityLevel ?? 0, w: a.W?.abilityLevel ?? 0, e: a.E?.abilityLevel ?? 0, r: a.R?.abilityLevel ?? 0 }
     : null;
+  const rawMe = data.allPlayers.find(p => playerName(p) === myName);
+  const reportedRunes = data.activePlayer.fullRunes;
+  const runeMap = new Map([reportedRunes?.keystone,...reportedRunes?.generalRunes??[],...reportedRunes?.statRunes??[]].filter(r=>r!==undefined).map(r=>[r.id,{id:r.id,name:r.displayName??`Rune ${r.id}`} ]));
+  const equippedSpells = [rawMe?.summonerSpells?.summonerSpellOne,rawMe?.summonerSpells?.summonerSpellTwo].flatMap(s=>s ? [s.displayName] : []);
   const level = data.activePlayer.level ?? me?.level ?? null;
   return {
+    loadout: reportedRunes || equippedSpells.length ? {runes:[...runeMap.values()],spells:equippedSpells} : null,
     time: data.gameData.gameTime,
     mode: data.gameData.gameMode ?? null,
     map: data.gameData.mapNumber ?? null,

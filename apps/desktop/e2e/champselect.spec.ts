@@ -19,10 +19,11 @@ test("desktop: game plan during champion select", async ({ page }) => {
           case "desktop_claim": return { token: "device-token-for-tests-only", origin: "https://koi.example" };
           case "desktop_scout": return { inGame: false, message: "Not in a game." };
           case "lcu_champ_select":
-            return { phase: "ChampSelect", me: { championId: 103, locked: false, position: "middle" }, allies: [64], enemies: [238] };
+            return { phase: "ChampSelect", me: { championId: 103, locked: Boolean((window as unknown as { __locked?: boolean }).__locked), position: "middle" }, allies: [64], enemies: [238] };
           case "desktop_plan":
             return {
               champion: "Ahri",
+              draftRead: { champion: "Ahri", coverage: "2/5 allied champions considered; 1/5 enemies known.", teamFit: "Adds magic damage.", versus: "Zed brings burst.", advantage: "Adds control.", concern: "Frontline unknown.", matchup: "Lane opponent unknown.", evidence: [], unknown: [] },
               plan: {
                 primaryObjective: line("Reach your first item"), secondaryObjective: null, biggestThreat: line("Zed"),
                 yourPowerSpike: null, enemyPowerSpike: null, avoid: null, lookFor: null,
@@ -82,7 +83,7 @@ test("desktop: game plan during champion select", async ({ page }) => {
   await page.goto("/");
   const select = page.getByRole("region", { name: "Champion select" });
   await expect(select).toBeVisible();
-  await expect(select.getByText(/Connect the website/)).toBeVisible(); // no site link yet: says what's needed
+  await expect(select.getByText(/Connect the desktop/)).toBeVisible(); // no site link yet: says what's needed
 
   // Champion select opens the Draft section on its own.
   await expect(page.getByRole("tablist", { name: "Sections" }).getByRole("tab", { name: "Draft" })).toHaveAttribute("aria-selected", "true");
@@ -95,6 +96,10 @@ test("desktop: game plan during champion select", async ({ page }) => {
 
   await expect(select.getByText("Ahri", { exact: true })).toBeVisible();
   await expect(select.getByText(/hovering · middle/)).toBeVisible();
+  await expect(select.getByRole("region", { name: "Draft coach", exact: true })).toBeVisible();
+  await expect(select.getByRole("region", { name: "Build for this game" })).toHaveCount(0);
+  await page.evaluate(() => { (window as unknown as { __locked: boolean }).__locked = true; });
+  await expect(select.getByText(/locked in · middle/)).toBeVisible();
   await expect(select.getByText("Reach your first item")).toBeVisible();
   await expect(select.getByText(/read-only/)).toBeVisible();
 
@@ -134,4 +139,36 @@ test("desktop: game plan during champion select", async ({ page }) => {
 
   const plan = await page.evaluate(() => (window as unknown as { __calls: { cmd: string; args: Record<string, unknown> }[] }).__calls.find((c) => c.cmd === "desktop_plan")?.args);
   expect(plan).toMatchObject({ me: "103", allies: "64", enemies: "238", opponent: "", position: "middle" });
+});
+
+test("a late response for an old hover cannot replace the current pick",async({page})=>{
+ await page.addInitScript(()=>{
+  localStorage.setItem("koi.link",JSON.stringify({origin:"https://koi.example",token:"device-token-for-tests-only"}));
+  const state=window as unknown as {__pick:number;__slowStarted:boolean;__finishSlow?:()=>void;__TAURI_INTERNALS__:unknown};
+  state.__pick=103;
+  state.__TAURI_INTERNALS__={invoke:async(cmd:string,args:Record<string,unknown>)=>{
+   if(cmd==="live_snapshot")throw "not_in_game";
+   if(cmd==="check_update")return null;
+   if(cmd==="system_load")return {cpu:10,memAvailable:.6};
+   if(cmd==="lcu_champ_select")return {phase:"ChampSelect",me:{championId:state.__pick,locked:false,position:"middle"},allies:[],enemies:[]};
+   if(cmd==="desktop_plan"){
+    const old=args.me==="103";
+    if(old){state.__slowStarted=true;await new Promise<void>(resolve=>{state.__finishSlow=resolve;});}
+    const champion=old?"Ahri":"Lux";
+    return {champion,plan:{},draftRead:{champion,coverage:"Incomplete draft",teamFit:`${champion} current fit`,versus:"Unknown",advantage:"Unknown",concern:"Unknown",matchup:"Unknown",evidence:[],unknown:[]}};
+   }
+   if(cmd==="desktop_scout")return {inGame:false};
+   throw "unavailable";
+  },transformCallback:()=>0,metadata:{currentWindow:{label:"live"},currentWebview:{label:"live"}}};
+ });
+ await page.goto("/");
+ await expect.poll(()=>page.evaluate(()=>(window as unknown as {__slowStarted:boolean}).__slowStarted)).toBe(true);
+ await page.evaluate(()=>{(window as unknown as {__pick:number}).__pick=99;});
+ await expect(page.getByText("Lux current fit")).toBeVisible();
+ await page.evaluate(()=>{(window as unknown as {__finishSlow:()=>void}).__finishSlow();});
+ await expect(page.getByText("Lux current fit")).toBeVisible();
+ await expect(page.getByText("Ahri current fit")).toHaveCount(0);
+ // Clearing the provisional selection also clears its old analysis.
+ await page.evaluate(()=>{(window as unknown as {__pick:number}).__pick=0;});
+ await expect(page.getByText("Lux current fit")).toHaveCount(0);
 });

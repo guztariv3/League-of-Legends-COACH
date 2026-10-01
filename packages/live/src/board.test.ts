@@ -72,3 +72,16 @@ describe("objectives", () => {
     });
   });
 });
+
+describe("actual equipped loadout",()=>{
+ it("reads only own spells and deduplicates the reported keystone",()=>{
+  const data=game();
+  data.activePlayer.fullRunes={keystone:{id:8112,displayName:"Electrocute"},generalRunes:[{id:8112,displayName:"Electrocute"},{id:8143,displayName:"Sudden Impact"}],statRunes:[{id:5008}]};
+  data.allPlayers[0]!.summonerSpells={summonerSpellOne:{displayName:"Flash"},summonerSpellTwo:{displayName:"Ignite"}};
+  data.allPlayers[2]!.summonerSpells={summonerSpellOne:{displayName:"Teleport"}};
+  expect(reduceState(emptyState(),data).loadout).toEqual({runes:[{id:8112,name:"Electrocute"},{id:8143,name:"Sudden Impact"},{id:5008,name:"Rune 5008"}],spells:["Flash","Ignite"]});
+ });
+ it("reports unavailable when actual data is missing",()=>{
+  expect(reduceState(emptyState(),game()).loadout).toBeNull();
+ });
+});

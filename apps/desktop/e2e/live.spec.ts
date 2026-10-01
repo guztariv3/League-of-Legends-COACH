@@ -28,5 +28,11 @@ test("live window: waiting state, demo game, controls", async ({ page }) => {
   await page.getByRole("button", { name: "Pause" }).click();
   await expect(page.getByText("Paused", { exact: true })).toBeVisible(); // title bar
   await page.getByRole("tablist", { name: "Sections" }).getByRole("tab", { name: "Items" }).click();
-  await expect(page.getByText("Paused.")).toBeVisible();
+  await expect(page.getByText("Paused.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Coach paused. Resume to see recommendations.")).toBeVisible();
+  await expect(page.locator(".message")).toHaveCount(0);
+  await page.getByRole("tablist", { name: "Sections" }).getByRole("tab", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Resume" }).click();
+  await page.getByRole("tablist", { name: "Sections" }).getByRole("tab", { name: "Items" }).click();
+  await expect(page.getByText("Coach paused. Resume to see recommendations.")).toHaveCount(0);
 });
