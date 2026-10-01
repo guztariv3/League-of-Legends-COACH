@@ -33,6 +33,29 @@ const TANKS = ["Malphite", "Ornn", "Sejuani", "Braum", "Orianna"];
 const CC_TEAM = ["Leona", "Nautilus", "Sejuani", "Morgana", "Ashe"];
 const HEALERS = ["Soraka", "Aatrox", "Vladimir", "Yuumi", "DrMundo"];
 
+describe('roster audit: passive triggers and capped stats',()=>{
+ it('does not call an execute amplifier percentage-health antitank damage',()=>{
+  expect(profileOf(6672).counters).not.toContain('maxHealthDamage');
+  expect(profileOf(3153).counters).toContain('maxHealthDamage');
+ });
+ it('distinguishes self shields from shields or heals on another ally',()=>{
+  for(const id of ['Riven','Mordekaiser','Yone']) expect(championProfileOf(id).allyHealShield,id).toBe(false);
+  for(const id of ['Lulu','Nami','Ivern','Senna']) expect(championProfileOf(id).allyHealShield,id).toBe(true);
+ });
+ it('cannot manufacture an ally-heal trigger just by selecting support',()=>{
+  const proc=items.find(i=>i.id===3504)!;
+  const shop=items.map(i=>i.id===proc.id?{...i,stats:{...i.stats,abilityPower:{flat:2000,percent:0}}}:i);
+  const b=recommendBuild({me:kit('Riven'),items:shop,enemies:[],position:'UTILITY'});
+  expect([b.first,...b.next].some(i=>i?.id===proc.id)).toBe(false);
+ });
+ it('stops crediting additional critical chance beyond the cap',()=>{
+  const options={me:kit('Jinx'),items,enemies:[],position:'BOTTOM'};
+  const b=recommendBuild({...options,owned:[3031,6676,3094,3036]});
+  const why=[b.first,...b.next].flatMap(i=>i?.why??[]).join(' ');
+  expect(why).not.toMatch(/Gives[^:]*critical strike chance/);
+ });
+});
+
 describe("A — a champion that needs mana gets it covered", () => {
   const b = build("Smolder", AD_TEAM, { opponent: "Jinx", position: "BOTTOM" });
   it("reads the mana need from the kit's costs and pool", () => {
@@ -56,7 +79,7 @@ describe("A — a champion that needs mana gets it covered", () => {
 describe("B — several tanks call for penetration or health-based damage", () => {
   for (const me of ["Ahri", "Zed", "Caitlyn"]) {
     it(`${me} against a tank line`, () => {
-      const b = build(me, TANKS);
+      const b = recommendBuild({me:kit(me),items,enemies:TANKS.map(id=>({kit:kit(id),items:[catalog.get(3065)!,catalog.get(3075)!]}))});
       expect(b.threats.find((t) => t.kind === "tanks")!.sources.length).toBeGreaterThanOrEqual(3);
       const answers = core(b).filter((x) => stat(x!.id, "magicPenetration") + stat(x!.id, "armorPenetration") > 0 || profileOf(x!.id).counters.includes("maxHealthDamage"));
       expect(answers.length, JSON.stringify(core(b).map((x) => x!.name))).toBeGreaterThan(0);
@@ -262,9 +285,9 @@ describe("certainty, alternatives and the standard build (phase 3)", () => {
       const a = b.adaptation!;
       expect(a.standardCore.length, me).toBeGreaterThan(0);
       if (a.standard) {
-        expect(a.note, me).toMatch(/continue with it/);
+        expect(a.note, me).toContain("provisional mechanics-based choices");
       } else if (a.standardCore[0]!.id !== b.first!.id) {
-        expect(a.note, me).toContain(`instead of the standard ${a.standardCore[0]!.name}`);
+        expect(a.note, me).toContain(`instead of the neutral-scenario ${a.standardCore[0]!.name}`);
         // The reason names an enemy champion or the enemy's damage: never a generic stat line.
         expect(en.some((id) => a.note.includes(kit(id).name)) || /enemy damage/.test(a.note), `${me}: ${a.note}`).toBe(true);
       }
@@ -293,4 +316,124 @@ describe("full inventory", () => {
     expect(b.boots).toBeNull();
     expect(b.situational).toEqual([]);
   });
+});
+
+describe('owned components and final-item passive restrictions', () => {
+  it.each([['Ahri','MIDDLE',3100],['Jax','TOP',3078]] as const)('allows %s to upgrade owned Sheen into its own recipe', (champion,position,target) => {
+    const pool=items.filter(i=>i.id===target || !i.rank.includes('LEGENDARY'));
+    const b=recommendBuild({me:kit(champion),items:pool,enemies:[],position,owned:[3057],baseline:true});
+    expect(b.first?.id).toBe(target);
+  });
+});
+
+
+it('does not offer a second conflicting Spellblade item that will remain equipped', () => {
+ const pool=items.filter(i=>[3100,3078].includes(i.id) || !i.rank.includes('LEGENDARY'));
+ const b=recommendBuild({me:kit('Ahri'),items:pool,enemies:[],position:'MIDDLE',owned:[3078],baseline:true});
+ expect(b.first).toBeNull();
+ expect(b.next).toEqual([]);
+});
+
+it('can upgrade basic boots, without buying a second pair of upgraded boots', () => {
+ const base={me:kit('Jax'),items,enemies:[],position:'TOP',baseline:true};
+ const b=recommendBuild({...base,owned:[1001]});
+ expect(b.boots).not.toBeNull();
+ expect(b.boots!.id).not.toBe(1001);
+ expect(recommendBuild({...base,owned:[b.boots!.id]}).boots).toBeNull();
+});
+
+describe('conditional purchases in a solo lane', () => {
+  it('keeps team healing reduction situational against a non-healing lane opponent', () => {
+    const b = recommendBuild({me:kit('Ahri'),items,position:'MIDDLE',owned:[1052,3020,1082],
+      enemies:['Darius','Viego','Zed','Caitlyn','Lulu'].map(id=>({kit:kit(id),laneOpponent:id==='Zed',items:id==='Viego'?[catalog.get(3153)!]:[]}))});
+    expect(core(b).some(x=>profileOf(x!.id).counters.includes('grievousWounds'))).toBe(false);
+    expect(b.situational.some(x=>profileOf(x.id).counters.includes('grievousWounds'))).toBe(true);
+    expect(core(b).map(x=>x!.id)).not.toContain(4005);
+  });
+  it('still offers healing reduction against a healing lane opponent', () => {
+    const b=build('Ahri',HEALERS,{position:'MIDDLE',opponent:'Vladimir'});
+    expect(recommended(b).some(x=>profileOf(x!.id).counters.includes('grievousWounds'))).toBe(true);
+  });
+});
+
+describe('resistance-specific and role-consistent recommendations', () => {
+  it('does not treat purchased armor or health as magic resistance', () => {
+    const armor=enemyPicture([{kit:kit('Darius'),items:[catalog.get(3047)!,catalog.get(3078)!]}]);
+    expect(armor.purchasedResists).toEqual({armor:25,magicResistance:0});
+    const mr=enemyPicture([{kit:kit('Darius'),items:[catalog.get(3065)!]}]);
+    expect(mr.purchasedResists.magicResistance).toBeGreaterThan(0);
+    expect(armor.threats.tanks.sources[0]!.why).toContain('0 magic resist');
+  });
+  it('keeps an MR spell shield conditional against mainly physical damage without evidence', () => {
+    const b=build('Ahri',AD_TEAM,{position:'MIDDLE',opponent:'Zed'});
+    expect(core(b).some(x=>profileOf(x!.id).counters.includes('spellShield') && stat(x!.id,'magicResistance')>0)).toBe(false);
+  });
+  it('applies the ally-trigger discount to situational options too', () => {
+    const dependent=catalog.get(4005)!;
+    const main=[1,2,3].map(n=>({...dependent,id:99000+n,name:`Main ${n}`,gold:2000,from:[],stats:{abilityPower:{flat:1000,percent:0}},effects:[]}));
+    const run=(effects:typeof dependent.effects)=>recommendBuild({me:kit('Ahri'),position:'MIDDLE',enemies:TANKS.map(id=>({kit:kit(id)})),items:[...main,{...dependent,from:[],effects}]}).situational.find(x=>x.id===4005)!;
+    const dependentPick=run(dependent.effects);
+    const independentPick=run(dependent.effects.map(e=>({...e,text:e.text.replace(/Allied champions/gi,'You')})));
+    expect(dependentPick).toBeDefined();
+    expect(dependentPick.why.join(' ')).toContain('requires an allied champion');
+    expect(dependentPick.score).toBeLessThan(independentPick.score);
+  });
+});
+
+it('does not fill an alternative slot with an ill-fitting tank counter after choosing armor',()=>{
+ const b=build('Ahri',['Darius','Viego','Zed','Caitlyn','Lulu'],{position:'MIDDLE',opponent:'Zed'});
+ expect(b.situational.map(x=>x.id)).not.toContain(3143);
+});
+
+it('increases magic penetration value for MR, not for purchased armor',()=>{
+ const pen={...catalog.get(3135)!,from:[],effects:[]};
+ const run=(stats:typeof pen.stats)=>{
+  const enemyItem={...catalog.get(3047)!,stats};
+  return recommendBuild({me:kit('Ahri'),items:[...items.filter(i=>!i.rank.includes('LEGENDARY')),pen],enemies:[{kit:kit('Darius'),items:[enemyItem]}],position:'MIDDLE'}).first!.score;
+ };
+ const baseline=run({});
+ expect(run({armor:{flat:100,percent:0}})).toBe(baseline);
+ expect(run({magicResistance:{flat:100,percent:0}})).toBeGreaterThan(baseline);
+});
+
+it('scores the next slot from the completed inventory, not the consumed component plus its upgrade',()=>{
+ const parent={...catalog.get(3031)!,from:[1018],effects:[],stats:{attackDamage:{flat:2000,percent:0},criticalStrikeChance:{flat:25,percent:0}}};
+ const next={...catalog.get(3094)!,from:[],effects:[],stats:{criticalStrikeChance:{flat:25,percent:0}}};
+ const shop=[...items.filter(i=>!i.rank.includes('LEGENDARY')&&!i.rank.includes('BOOTS')),parent,next];
+ const input={me:kit('Yasuo'),items:shop,enemies:[],position:'MIDDLE',baseline:true};
+ const projected=recommendBuild({...input,owned:[1018]});
+ const completed=recommendBuild({...input,owned:[parent.id]});
+ expect(projected.first?.id).toBe(parent.id);
+ expect(projected.next[0]?.id).toBe(next.id);
+ expect(completed.first?.id).toBe(next.id);
+ expect(projected.next[0]?.score).toBe(completed.first?.score);
+});
+
+describe('healing counters require a healing source, not just life-steal compatibility',()=>{
+ it.each(['Akshan','Ashe','Graves','Riven','Samira'])('does not treat %s applying life steal as innate healing',(id)=>{
+  const p=enemyPicture([{kit:kit(id),laneOpponent:true}]);
+  expect(p.threats.healing.weight).toBe(0);
+  expect(p.threats.healing.sources).toEqual([]);
+ });
+ it('retains direct heals and innate life steal while excluding compatible attacks',()=>{
+  expect(enemyPicture([{kit:kit('Smolder')}]).threats.healing.sources[0]?.why).toBe('R heals');
+  expect(enemyPicture([{kit:kit('Volibear')}]).threats.healing.sources[0]?.why).toBe('W heals');
+  expect(enemyPicture([{kit:kit('Olaf')}]).threats.healing.weight).toBeGreaterThan(0);
+  expect(enemyPicture([{kit:kit('XinZhao')}]).threats.healing.sources[0]?.why).toBe('P heals');
+ });
+ it('values an antiheal component when healing is actually supplied by an item',()=>{
+  const run=(held:typeof items)=>recommendBuild({me:kit('Orianna'),items,position:'MIDDLE',enemies:[{kit:kit('Akshan'),laneOpponent:true,items:held}]}).componentUtility![3916]!;
+  expect(run([catalog.get(1053)!])).toBeGreaterThan(run([]));
+ });
+});
+
+it('does not increase flat magic penetration value as enemy MR grows',()=>{
+ const pen={...catalog.get(3135)!,from:[],effects:[],stats:{magicPenetration:{flat:18,percent:0}}};
+ const run=(resist:number,percent=false)=>{
+  const target=percent?{...pen,stats:{magicPenetration:{flat:0,percent:40}}}:pen;
+  const enemyItem={...catalog.get(3047)!,stats:{magicResistance:{flat:resist,percent:0}}};
+  return recommendBuild({me:kit('Syndra'),items:[...items.filter(i=>!i.rank.includes('LEGENDARY')),target],enemies:[{kit:kit('Darius'),items:[enemyItem]}],position:'MIDDLE'}).first!.score;
+ };
+ expect(run(150)).toBeLessThan(run(0));
+ expect(run(150,true)).toBeGreaterThan(run(0,true));
 });

@@ -35,6 +35,7 @@ const NAV: [string, string, string][] = [
 ];
 
 function Layout() {
+  const { pathname } = useLocation();
   const { me, refresh } = useSession();
   const syncing = me?.accounts.some((a) => a.sync.status === "syncing");
   // The client shows your icon top-right; we show the champion of your latest game.
@@ -88,7 +89,7 @@ function Layout() {
           <LegalFooter />
         </div>
       </div>
-      <Coach />
+      {pathname !== "/live" && <Coach />}
     </>
   );
 }

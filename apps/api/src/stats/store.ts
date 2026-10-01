@@ -23,6 +23,7 @@ export async function recordGame(db: Db, g: { matchId: string; platform: string;
     const claimed = await tx.insert(schema.statsMatches).values({matchId:g.matchId,platform:g.platform,patch:g.patch,counted:g.counted})
       .onConflictDoNothing().returning({id:schema.statsMatches.matchId});
     if (!claimed.length) return;
+    if (g.counted) await tx.insert(schema.statsEnrichments).values({matchId:g.matchId,status:"complete"});
     const c = schema.statsCounts;
     for (const a of acc.values()) {
       await tx.insert(c).values({ patch: g.patch, ...a })
@@ -56,6 +57,8 @@ export interface ChampionStats {
   wins: number;
   winRate: number;
   byKind: Partial<Record<Exclude<StatKind, "games">, StatOption[]>>;
+  /** Unfiltered counters for engine baselines and prefix aggregation; never display-filter first. */
+  evidenceByKind?: Partial<Record<Exclude<StatKind, "games">, StatOption[]>>;
 }
 
 /** The patch before "16.19" is "16.18"; null for the first patch of a season (unknown). */
@@ -72,28 +75,42 @@ export function previousPatch(patch: string): string | null {
 export async function championStats(db: Db, champion: string, position: string | null, currentPatch: string): Promise<ChampionStats | null> {
   const prev = previousPatch(currentPatch);
   const c = schema.statsCounts;
+  // Provider and catalog capitalization can differ. Preserve role/patch
+  // boundaries while reading historical counters under either spelling.
+  const sameChampion = sql`lower(${c.champion}) = ${champion.toLowerCase()}`;
   for (const [patch, patchLabel] of [[currentPatch, "current"], ...(prev ? [[prev, "previous"]] : [])] as [string, "current" | "previous"][]) {
     let pos = position;
     if (!pos) {
       const totals = await db.select({ position: c.position, games: c.games }).from(c)
-        .where(and(eq(c.patch, patch), eq(c.champion, champion), eq(c.kind, "games"), eq(c.key, "")));
-      pos = totals.sort((a, b) => b.games - a.games)[0]?.position ?? null;
+        .where(and(eq(c.patch, patch), sameChampion, eq(c.kind, "games"), eq(c.key, "")));
+      const byRole = new Map<string,number>();
+      for (const row of totals) byRole.set(row.position,(byRole.get(row.position)??0)+row.games);
+      pos = [...byRole].sort((a,b)=>b[1]-a[1])[0]?.[0] ?? null;
       if (!pos) continue;
     }
-    const rows = await db.select().from(c).where(and(eq(c.patch, patch), eq(c.champion, champion), eq(c.position, pos)));
+    const stored = await db.select().from(c).where(and(eq(c.patch, patch), sameChampion, eq(c.position, pos)));
+    const merged = new Map<string,typeof stored[number]>();
+    for (const row of stored) {
+      const id=JSON.stringify([row.kind,row.key.toLowerCase()]),prior=merged.get(id);
+      merged.set(id,prior?{...prior,games:prior.games+row.games,wins:prior.wins+row.wins,minuteSum:prior.minuteSum+row.minuteSum,minuteN:prior.minuteN+row.minuteN}:{...row});
+    }
+    const rows=[...merged.values()];
     const total = rows.find((r) => r.kind === "games" && r.key === "");
     if (!total || total.games < MIN_GAMES) continue;
     const byKind: ChampionStats["byKind"] = {};
+    const evidenceByKind: ChampionStats["byKind"] = {};
     for (const r of rows) {
-      if (r.kind === "games" || r.games < MIN_OPTION) continue;
+      if (r.kind === "games") continue;
       const k = r.kind as Exclude<StatKind, "games">;
-      (byKind[k] ??= []).push({
-        key: r.key, games: r.games, wins: r.wins, share: r.games / total.games, winRate: r.wins / r.games,
+      const option: StatOption = {
+        key: r.key, games: r.games, wins: r.wins, share: r.games / total.games, winRate: r.games > 0 ? r.wins / r.games : 0,
         avgMinute: r.minuteN ? r.minuteSum / r.minuteN : null,
-      });
+      };
+      (evidenceByKind[k] ??= []).push(option);
+      if (r.games >= MIN_OPTION) (byKind[k] ??= []).push(option);
     }
     for (const k of Object.keys(byKind) as (keyof typeof byKind)[]) byKind[k]!.sort((a, b) => b.games - a.games);
-    return { patch, patchLabel, champion, position: pos, games: total.games, wins: total.wins, winRate: total.wins / total.games, byKind };
+    return { patch, patchLabel, champion, position: pos, games: total.games, wins: total.wins, winRate: total.wins / total.games, byKind, evidenceByKind };
   }
   return null;
 }

@@ -8,6 +8,8 @@ import type { AllGameData, LiveEvent, LivePlayer } from "./schema.js";
  */
 
 export interface PlayerState {
+  spells?: string[];
+  runes?: {id:number;name:string}[];
   name: string;
   champion: string;
   /** Data Dragon id (for art and for matching the player's history), e.g. "MissFortune". */
@@ -88,6 +90,8 @@ function toPlayer(p: LivePlayer, ctx: StateContext): PlayerState {
   const itemGold = p.items.reduce((s, i) => s + (i.price ?? ctx.itemPrices?.get(i.itemID) ?? 0) * (i.count ?? 1), 0);
   return {
     name: playerName(p),
+    spells: [p.summonerSpells?.summonerSpellOne,p.summonerSpells?.summonerSpellTwo].flatMap(s=>s?[s.displayName]:[]),
+    runes: [p.runes?.keystone,p.runes?.primaryRuneTree,p.runes?.secondaryRuneTree].flatMap(r=>r?[{id:r.id,name:r.displayName??`Rune ${r.id}`}]:[]),
     champion: p.championName,
     championId: championIdOf(p),
     team: p.team === "CHAOS" ? "CHAOS" : "ORDER",

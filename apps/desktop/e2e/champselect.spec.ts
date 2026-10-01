@@ -97,7 +97,8 @@ test("desktop: game plan during champion select", async ({ page }) => {
   await expect(select.getByText("Ahri", { exact: true })).toBeVisible();
   await expect(select.getByText(/hovering · middle/)).toBeVisible();
   await expect(select.getByRole("region", { name: "Draft coach", exact: true })).toBeVisible();
-  await expect(select.getByRole("region", { name: "Build for this game" })).toHaveCount(0);
+  await expect(select.getByRole("region", { name: "Build for this game" })).toBeVisible();
+  await expect(select.getByText("Provisional recommendations — update as picks change.")).toBeVisible();
   await page.evaluate(() => { (window as unknown as { __locked: boolean }).__locked = true; });
   await expect(select.getByText(/locked in · middle/)).toBeVisible();
   await expect(select.getByText("Reach your first item")).toBeVisible();

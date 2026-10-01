@@ -308,7 +308,10 @@ export function parseItems(ddragonItems: unknown, merakiItems: unknown): ItemFac
     const from = arr(d["from"]).map(Number).filter(Number.isInteger);
     const into = arr(d["into"]).map(Number).filter(Number.isInteger);
     const tags = arr(d["tags"]).filter((t): t is string => typeof t === "string");
-    const m = meraki.get(id);
+    const candidate = meraki.get(id);
+    // An id can be reused/renamed across patches. Never attach another item's effects.
+    const normalizedName = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const m = candidate && normalizedName(str(candidate["name"]) ?? "") === normalizedName(name) ? candidate : undefined;
     const rank = m ? arr(m["rank"]).filter((r): r is ItemRank => RANKS.has(r as ItemRank)) : [];
     items.push({
       id,
@@ -355,6 +358,8 @@ export interface AbilityFacts {
   cost: number[] | null;
   /** Cooldown per rank in seconds. */
   cooldown: number[] | null;
+  /** Non-numeric cooldown units/formula; retained rather than silently discarded. */
+  cooldownFormula?: string;
   damageType: DamageType | null;
   targeting: string | null;
   /** Plain-text description of every effect. */
@@ -484,6 +489,7 @@ function wikiAbilities(m: Json): AbilityFacts[] {
     return {
       slot, name, resource: resource === "NONE" ? null : resource,
       cost: plainPerRank(a["cost"]), cooldown: plainPerRank(a["cooldown"]),
+      cooldownFormula: [...new Set(arr(obj(a["cooldown"])?.["modifiers"]).flatMap(mod=>arr(obj(mod)?.["units"]).filter((unit):unit is string=>typeof unit==="string")))].join(" "),
       damageType: damageType(a["damageType"]), targeting: str(a["targeting"]), text,
       ...abilityValues(a),
     };

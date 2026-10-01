@@ -43,6 +43,7 @@ export const LivePlayer = z.looseObject({
   isBot: z.boolean().optional(),
   items: z.array(Item).default([]),
   scores: Scores.optional(),
+  runes: z.looseObject({ keystone: Rune.optional(), primaryRuneTree: Rune.optional(), secondaryRuneTree: Rune.optional() }).optional().catch(undefined),
   summonerSpells: z.looseObject({ summonerSpellOne: Spell.optional(), summonerSpellTwo: Spell.optional() }).optional().catch(undefined),
 });
 export type LivePlayer = z.infer<typeof LivePlayer>;

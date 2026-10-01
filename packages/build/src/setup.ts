@@ -1,3 +1,5 @@
+import { setupObservations, type BuildEvidence } from "./evidence.js";
+import { normalizePosition, positionReason, type Position } from "./position.js";
 import type { ChampionKit, RuneData, RuneFacts, SummonerSpellFacts } from "@coach/knowledge";
 import { championProfile, type ChampionProfile } from "./profile.js";
 import { enemyPicture, type EnemyInput, type EnemyPicture } from "./threats.js";
@@ -14,6 +16,8 @@ export interface SetupInput {
   runes: RuneData;
   spells: SummonerSpellFacts[];
   position?: string | null;
+  patch?: string;
+  evidence?: BuildEvidence;
 }
 
 export interface RunePick { id: number; name: string; why: string }
@@ -59,13 +63,15 @@ interface KitNeeds {
   /** 0–1: how much hard crowd control the kit has (abilities that stun, root, knock up…). */
   ownCc: number;
   mobility: number;
+  reloads: boolean;
   helpsAllies: number;
   resource: string;
+  position: Position | null;
   /** Set per rune: its text also mentions energy. */
   energyText?: boolean;
 }
 
-function needs(kit: ChampionKit): KitNeeds {
+function needs(kit: ChampionKit, position: Position | null): KitNeeds {
   const p = championProfile(kit);
   const rating = (k: string) => (typeof kit.ratings?.[k] === "number" ? kit.ratings[k]! : 2);
   return {
@@ -74,7 +80,8 @@ function needs(kit: ChampionKit): KitNeeds {
     ownCc: clamp(new Set(kit.abilities.filter((a) => a.slot !== "P" && HARD_CC.test(a.text)).map((a) => a.slot)).size / 2),
     mobility: clamp((rating("mobility") - 1) / 2),
     helpsAllies: clamp(((rating("utility") - 1) / 2) * 0.6 + p.healsOrShields * 0.6),
-    resource: kit.resource,
+    resource: kit.resource, position,
+    reloads: kit.abilities.some(a=>a.slot === "P" && /reload/i.test(a.text)),
   };
 }
 
@@ -84,10 +91,10 @@ function traitValue(t: Trait, k: KitNeeds, e: EnemyPicture): [number, string | n
   const name = p.name;
   switch (t) {
     case "attacks": return [p.attackReliance, p.attackReliance >= 0.5 ? `${name} relies on basic attacks` : null];
-    case "attackSpeed": return [p.scales.attackSpeed * 0.8, p.scales.attackSpeed >= 0.5 ? `${name} scales with attack speed` : null];
+    case "attackSpeed": return [p.scales.attackSpeed * (k.reloads ? .25 : .8), p.scales.attackSpeed >= 0.5 ? `${name} scales with attack speed` : null];
     case "abilities": return [p.abilityReliance, p.abilityReliance >= 0.5 ? `${name} relies on abilities` : null];
     case "burst": return [k.selfBurst, k.selfBurst >= 0.4 ? `${name} deals its damage in short bursts` : null];
-    case "sustained": return [p.attackReliance * 0.6 + p.frontline * 0.3, p.attackReliance * 0.6 + p.frontline * 0.3 >= 0.45 ? `${name} fights in long trades` : null];
+    case "sustained": return [p.attackReliance * (k.reloads ? .15 : .6) + p.frontline * 0.3, p.attackReliance * 0.6 + p.frontline * 0.3 >= 0.45 ? `${name} fights in long trades` : null];
     case "selfHeal": return [(p.frontline * 0.5 + (p.ranged ? 0 : 0.4)) * 0.8, !p.ranged ? `${name} fights up close and takes damage` : null];
     case "allies": return [k.helpsAllies * 1.2, k.helpsAllies >= 0.4 ? `${name}'s kit supports allies` : null];
     case "immobilize": return [k.ownCc ? 0.8 * k.ownCc : -1, k.ownCc >= 0.5 ? `${name}'s abilities stun, root or knock up` : null];
@@ -118,6 +125,17 @@ function scoreText(text: string, needs: KitNeeds, e: EnemyPicture): { score: num
     score += v;
     if (fact && v > 0.2 && !facts.includes(fact)) facts.push(fact);
   }
+  let role = 0;
+  if (k.position === "TOP" && /heal|sustain|overgrowth|health/i.test(text)) role += .18;
+  if (k.position === "MIDDLE" && /ability haste|movement speed|move speed/i.test(text)) role += .12;
+  if (k.position === "BOTTOM" && /heal|shield|less damage/i.test(text)) role += .18;
+  if (k.position === "UTILITY" && /immobiliz/i.test(text)) role += .7 * k.ownCc * k.p.frontline;
+  if (k.position === "UTILITY" && /all(?:y|ies|ied)|ward|trinket/i.test(text)) role += .35;
+  if (k.position === "JUNGLE") {
+    if (/movement speed|move speed|river|ward/i.test(text)) role += .25;
+    if (/in combat[^.]*next basic attack|every 4 seconds in combat/i.test(text)) role -= .5;
+  }
+  if (role !== 0) { score += role; facts.push(positionReason(k.position)); }
   return { score, facts };
 }
 
@@ -125,17 +143,53 @@ const sentence = (s: string) => s.split(/(?<=\.)\s|\n/)[0]!.trim();
 const why = (r: { short: string }, facts: string[]) =>
   `${sentence(r.short)} ${facts.length ? `Fits: ${facts.slice(0, 2).join("; ")}.` : "No rune in this row stands out for this champion; this one is a reasonable default."}`;
 
-function recommendRunes(data: RuneData, k: KitNeeds, e: EnemyPicture): RuneRecommendation | null {
+const eligibleRune = (r: RuneFacts, k: KitNeeds) => !(/\bmana\b/i.test(r.short) && k.resource !== "MANA" && !(k.resource === "ENERGY" && /\benergy\b/i.test(r.short)))
+  && !(/immobiliz/i.test(r.short) && k.ownCc === 0);
+
+/** Validate a complete observed page before it can affect statistical scope or weights. */
+function legalObservedPage(key: string, data: RuneData, k: KitNeeds): boolean {
+  if (!/^\d+(>\d+){10}$/.test(key)) return false;
+  const ids=key.split('>').map(Number);
+  const pt=data.trees.find(t=>t.id===ids[0]), st=data.trees.find(t=>t.id===ids[1]);
+  if(!pt || !st || pt.id===st.id || !pt.secondary.includes(st.id)) return false;
+  if(![0,1,2,3].every(row=>pt.rows[row]?.includes(ids[2+row]!))) return false;
+  const rows=[ids[6]!,ids[7]!].map(id=>st.rows.findIndex(row=>row.includes(id)));
+  if(rows.some(row=>row<=0) || rows[0]===rows[1]) return false;
+  if(data.shardRows.length!==3 || !data.shardRows.every((row,i)=>row.shards.includes(ids[8+i]!) && data.shards.some(s=>s.id===ids[8+i]))) return false;
+  return ids.slice(2,8).every(id=>{const rune=data.runes.find(r=>r.id===id);return !!rune && eligibleRune(rune,k);});
+}
+
+function recommendRunes(data: RuneData, k: KitNeeds, e: EnemyPicture, observations: ReturnType<typeof setupObservations>, keystones: ReturnType<typeof setupObservations>): RuneRecommendation | null {
   const byId = new Map(data.runes.map((r) => [r.id, r]));
   // The summary says what the rune is for; the long text lists details that would add noise.
-  const rated = (r: RuneFacts) => ({ r, ...scoreText(r.short, k, e) });
+  const eligible = (r: RuneFacts) => eligibleRune(r,k);
+  const rated = (r: RuneFacts) => ({ r, ...scoreText(r.short, k, e), ...(eligible(r) ? {} : {score: -Infinity}) });
   const bestOf = (ids: number[]) => ids.map((id) => byId.get(id)).filter((r): r is RuneFacts => r !== undefined).map(rated).sort((a, b) => b.score - a.score || a.r.id - b.r.id)[0];
   // The primary tree is the one whose whole page (keystone, which weighs most, plus its best rune per row) fits best.
-  const pages = data.trees.map((t) => {
-    const key = bestOf(t.rows[0] ?? []);
+  let pages = data.trees.map((t) => {
+    const allowedKeys=(t.rows[0]??[]).filter(id=>observations.length>0 || !keystones.length || keystones.some(o=>Number(o.key.split(':')[0])===id));
+    const key = bestOf(allowedKeys);
     const rows = t.rows.slice(1).map(bestOf).filter((x) => x !== undefined);
-    return { t, key, rows, total: (key ? key.score * 2 : -Infinity) + rows.reduce((sum, x) => sum + x.score, 0) };
+    return { t, key, rows, secondaryId:undefined as number|undefined, total: (key ? key.score * 2 : -Infinity) + rows.reduce((sum, x) => sum + x.score, 0) };
   }).sort((a, b) => b.total - a.total || a.t.id - b.t.id);
+  if (!observations.length && keystones.length) {
+    // Rank each observed key/tree pair as a unit. The sample bonus must affect
+    // the comparison, rather than merely admitting a pair and then ignoring it.
+    const supported:typeof pages=[];
+    for(const observation of keystones){
+      const [id,secondaryId]=observation.key.split(":").map(Number);
+      const t=data.trees.find(t=>t.rows[0]?.includes(id!));
+      const rune=byId.get(id!);
+      if(!t || !rune)continue;
+      const key=rated(rune),rows=t.rows.slice(1).map(bestOf).filter(x=>x!==undefined);
+      for(const secondary of data.trees.filter(s=>t.secondary.includes(s.id) && (secondaryId===undefined || s.id===secondaryId))){
+        const picks=secondary.rows.slice(1).map(bestOf).filter((x):x is ReturnType<typeof rated>=>x!==undefined && Number.isFinite(x.score)).sort((a,b)=>b.score-a.score).slice(0,2);
+        if(rows.length!==3 || picks.length!==2 || !Number.isFinite(key.score) || rows.some(r=>!Number.isFinite(r.score)))continue;
+        supported.push({t,key,rows,secondaryId:secondary.id,total:key.score*2+rows.reduce((n,r)=>n+r.score,0)+picks.reduce((n,r)=>n+r.score,0)+observation.bonus*4});
+      }
+    }
+    if(supported.length)pages=supported.sort((a,b)=>b.total-a.total || a.t.id-b.t.id || a.key!.r.id-b.key!.r.id || a.secondaryId!-b.secondaryId!);
+  }
   const best = pages[0];
   if (!best?.key) return null;
   const tree = best.t;
@@ -144,7 +198,8 @@ function recommendRunes(data: RuneData, k: KitNeeds, e: EnemyPicture): RuneRecom
 
   // Secondary: the allowed tree whose two best runes (from different rows) add up to the most.
   let secondary: { tree: string; picks: ReturnType<typeof rated>[]; total: number } | null = null;
-  for (const t of data.trees.filter((x) => x.id !== tree.id && tree.secondary.includes(x.id))) {
+  const observedSecondary=new Set(keystones.filter(o=>Number(o.key.split(':')[0])===key.r.id).map(o=>Number(o.key.split(':')[1])).filter(Boolean));
+  for (const t of data.trees.filter((x) => x.id !== tree.id && tree.secondary.includes(x.id) && (best.secondaryId!==undefined ? x.id===best.secondaryId : (observations.length>0 || !observedSecondary.size || observedSecondary.has(x.id))))) {
     const perRow = t.rows.slice(1).map(bestOf).filter((x) => x !== undefined).sort((a, b) => b.score - a.score);
     const picks = perRow.slice(0, 2);
     const total = picks.reduce((s, x) => s + x.score, 0);
@@ -171,7 +226,7 @@ function recommendRunes(data: RuneData, k: KitNeeds, e: EnemyPicture): RuneRecom
     .map(({ s, v }) => ({ id: s.id, name: s.name, why: `${s.text}${v[1] ? `: ${v[1]}.` : "."}` }));
 
   const pick = (x: ReturnType<typeof rated>): RunePick => ({ id: x.r.id, name: x.r.name, why: why(x.r, x.facts) });
-  return {
+  const fallback: RuneRecommendation = {
     primaryTree: tree.name,
     keystone: pick(key),
     primary: primary.map(pick),
@@ -179,9 +234,34 @@ function recommendRunes(data: RuneData, k: KitNeeds, e: EnemyPicture): RuneRecom
     secondary: (secondary?.picks ?? []).map(pick),
     shards,
   };
+  const mechanicalScore = (page: RuneRecommendation) => {
+    const score = (id: number) => { const r = byId.get(id); return r ? rated(r).score : -Infinity; };
+    return score(page.keystone.id) * 2 + [...page.primary, ...page.secondary].reduce((n,r)=>n+score(r.id),0)
+      + page.shards.reduce((n,r)=>{const shard=shardById.get(r.id);return n+(shard ? shardValue(`${shard.name} ${shard.text}`)[0] : -Infinity);},0);
+  };
+  let answer = fallback, bestScore = observations.length ? -Infinity : mechanicalScore(fallback);
+  for (const observation of observations) {
+    if (!legalObservedPage(observation.key,data,k)) continue;
+    const ids = observation.key.split(">").map(Number);
+    const pt = data.trees.find(t=>t.id===ids[0])!, st=data.trees.find(t=>t.id===ids[1])!;
+    const perks=ids.slice(2,8).map(id=>byId.get(id)!);
+    const rp = perks.map(r=>pick(rated(r!)));
+    const page: RuneRecommendation = {primaryTree:pt.name,secondaryTree:st.name,keystone:rp[0]!,primary:rp.slice(1,4),secondary:rp.slice(4),shards:ids.slice(8).map(id=>{const shard=shardById.get(id)!;return {id,name:shard.name,why:shard.text};})};
+    const score = mechanicalScore(page) + observation.bonus * 4;
+    if (score > bestScore) { bestScore=score;answer=page;answer.keystone.why += ` ${observation.reason}`; }
+  }
+  answer.keystone.why += ` ${positionReason(k.position)}`;
+  if (answer === fallback) {
+    const secondaryId=data.trees.find(t=>t.name===answer.secondaryTree)?.id;
+    const observedKey=keystones.find(o=>Number(o.key.split(':')[0])===answer.keystone.id && (!o.key.includes(':') || Number(o.key.split(':')[1])===secondaryId));
+    answer.keystone.why += observedKey
+      ? ` ${observedKey.reason}${observedKey.key.includes(':')?' The secondary tree is part of this observation.':''} Remaining rune choices are mechanics-based; this is not an observed complete page.`
+      : " Mechanic-based page; no observed complete page displaced it. This is not a matchup win-rate prediction.";
+  }
+  return answer;
 }
 
-function recommendSpells(spells: SummonerSpellFacts[], k: KitNeeds, e: EnemyPicture, position: string): SpellPick[] {
+function recommendSpells(spells: SummonerSpellFacts[], k: KitNeeds, e: EnemyPicture, position: string, observations: ReturnType<typeof setupObservations>): SpellPick[] {
   const { p } = k;
   const t = (s: SummonerSpellFacts) => s.text;
   const picks: SpellPick[] = [];
@@ -221,6 +301,12 @@ function recommendSpells(spells: SummonerSpellFacts[], k: KitNeeds, e: EnemyPict
     }
     if (v > 0) options.push({ s, v, reason });
   }
+  // Keep the mandatory jungle spell / repositioning choice; evidence can rank the second spell.
+  for (const option of options) {
+    const pair=[picks[0]?.key,option.s.key].sort((a,b)=>(a??0)-(b??0)).join("+");
+    const observed=observations.find(row=>row.key===pair);
+    if (observed) {option.v+=observed.bonus;option.reason+=` ${observed.reason}`;}
+  }
   for (const o of options.sort((a, b) => b.v - a.v || a.s.id.localeCompare(b.s.id))) {
     if (picks.length >= 2) break;
     take(o.s, o.reason);
@@ -229,10 +315,16 @@ function recommendSpells(spells: SummonerSpellFacts[], k: KitNeeds, e: EnemyPict
 }
 
 export function recommendSetup(input: SetupInput): SetupRecommendation {
-  const k = needs(input.me);
+  if (input.me.detail !== "full") return {runes:null,spells:[]};
+  const position = normalizePosition(input.position);
+  const k = needs(input.me, position);
   const e = enemyPicture(input.enemies);
+  const evidence = {evidence:input.evidence,champion:input.me.id,position,patch:input.patch,opponent:input.enemies.find(x=>x.laneOpponent)?.kit.id};
   return {
-    runes: recommendRunes(input.runes, k, e),
-    spells: recommendSpells(input.spells, k, e, (input.position ?? "").toUpperCase()),
+    runes: recommendRunes(input.runes, k, e, setupObservations({...evidence,kind:'runePages',acceptKey:key=>legalObservedPage(key,input.runes,k)}),setupObservations({...evidence,kind:'keystones',acceptKey:key=>{
+      const [id,secondary]=key.split(':').map(Number),rune=input.runes.runes.find(r=>r.id===id);
+      return /^\d+(?::\d+)?$/.test(key) && input.runes.trees.some(t=>t.rows[0]?.includes(id!) && (secondary===undefined || t.secondary.includes(secondary))) && !!rune && eligibleRune(rune,k);
+    }})),
+    spells: recommendSpells(input.spells, k, e, position ?? "", setupObservations({...evidence,kind:'spells'})),
   };
 }

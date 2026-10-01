@@ -1,3 +1,4 @@
+import { LiveFrameSchema } from "../../api/src/live-frame.js";
 import { expect, test, type Page } from "@playwright/test";
 import { championJson, itemJson } from "../../../packages/itemization/src/test-fixture";
 
@@ -14,7 +15,7 @@ import { championJson, itemJson } from "../../../packages/itemization/src/test-f
  */
 const SERVER = Date.UTC(2026, 8, 28, 12);
 interface Mock { pcAheadMs?: number; timeFails?: boolean; alwaysReject?: boolean; select?: boolean; game?: boolean }
-interface Sent { phase: string; capturedAt: number; serverNow: number; accepted: boolean }
+interface Sent { observedAt?: number | null; payload?: unknown; phase: string; capturedAt: number; serverNow: number; accepted: boolean }
 
 async function linkedAndWaiting(page: Page, mock: Mock = {}, { share = false } = {}) {
   await page.clock.install({ time: SERVER + (mock.pcAheadMs ?? 0) });
@@ -25,6 +26,8 @@ async function linkedAndWaiting(page: Page, mock: Mock = {}, { share = false } =
     const sent: Sent[] = [];
     w.__sent = sent;
     w.__timeCalls = 0;
+    w.__selectNow = false;
+    w.__pickNow = 103;
     w.__timeFails = Boolean(mock.timeFails);
     // Website time at which the game / champion select data was actually read (true time).
     w.__readAt = null;
@@ -51,10 +54,10 @@ async function linkedAndWaiting(page: Page, mock: Mock = {}, { share = false } =
             w.__readAt = serverNow();
             return snapshot;
           case "lcu_champ_select":
-            if (!mock.select) throw "not_running";
-            if (serverNow() > answersUntil) return hang();
+            if (!mock.select && !w.__selectNow) throw "not_running";
+            if (!w.__selectNow && serverNow() > answersUntil) return hang();
             w.__readAt = serverNow();
-            return { phase: "ChampSelect", me: { championId: 103, locked: false, position: "middle" }, allies: [64], enemies: [238] };
+            return { phase: "ChampSelect", me: { championId: Number(w.__pickNow), locked: false, position: "middle" }, allies: [64], enemies: [238] };
           case "system_load": return { cpu: 10, memAvailable: 0.6 };
           case "check_update": return null;
           case "desktop_scout": return { inGame: false, assets: { cdn: null, version: null } };
@@ -65,7 +68,7 @@ async function linkedAndWaiting(page: Page, mock: Mock = {}, { share = false } =
           case "desktop_live": {
             const now = serverNow(), f = args.frame!;
             const accepted = !mock.alwaysReject && f.capturedAt <= now + 5000 && now - f.capturedAt <= 15_000;
-            sent.push({ phase: f.phase, capturedAt: f.capturedAt, serverNow: now, accepted });
+            sent.push({ observedAt: w.__readAt as number | null, payload: f, phase: f.phase, capturedAt: f.capturedAt, serverNow: now, accepted });
             if (!accepted) throw "rejected";
             return { ok: true, accepted: true, serverTime: now };
           }
@@ -100,7 +103,7 @@ async function openShare(page: Page) {
 /** Frames carrying advice, and how old their data truly was when the website received them. */
 async function advice(page: Page) {
   const at = await readAt(page);
-  return (await sent(page)).filter((f) => ["live", "draft", "pregame"].includes(f.phase)).map((f) => ({ ...f, trueAge: f.serverNow - at! }));
+  return (await sent(page)).filter((f) => ["live", "draft", "pregame"].includes(f.phase)).map((f) => ({ ...f, trueAge: f.serverNow - (f.observedAt ?? at!) }));
 }
 
 test("web Live sharing: nothing is published while it is off; turning it off clears once", async ({ page }) => {
@@ -162,6 +165,7 @@ test("champion select read, then held 65 s before its first publication (no webs
   await expect.poll(() => readAt(page)).not.toBeNull(); // read; the client then stops answering
   await settings(page);
   await expect(page.getByText(/can't check the time with the website/)).toBeVisible();
+  await page.clock.runFor(2000); // allow the mock reader to stop before measuring the retained capture
   await page.clock.runFor(65_000);
   expect(await sent(page)).toEqual([]);
 
@@ -214,4 +218,32 @@ test("in game: a snapshot kept 65 s before sharing is turned on is not accepted 
     expect(f.accepted).toBe(false);
     expect(f.serverNow - f.capturedAt).toBeGreaterThanOrEqual(f.trueAge - 1000);
   }
+});
+
+
+test("the desktop emits a structured player and purchase frame accepted by the API schema", async ({page}) => {
+  await linkedAndWaiting(page, {game:true}, {share:true});
+  await page.goto("/");
+  await page.clock.runFor(11_000);
+  await expect.poll(async ()=>(await sent(page)).filter(f=>f.phase==="live").length).toBeGreaterThan(0);
+  const payload=(await sent(page)).find(f=>f.phase==="live")!.payload;
+  const parsed=LiveFrameSchema.parse(payload);
+  expect(parsed.detail!.players.allies).toHaveLength(5);
+  expect(parsed.detail!.players.enemies).toHaveLength(5);
+  expect(parsed.detail!.source).toBe("limited");
+  expect(parsed.detail!.players.allies[0]!.name).toBe("Yo#EUW");
+});
+
+
+test("selection and hover changes bypass the ten-second idle publication timer", async ({page})=>{
+ await linkedAndWaiting(page,{}, {share:true});
+ await page.goto("/");
+ await page.clock.runFor(1000);
+ await expect.poll(async()=>(await sent(page)).some(f=>f.phase==="idle")).toBe(true);
+ await page.evaluate(()=>{(window as unknown as {__selectNow:boolean}).__selectNow=true;});
+ await page.clock.runFor(2600);
+ await expect.poll(async()=>(await sent(page)).some(f=>f.phase==="draft")).toBe(true);
+ await page.evaluate(()=>{(window as unknown as {__pickNow:number}).__pickNow=99;});
+ await page.clock.runFor(800);
+ await expect.poll(async()=>(await sent(page)).some(f=>(f.payload as {champion?:string})?.champion==="99")).toBe(true);
 });

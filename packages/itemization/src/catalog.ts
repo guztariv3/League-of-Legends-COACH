@@ -8,6 +8,8 @@ import { z } from "zod";
 export interface CatalogItem {
   id: number;
   name: string;
+  /** False for items unavailable through ordinary shop purchases; still usable when owned. */
+  purchasable?: boolean;
   /** Full price. */
   gold: number;
   /** Direct components (recipe), possibly repeated. */
@@ -92,6 +94,7 @@ export function parseCatalog(itemJson: unknown, championJson: unknown): Catalog 
     out.set(id, {
       id,
       name: i.name,
+      purchasable: buyable(i),
       gold: i.gold.total,
       from,
       tags,

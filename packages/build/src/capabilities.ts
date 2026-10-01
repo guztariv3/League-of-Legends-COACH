@@ -34,7 +34,10 @@ export const THREAT_ONLY: Counter[] = ["critReduction", "grievousWounds", "antiS
 /** Health-based damage: "X% of the target's maximum/current/missing health" as damage (not as a trigger condition). */
 const TARGET_HEALTH = /(?:target'?s?|their|each target'?s?|enemy'?s?) (?:maximum|max|current|missing) health/i;
 const healthDamage = (t: string) =>
-  TARGET_HEALTH.test(t) && /damage/i.test(t) && !/(?:at or )?below [\d.]+% of|within [\d.]+ seconds? inflicts/i.test(t);
+  TARGET_HEALTH.test(t) && /damage/i.test(t) && !/(?:at or )?below [\d.]+% of|within [\d.]+ seconds? inflicts/i.test(t)
+  // Amplifying a fixed hit as a target loses health is an execute mechanic,
+  // not damage proportional to the target's health pool.
+  && !/increased by[^.]{0,100}(?:target'?s? |their )missing health/i.test(t);
 
 /** Each detector reads one sentence at a time, so words from different effects never combine. */
 const DETECT: [Counter, (t: string) => boolean][] = [
@@ -109,6 +112,8 @@ export function statGoldValues(items: ItemFacts[]): Map<StatKey, number> {
  */
 export function buildable(item: ItemFacts, catalog: Map<number, ItemFacts>, depth = 0): boolean {
   if (!item.purchasable || depth > 4) return false;
+  // Zero-cost upgrades of completed boots require progression which the input does not prove.
+  if (item.from.some(id => { const base = catalog.get(id); return base?.rank.includes("BOOTS") && base.from.length > 0 && item.gold <= base.gold; })) return false;
   return item.from.every((id) => { const c = catalog.get(id); return c !== undefined && buildable(c, catalog, depth + 1); });
 }
 

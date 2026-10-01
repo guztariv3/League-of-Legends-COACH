@@ -1,3 +1,4 @@
+import { buildEvidence } from "./stats/build-evidence.js";
 import { economyBaseline } from "./economy-baseline.js";
 import { bodyLimit } from "hono/body-limit";
 import { LiveFrameSchema, LIVE_TTL_MS, freshFrame } from "./live-frame.js";
@@ -222,17 +223,7 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
     const known = (xs: string[]) => xs.map(resolve).filter((x): x is string => x !== null);
     const opponent = q.data.opponent ? resolve(q.data.opponent) ?? undefined : undefined;
     const enemies = known(q.data.enemies);
-    if (c.req.query("preview") === "1") {
-      const facts = await deps.gameFacts?.get(200) ?? null;
-      const kits = new Map((facts?.kits ?? []).map(k=>[k.id,k]));
-      const mine = kits.get(me);
-      const allies=known(q.data.allies), enemyKits=enemies.flatMap(e=>kits.get(e)?[kits.get(e)!]:[]);
-      // Candidate lanes are inferred from known champion positions, never asserted as assigned roles.
-      const probable=opponent ?? (q.data.position ? enemyKits.filter(k=>k.positions.some(p=>p.toUpperCase()===q.data.position)).map(k=>k.id) : []);
-      const likely=typeof probable === "string" ? probable : probable.length===1 ? probable[0] : undefined;
-      return c.json({champion:me,draftState,roster:{allies,enemies},draftRead:mine ? draftRead(mine,allies.flatMap(a=>kits.get(a)?[kits.get(a)!]:[]),enemyKits,likely):null,
-        plan:prepareGame({myChampion:me,allies,enemies},[],bundle).plan,build:null});
-    }
+    // Hover and lock-in use the same recommendation engine; the client labels hover as provisional.
     const { analyses } = await deps.services.profileAnalyses(device.userId);
     const { draft, plan } = prepareGame({ myChampion: me, allies: known(q.data.allies), enemies, laneOpponent: opponent }, analyses, bundle);
 
@@ -243,10 +234,11 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
     const enemyInput = enemies.map((e) => kits.get(e)).filter((k) => k !== undefined).map((k) => ({ kit: k, laneOpponent: k.id === opponent }));
     const baseline = facts ? await economyBaseline(db, analyses, me, q.data.position, patchFromVersion(facts.version)) : null;
     const economy = baseline ? {gold:0,time:150,income:baseline.income,source:"history" as const} : undefined;
-    const engine = facts && myKit ? recommendBuild({ me: myKit, enemies: enemyInput, items: facts.items, position: q.data.position ?? null, economy }) : null;
-    const setup = facts && myKit ? recommendSetup({ me: myKit, enemies: enemyInput, runes: facts.runes, spells: facts.spells, position: q.data.position ?? null }) : null;
-    // What Master+ players do with this champion this patch (phase 4): evidence beside the engine, never the decision.
     const master = facts ? await championStats(db, me, q.data.position ?? null, patchFromVersion(facts.version)) : null;
+    const engine = facts && myKit ? recommendBuild({ me: myKit, enemies: enemyInput, items: facts.items, position: q.data.position ?? null, economy, patch:patchFromVersion(facts.version), evidence:buildEvidence(master,me,q.data.position??null,patchFromVersion(facts.version),opponent) }) : null;
+    const setup = facts && myKit ? recommendSetup({ me: myKit, enemies: enemyInput, runes: facts.runes, spells: facts.spells, position: q.data.position ?? null, patch:patchFromVersion(facts.version), evidence:buildEvidence(master,me,q.data.position??null,patchFromVersion(facts.version),opponent) }) : null;
+    // What Master+ players do with this champion this patch (phase 4): sample-gated purchases also contribute to the engine ranking.
+
     // What keeps happening in the player's own games (phase 5): personalises, never changes the call.
     const stats = master && facts ? statsEvidence(master, facts, { build: engine, setup, opponent }) : null;
     const memory = await deps.services.memoryFor(device.userId, {
@@ -336,8 +328,10 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
       const kit = kits.get(e.champion);
       return kit ? [{ kit, items: e.items.map((i) => byId.get(i)).filter((i) => i !== undefined), kills: e.kills, deaths: e.deaths, laneOpponent: e.champion === q.data.opponent }] : [];
     });
+    const patch=patchFromVersion(facts.version);
+    const observed=await championStats(db,q.data.me,q.data.position??null,patch);
     const build = recommendBuild({
-      me: myKit, enemies, items: facts.items, owned: q.data.mine, position: q.data.position ?? null, starter: q.data.opening === "1", economy: q.data.economy,
+      me: myKit, enemies, items: facts.items, owned: q.data.mine, position: q.data.position ?? null, starter: q.data.opening === "1", economy: q.data.economy, patch, evidence:buildEvidence(observed,q.data.me,q.data.position??null,patch,q.data.opponent),
     });
     return c.json({ build: { ...build, version: facts.version, enemiesKnown: enemies.length, attribution: GAME_DATA_ATTRIBUTION } });
   });

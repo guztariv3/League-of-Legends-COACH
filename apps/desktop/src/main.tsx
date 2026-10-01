@@ -208,7 +208,7 @@ function LiveWindow() {
 
   // The Coach's game plan, once per game, for the champions of this game (Summoner's Rift only).
   const st = mode === "live" ? tick?.state : undefined;
-  const planKey = st?.me && st.map === 11 && st.enemies.length ? [st.me.championId, ...st.allies.map((a) => a.championId), "|", ...st.enemies.map((e) => e.championId)].join(",") : null;
+  const planKey = st?.me && st.map === 11 && st.enemies.length ? [st.me.championId, st.me.position ?? "", laneOpponent(st)?.championId ?? "", ...st.allies.map((a) => a.championId), "|", ...st.enemies.map((e) => e.championId)].join(",") : null;
   useEffect(() => {
     setPlan(null);
     const link = rivals.link;
@@ -221,11 +221,13 @@ function LiveWindow() {
   }, [rivals.link, planKey]);
 
   // The site's build engine during the game (Summoner's Rift): asked again when your items, the
-  // enemies' items or scores change. Without a connected site the local item rules are used.
-  const [engine, setEngine] = useState<EngineItems | null>(null);
+  // enemies' items or scores change. Without a connected site contextual item guidance is unavailable.
+  const [engineResponse, setEngine] = useState<{context:string;build:EngineItems} | null>(null);
+  const engineContext = st?.me && rivals.link ? JSON.stringify([rivals.link.origin,rivals.link.token,st.me.championId,st.me.position,laneOpponent(st)?.championId]) : null;
+  const engine = engineResponse?.context === engineContext ? engineResponse.build : null;
   const opening = Boolean(st?.me && st.time < STARTER_WINDOW_SEC && st.me.itemGold < 300);
   const engineKey = st?.me && st.map === 11 && st.enemies.length
-    ? [st.me.championId, st.me.position ?? "", Math.floor((st.gold ?? 0)/100), Math.floor(st.time/15), opening ? "open" : "", [...st.me.items].sort().join("."), "|",
+    ? [st.me.championId, st.me.position ?? "", laneOpponent(st)?.championId ?? "", Math.floor((st.gold ?? 0)/100), Math.floor(st.time/15), opening ? "open" : "", [...st.me.items].sort().join("."), "|",
        ...st.enemies.map((e) => `${e.championId}:${[...e.items].sort().join(".")}:${e.kills}:${e.deaths}`)].join(",")
     : null;
   useEffect(() => {
@@ -237,10 +239,10 @@ function LiveWindow() {
     const opponent = laneOpponent(st)?.championId ?? null;
     const t = setTimeout(() => {
       void fetchItems<{ build: EngineItems | null }>(link.origin, link.token, { me: me.championId, mine: me.items, enemies, opponent, position: me.position || null, opening, economy: {gold:st.gold,time:st.time,income:goldPace(st.time,st.gold,me.itemGold),opponentCompleted: Boolean(laneOpponent(st)?.items.some(id=>catalog?.items.get(id)?.completed))} })
-        .then((r) => { if (!stopped) setEngine(r.ok ? r.data.build : null); });
+        .then((r) => { if (!stopped) setEngine(r.ok && r.data.build && engineContext ? {context:engineContext,build:r.data.build} : null); });
     }, 250);
     return () => { stopped = true; clearTimeout(t); };
-  }, [rivals.link, engineKey]);
+  }, [rivals.link, engineKey, engineContext]);
 
   // Champion select (D-13): read-only polling of the League Client while no game is running.
   const [champSelect, setChampSelect] = useState<ChampSelect | null>(null);
@@ -256,7 +258,7 @@ function LiveWindow() {
       if (r.ok) markAcquired(r.data, readAt);
       setChampSelect(r.ok ? r.data : null);
       // Faster inside champion select, slow when the client is closed.
-      timer = setTimeout(loop, !r.ok ? 10_000 : r.data.phase === "ChampSelect" ? 400 : 2000);
+      timer = setTimeout(loop, !r.ok ? 2000 : r.data.phase === "ChampSelect" ? 400 : 2000);
     };
     void loop();
     return () => { stopped = true; clearTimeout(timer); };
@@ -292,7 +294,7 @@ function LiveWindow() {
     return () => { stopped = true; clearTimeout(t); };
   }, [rivals.link, csKey]);
 
-  const liveShareStatus = useLiveRelay({enabled:shareLive,link:rivals.link,state:mode==="live" ? tick?.state??null:null,select:champSelect,draft:csPlan,plan,patch:art.version,paused:controls.paused,reconnecting,ended,output:coachOutput,demo:mode==="demo"});
+  const liveShareStatus = useLiveRelay({rivals:rivals.scout?.enemies,contextual:Boolean(engine),enabled:shareLive,link:rivals.link,state:mode==="live" ? tick?.state??null:null,select:champSelect,draft:csPlan,plan,patch:art.version,paused:controls.paused,reconnecting,ended,output:coachOutput,demo:mode==="demo"});
 
   // Updates are checked at start-up and offered only outside a game (the game always comes first).
   useEffect(() => { void checkUpdate().then(setUpdate); }, []);
@@ -377,7 +379,7 @@ function LiveWindow() {
                 <ConnectForm link={rivals.link} problem={rivals.problem} onConnect={(l) => { rivals.connect(l); setShowConnect(false); }} onDisconnect={rivals.disconnect} />
               ) : (
                 <>
-                  <p className="quiet">Optional, if you have a KOI Master website account: adds your profile here, your opponents at the loading screen and your history. Item suggestions and the game board work without connecting.</p>
+                  <p className="quiet">Optional, if you have a KOI Master website account: adds your profile here, your opponents at the loading screen and your history. The game board works without connecting; contextual item suggestions require the connected server.</p>
                   {rivals.problem && <p className="quiet" role="alert">{rivals.problem}</p>}
                   <button className="btn btn-primary" onClick={() => setShowConnect(true)}>Connect</button>
                 </>
@@ -405,7 +407,7 @@ function LiveWindow() {
               {!csPlan && <p role="status">{rivals.link ? "Reading your provisional pick…" : "Connect the desktop to your account to load Draft Coach."}</p>}
               {!champSelect?.me?.locked && csPlan?.draftRead && <DraftCard read={csPlan.draftRead} />}
               {!champSelect?.me?.locked && csPlan && !csPlan.draftRead && <p>Detailed draft knowledge is unavailable.</p>}
-              {champSelect?.me?.locked && <>{csPlan?.build && <PreGameBuildView build={csPlan.build} art={art} />}<PlanTab plan={csPlan} connected={Boolean(rivals.link)} /></>}
+              {csPlan && <>{!champSelect?.me?.locked && <p className="quiet">Provisional recommendations — update as picks change.</p>}{csPlan?.build && <PreGameBuildView build={csPlan.build} art={art} />}{champSelect?.me?.locked && <PlanTab plan={csPlan} connected={Boolean(rivals.link)} />}</>}
             </>
           )}
           <p className="quiet small">Read from your League client, read-only: nothing is changed there, and only champions are used, never other players' names.</p>

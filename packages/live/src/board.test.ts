@@ -85,3 +85,17 @@ describe("actual equipped loadout",()=>{
   expect(reduceState(emptyState(),game()).loadout).toBeNull();
  });
 });
+
+
+describe("reported player loadouts", () => {
+  it("keeps each player's reported spells and runes without inventing missing loadouts", () => {
+    const data=game();
+    data.allPlayers[2]!.summonerSpells={summonerSpellOne:{displayName:"Flash"},summonerSpellTwo:{displayName:"Teleport"}};
+    data.allPlayers[2]!.runes={keystone:{id:8112,displayName:"Electrocute"}};
+    const state=reduceState(emptyState(),data);
+    expect(state.enemies[0]!.spells).toEqual(["Flash","Teleport"]);
+    expect(state.enemies[0]!.runes).toEqual([{id:8112,name:"Electrocute"}]);
+    expect(state.me!.spells).toEqual([]);
+    expect(state.me!.runes).toEqual([]);
+  });
+});

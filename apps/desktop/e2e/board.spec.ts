@@ -27,6 +27,9 @@ async function inGame(page: Page, withEngine: boolean) {
       gameData: { gameMode: "CLASSIC", gameTime: 900, mapNumber: 11 },
     };
     localStorage.setItem("koi.link", JSON.stringify({ origin: "https://koi.example", token: "device-token-for-tests-only" }));
+    const auditWindow = window as unknown as { __changeRole?: (position:string)=>void; __plans?: string[]; __delayTop?: boolean; __releaseTop?: ()=>void };
+    auditWindow.__changeRole = position => { snapshot.allPlayers[0]!.position = position; };
+    auditWindow.__plans = [];
     (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {
       invoke: async (cmd: string, args: Record<string, unknown>) => {
         switch (cmd) {
@@ -42,6 +45,7 @@ async function inGame(page: Page, withEngine: boolean) {
               items: [{ id: 6655, name: "Luden's Companion", games: 10, wins: 6 }, { id: 3089, name: "Rabadon's Deathcap", games: 8, wins: 5 }],
             };
           case "desktop_plan":
+            auditWindow.__plans!.push(String(args.position));
             if (args.me !== "Ahri" || !String(args.enemies).includes("Zed")) throw "server_error";
             return {
               plan: {
@@ -65,9 +69,10 @@ async function inGame(page: Page, withEngine: boolean) {
             // The site's build engine; without it (the default here) the local item rules are used.
             if (!withEngine) throw "server_error";
             (window as unknown as { __items: unknown }).__items = args;
+            if (args.position === "TOP" && auditWindow.__delayTop) await new Promise<void>(resolve => { auditWindow.__releaseTop=resolve; });
             return {
               build: {
-                first: { id: 3089, name: "Rabadon's Deathcap", score: 1.3, why: ["Gives 130 ability power: Ahri's Q, W, E and R scale with ability power."] },
+                first: { id: 3089, name: "Rabadon's Deathcap", score: 1.3, why: ["Gives 130 ability power: Ahri's Q, W, E and R scale with ability power.", `Role ${args.position || "unknown"}`] },
                 next: [{ id: 3165, name: "Morellonomicon", score: 1.1, why: ["It applies Grievous Wounds: Zed: life steal from items."] }],
                 boots: null, situational: [], starter: null,
               },
@@ -99,17 +104,9 @@ test("in game: both teams with items, and your build from your history", async (
 
   // Items (opened when the game starts, from the top navigation): the next item follows the enemy team, with reasons and how to buy it.
   await expect(page.getByRole("tablist", { name: "Sections" }).getByRole("tab", { name: "Items" })).toHaveAttribute("aria-selected", "true");
-  const next = board.getByRole("region", { name: "Next suggested item" });
-  await expect(next).toContainText("Morellonomicon");
-  await expect(next).toContainText("Zed and Aatrox heal with lifesteal: applies Grievous Wounds");
-  await expect(next.getByLabel("Components").getByRole("img")).toHaveCount(2);
-  await expect(next).toContainText("You need 2950 more gold in total.");
-  // What the 1000 gold buys now is in the shopping plan above (not repeated in the item card).
-  await expect(board.getByRole("region", { name: "Shopping plan" })).toContainText("Blasting Wand");
-  await expect(next).not.toContainText("gold buys");
-  await expect(board).toContainText("Your history on Ahri (12 games)");
-  // The Coach's Now card sits above the section, in its own voice.
-  await expect(board.getByRole("region", { name: "Now" })).toBeVisible();
+  await expect(board).toContainText("Contextual item guidance unavailable");
+  await expect(board.getByRole("region", { name: "Next suggested item" })).toHaveCount(0);
+  await expect(board.getByRole("region", { name: "Shopping plan" })).toHaveCount(0);
   await page.screenshot({ path: "test-results/board-items.png" });
 
   // Plan: the Coach's game plan for these champions, from the website.
@@ -191,7 +188,7 @@ test("in game with the site connected: Items follows the site's build engine", a
   // What your gold buys now toward it, and when the items arrive at your pace.
   const shop = board.getByRole("region", { name: "Shopping plan" });
   await expect(shop).toContainText("Buy now");
-  await expect(shop.getByRole("list", { name: "When your items arrive" })).toContainText("Rabadon's Deathcap");
+  await expect(shop.getByRole("list", { name: "Upcoming item costs and next-item estimate" })).toContainText("Rabadon's Deathcap");
   await expect(shop).toContainText(/gold per minute/);
   await page.screenshot({ path: "test-results/board-buynow.png", fullPage: true });
   // Only champions, item ids and kill/death counts go to the site.
@@ -199,4 +196,22 @@ test("in game with the site connected: Items follows the site's build engine", a
   expect(sent).toMatchObject({ me: "Ahri", mine: "3020.6655", opening: false });
   expect(String(sent.enemies)).toContain("Zed~3072~6~1");
   expect(JSON.stringify(sent)).not.toContain("Jugador");
+});
+
+
+test("role switches refresh setup and hide an old role's item answer, including late responses", async ({page}) => {
+  await inGame(page, true);
+  await page.goto("/");
+  const board=page.getByRole("region",{name:"Game"});
+  const next=board.getByRole("region",{name:"Next suggested item"});
+  await expect(next).toContainText("Rabadon's Deathcap");
+  await page.evaluate(()=>{const w=window as unknown as {__delayTop:boolean;__changeRole:(p:string)=>void};w.__delayTop=true;w.__changeRole('TOP');});
+  await expect(board).toContainText('Contextual item guidance unavailable');
+  await expect.poll(()=>page.evaluate(()=>(window as unknown as {__plans:string[]}).__plans)).toContain('TOP');
+  await page.evaluate(()=>(window as unknown as {__changeRole:(p:string)=>void}).__changeRole('MIDDLE'));
+  await expect(next).toContainText('Role MIDDLE');
+  await expect.poll(()=>page.evaluate(()=>(window as unknown as {__plans:string[]}).__plans)).toContain('MIDDLE');
+  await page.evaluate(()=>(window as unknown as {__releaseTop:()=>void}).__releaseTop());
+  await expect(next).toContainText('Role MIDDLE');
+  await expect(next).not.toContainText('Role TOP');
 });

@@ -1,3 +1,5 @@
+import { liveDetail } from "./live-detail";
+import type { ScoutedRival } from "./rivals";
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import type { CoachDecision, LiveCoach } from "@coach/coach";
 import { clockSample, describeOffset, NOTABLE_OFFSET_MS, ServerClock, stampNow, type GameState, type Stamp } from "@coach/live";
@@ -12,7 +14,7 @@ export function liveSections(output: Output): LiveSection[] {
  return [
   section("What matters now",[output.now?.headline,...output.now?.reasons??[]],true),
   section("Buy now",c.purchase?.now ? [...c.purchase.now.buys.map(b=>`${b.name}: ${b.gold} gold`),`${c.purchase.now.leftover} gold left; toward ${c.purchase.now.toward}`] : ["No supported immediate purchase with the available data."],true),
-  section("Next major item",[c.items?.next?.item.name,...c.items?.next?.reasons??[]]),
+  section("Next major item",[c.items?.note,c.items?.next?.item.name,...c.items?.next?.reasons??[]]),
   section("Build order and timing",c.purchase?.milestones.map(m=>`${m.name}: ${m.remaining} gold remaining${m.at===null ? "; timing unknown" : `; estimated minute ${(m.at/60).toFixed(1)} at the observed pace`}`)??[]),
   section("Strategy and next objective",c.plan.flatMap(d=>[d.headline,...d.reasons])),
   section("Skill priority",c.decisions.filter(d=>d.kind==="skill").flatMap(d=>[d.headline,...d.reasons])),
@@ -24,6 +26,7 @@ function planSections(plan:PlanResponse|null):LiveSection[] {
  if(!plan)return [];
  const b=plan.build;
  return [
+  {title:"Champion mechanics and position",lines:b?.kit??[]},
   {title:"Economy and recall scenarios",lines:b?.economyNotes??[]},
   {title:"Pre-game plan",lines:Object.entries(plan.plan).filter(([k])=>k!=="loadout").flatMap(([k,v])=>v && "text" in v ? [`${k}: ${v.text} — ${v.why}`]:[])},
   {title:"Recommended pre-game runes and summoner spells",lines:[b?.setup?.runes ? `${b.setup.runes.primaryTree}: ${[b.setup.runes.keystone,...b.setup.runes.primary,...b.setup.runes.secondary,...b.setup.runes.shards].map(r=>`${r.name} (${r.why})`).join("; ")}`:"Rune recommendation unavailable.",...b?.setup?.spells.map(s=>`${s.name}: ${s.why}`)??[]]},
@@ -31,7 +34,7 @@ function planSections(plan:PlanResponse|null):LiveSection[] {
   {title:"Situational options",lines:b?.situational.map(i=>`${i.name}: ${i.when}`)??[]},
  ].map(s=>({...s,lines:s.lines.map(l=>l.slice(0,1600)).slice(0,24)})).filter(s=>s.lines.length);
 }
-interface RelayInput { enabled:boolean; link:{origin:string;token:string}|null; state:GameState|null; select:ChampSelect|null; draft:PlanResponse|null; plan:PlanResponse|null; patch:string|null; paused:boolean; reconnecting:boolean; ended:boolean; output:MutableRefObject<Output|null>; demo:boolean }
+interface RelayInput { rivals?:ScoutedRival[]; contextual?:boolean; enabled:boolean; link:{origin:string;token:string}|null; state:GameState|null; select:ChampSelect|null; draft:PlanResponse|null; plan:PlanResponse|null; patch:string|null; paused:boolean; reconnecting:boolean; ended:boolean; output:MutableRefObject<Output|null>; demo:boolean }
 
 /**
  * When the data behind an object was read (stamped where it is read: the game snapshot, the
@@ -56,6 +59,7 @@ export function useLiveRelay(input:RelayInput) {
  const stream=useRef(crypto.randomUUID()); const sequence=useRef(0);
  const lastGame=useRef<GameState|null>(null);
  const wasEnabled=useRef(false);
+ const wake=useRef<(()=>void)|null>(null);
  useEffect(()=>{
   if(!input.link){setStatus(OFF);return;}
   let stopped=false; let timer:ReturnType<typeof setTimeout>;
@@ -76,7 +80,7 @@ export function useLiveRelay(input:RelayInput) {
   }
   wasEnabled.current=true;
   let terminalSent=false;
-  const loop=async()=>{
+  const publishOnce=async()=>{
    if(stopped)return;
    if(clock.needsSync(stampNow())){
     setStatus(st=>st.state==="connected" ? st : {state:"syncing",text:"checking the time with the website…"});
@@ -115,11 +119,12 @@ export function useLiveRelay(input:RelayInput) {
    // the site's: the server's current time minus the capture's age.
    const now=stampNow();
    const frame:LiveFrame={version:1,streamId:stream.current,sequence:++sequence.current,capturedAt:clock.capturedAt(phase==="reconnecting" ? now : acquired??now,now)!,phase,
-    champion:s?.me?.championId??v.draft?.champion??null,position:s?.me?.position??v.select?.me?.position??null,patch:v.patch,
+    champion:s?.me?.championId??v.draft?.champion??(v.select?.me?.championId ? String(v.select.me.championId):null),position:s?.me?.position??v.select?.me?.position??null,patch:v.patch,
     time:s?.time??null,gold:s?.gold??null,
-    allies:s?.allies.map(p=>p.championId)??v.draft?.roster?.allies??[],enemies:s?.enemies.map(p=>p.championId)??v.draft?.roster?.enemies??[],
+    allies:s?.allies.map(p=>p.championId)??v.draft?.roster?.allies??v.select?.allies?.map(String)??[],enemies:s?.enemies.map(p=>p.championId)??v.draft?.roster?.enemies??v.select?.enemies?.map(String)??[],
     headline:phase==="live" ? out?.now?.headline??"No urgent recommendation." : phase==="draft" ? "Provisional pick — draft still developing" : phase==="pregame" ? "Champion locked — prepare your game" : phase==="ended" ? "Match ended" : phase==="paused" ? "Coach paused" : phase==="reconnecting" ? "Waiting for fresh game data" : phase==="loading" ? "Match loading" : "No active shared game",
     sections:sections.slice(0,16),};
+   if(["live","draft","pregame"].includes(phase))frame.detail=liveDetail(s,phase==="live" ? out?.coach??null:null,phase==="live" ? v.plan:v.draft,phase,v.patch?.includes("synthetic") ? "synthetic":(phase === "live" ? v.contextual : Boolean(v.draft?.build)) ? "contextual":"limited",v.rivals,v.select);
    if(phase==="idle"){frame.champion=null;frame.position=null;frame.allies=[];frame.enemies=[];frame.time=null;frame.gold=null;}
    const result=await publishLive(link.origin,link.token,frame);
    if(result.ok && phase === "ended")terminalSent=true;
@@ -131,8 +136,22 @@ export function useLiveRelay(input:RelayInput) {
     : {state:"offline",text:"can't reach the website. Retrying…"});
    if(!stopped)timer=setTimeout(loop,phase==="idle"||phase==="ended" ? 10000:1500);
   };
+  let running=false, pending=false;
+  const loop=async()=>{
+   if(stopped)return;
+   if(running){pending=true;return;}
+   running=true;
+   try { await publishOnce(); }
+   finally {
+    running=false;
+    if(pending && !stopped){pending=false;clearTimeout(timer);timer=setTimeout(loop,150);}
+   }
+  };
+  wake.current=()=>{clearTimeout(timer);if(running)pending=true;else timer=setTimeout(loop,150);};
   void loop();
-  return()=>{stopped=true;clearTimeout(timer);};
+  return()=>{stopped=true;wake.current=null;clearTimeout(timer);};
  },[input.link?.origin,input.link?.token,input.enabled]);
+ // Phase/pick changes bypass the idle timer; the plan result gets its own update.
+ useEffect(()=>{wake.current?.();},[input.select?.phase,input.select?.me?.championId,input.select?.me?.locked,input.draft,Boolean(input.state?.me),input.ended]);
  return status;
 }

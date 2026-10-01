@@ -14,7 +14,7 @@ beforeAll(async () => {
   database = await openDatabase(undefined, undefined);
   const cfg = { ...loadConfig({ NODE_ENV: "test" }), webOrigin: ORIGIN };
   const knowledge = await bootKnowledge(database.db, syntheticKnowledge());
-  ctx = createApp({ cfg, db: database.db, source: syntheticSource(() => Date.UTC(2026, 5, 1)), knowledge, aiProviders: [] });
+  ctx = createApp({ cfg, db: database.db, source: syntheticSource(() => Date.now()), knowledge, aiProviders: [] });
 }, 30_000);
 
 afterAll(async () => {

@@ -31,6 +31,22 @@ describe("live coach", () => {
     expect(c.decisions.find((d) => d.kind === "item")?.headline).toMatch(/^Next: /);
   });
 
+  it("withholds opening guesses and explains incomplete mechanics from the shared engine", () => {
+    const engine={first:null,next:[],boots:null,situational:[],starter:null,unavailableReason:"Detailed champion mechanics are unavailable."};
+    const c=liveCoach({state:state(20,[]),catalog,engine,allowLocalItems:false});
+    expect(c.starter).toBeNull();expect(c.purchase).toBeNull();expect(c.items?.next).toBeNull();
+    expect(c.items?.note).toBe(engine.unavailableReason);
+    expect(c.decisions.some(d=>d.kind==='item')).toBe(false);
+  });
+
+  it("does not leak generic purchases when contextual guidance is required", () => {
+    const c = liveCoach({ state: state(600, [], undefined, 7), catalog, allowLocalItems: false });
+    expect(c.items).toBeNull();
+    expect(c.purchase).toBeNull();
+    expect(c.decisions.some(d => d.kind === "item")).toBe(false);
+    expect(c.gold?.rows).toHaveLength(1);
+  });
+
   it("puts the ultimate first when a rank opens", () => {
     const c = liveCoach({ state: state(700, [{ itemID: 1054, price: 450 }], { Q: 3, W: 1, E: 1, R: 0 }, 6), catalog, skillHistory: [QMAX, QMAX, QMAX] });
     expect(c.skill?.headline).toBe("Level up: R");
@@ -44,7 +60,7 @@ describe("live coach", () => {
       situational: [{ id: 6655, name: "Luden's Companion", score: 0.8, why: [], when: "Against the shields from Lux." }],
       starter: null,
     };
-    const c = liveCoach({ state: state(600, [{ itemID: 1026, price: 850 }], undefined, 7), catalog, engine });
+    const c = liveCoach({ state: state(600, [{ itemID: 1026, price: 850 }], undefined, 7), catalog, engine, allowLocalItems: false });
     expect(c.items?.next?.item.name).toBe("Morellonomicon");
     expect(c.items?.next?.reasons[0]).toMatch(/Grievous Wounds/);
     expect(c.items?.next?.path.steps.find((st) => st.id === 1026)?.owned).toBe(true); // the Blasting Wand you have counts
@@ -52,17 +68,17 @@ describe("live coach", () => {
     expect(c.items?.alternatives[1]?.reasons).toContain("Against the shields from Lux.");
     expect(c.items?.boots?.item.name).toBe("Mercury's Treads");
     expect(c.decisions.find((d) => d.kind === "item")?.headline).toBe("Next: Morellonomicon");
-    // When the items arrive: Morellonomicon first (the Blasting Wand you hold lowers what's left), then Rabadon's.
-    expect(c.purchase?.milestones.map((m) => m.name)).toEqual(["Morellonomicon", "Rabadon's Deathcap"]);
+    // When the items arrive: Morellonomicon first (the Blasting Wand you hold lowers what's left), then boots and Rabadon's.
+    expect(c.purchase?.milestones.map((m) => m.name)).toEqual(["Morellonomicon", "Mercury's Treads", "Rabadon's Deathcap"]);
     expect(c.purchase?.milestones[0]?.remaining).toBe(2950 - 850);
     expect(c.purchase?.pace).toBeGreaterThan(0);
-    expect(c.purchase?.milestones[1]!.at!).toBeGreaterThan(c.purchase!.milestones[0]!.at!);
+    expect(c.purchase?.milestones[1]!.at).toBeNull();
   });
 
   it("with enough gold, the item decision says what to buy now", () => {
     const engine = { first: { id: 3165, name: "Morellonomicon", score: 1.4, why: ["x"] }, next: [], boots: null, situational: [], starter: null };
     const base = state(600, [{ itemID: 1026, price: 850 }], undefined, 7);
-    const c = liveCoach({ state: { ...base, gold: 900 }, catalog, engine });
+    const c = liveCoach({ state: { ...base, gold: 900 }, catalog, engine, allowLocalItems: false });
     expect(c.purchase?.now?.buys.map((b) => b.name)).toEqual(["Oblivion Orb"]);
     expect(c.decisions.find((d) => d.kind === "item")?.evidence.find((e) => e.label === "Buy now")?.value).toBe("Oblivion Orb (800 gold)");
   });
@@ -75,7 +91,7 @@ describe("live coach", () => {
       alternative: { id: 3089, name: "Rabadon's Deathcap", score: 1.35, why: [], difference: "Rabadon's Deathcap gives more of the stats your kit uses." },
       adaptation: { standard: false, standardCore: [{ id: 3089, name: "Rabadon's Deathcap" }], note: "Morellonomicon instead of the standard Rabadon's Deathcap: it applies Grievous Wounds." },
     };
-    const c = liveCoach({ state: state(600, [{ itemID: 1026, price: 850 }], undefined, 7), catalog, engine });
+    const c = liveCoach({ state: state(600, [{ itemID: 1026, price: 850 }], undefined, 7), catalog, engine, allowLocalItems: false });
     const d = c.decisions.find((x) => x.kind === "item")!;
     expect(certaintyOf(d)).toBe("uncertain");
     expect(d.reasons[0]).toMatch(/instead of the standard Rabadon's Deathcap/);
@@ -88,7 +104,7 @@ describe("live coach", () => {
 
   it("opens with the engine's starting items when it gives them", () => {
     const engine = { first: null, next: [], boots: null, situational: [], starter: { items: [{ id: 1054, name: "Doran's Shield", gold: 450 }], why: ["You are melee against Syndra, who is ranged."] } };
-    const c = liveCoach({ state: state(20, []), catalog, engine });
+    const c = liveCoach({ state: state(20, []), catalog, engine, allowLocalItems: false });
     expect(c.starter?.items.map((i) => i.name)).toEqual(["Doran's Shield"]);
     expect(c.starter?.reasons[0]).toMatch(/melee against Syndra/);
   });

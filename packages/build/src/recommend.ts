@@ -1,3 +1,5 @@
+import { normalizePosition, positionReason } from "./position.js";
+import { purchasePrior, type BuildEvidence } from "./evidence.js";
 import { itemTiming, type EconomyContext, type ItemTiming } from "./economy.js";
 import type { ChampionKit, ItemFacts, ItemStat } from "@coach/knowledge";
 import { COUNTERS, THREAT_ONLY, itemProfile, statGoldValues, type Counter, type ItemProfile, type StatKey } from "./capabilities.js";
@@ -22,14 +24,18 @@ export interface BuildInput {
   /** Internal: this run computes the standard core (neutral enemy); it doesn't compute its own. */
   baseline?: boolean;
   economy?: EconomyContext;
+  patch?: string;
+  evidence?: BuildEvidence;
 }
 
 export interface ItemPick { id: number; name: string; gold: number; score: number; why: string[]; timing?: ItemTiming }
 export interface Situational extends ItemPick { when: string }
 
 export interface BuildRecommendation {
+  unavailableReason?: string;
   champion: string;
   componentUtility?: Record<number, number>;
+  audit?: { basis: "mechanics" | "observed"; candidates: {id:number;name:string;score:number;mechanical:number;empirical:number}[] };
   /** Facts about the champion's own kit that drive the build. */
   kit: string[];
   enemyDamage: EnemyPicture["damage"];
@@ -86,7 +92,7 @@ const STAT_NAMES: Partial<Record<ItemStat, string>> = {
   healAndShieldPower: "heal and shield power", adaptiveForce: "adaptive force",
 };
 
-interface State { threats: Record<ThreatKind, number>; manaNeed: number; critChance: number; effects: Set<string> }
+interface State { position?: string | null; threats: Record<ThreatKind, number>; manaNeed: number; critChance: number; effects: Set<string> }
 
 /** How much this champion, in this game, values each stat (0 = not at all). */
 function statWeights(p: ChampionProfile, e: EnemyPicture, s: State): Record<ItemStat, number> {
@@ -97,16 +103,16 @@ function statWeights(p: ChampionProfile, e: EnemyPicture, s: State): Record<Item
     abilityPower: AP,
     attackDamage: AD,
     adaptiveForce: Math.max(AD, AP),
-    attackSpeed: p.scales.attackSpeed * p.offense * 0.9,
+    attackSpeed: p.scales.attackSpeed * p.offense * (p.attackSpeedCooldown ? 1.35 : .9),
     criticalStrikeChance: p.scales.crit * p.offense,
     criticalStrikeDamage: p.scales.crit * p.offense,
     lethality: AD * p.abilityReliance * (1 - tanks * 0.5),
-    armorPenetration: AD * (0.3 + tanks),
-    magicPenetration: AP * (0.4 + tanks * 0.8),
+    armorPenetration: AD * p.damage.physical * (0.3 + clamp(e.purchasedResists.armor / 100)),
+    magicPenetration: AP * p.damage.magic * (0.4 + clamp(e.purchasedResists.magicResistance / 100) * 0.8),
     abilityHaste: 0.25 + 0.5 * p.abilityReliance,
     mana: s.manaNeed,
     manaRegen: s.manaNeed * 0.6,
-    health: defense + p.scales.health * 0.8,
+    health: p.cannotGainHealth ? AD * .15 : defense + p.scales.health * 0.8,
     armor: defense * e.damage.physical * 2 + p.scales.resists * 0.5,
     magicResistance: defense * e.damage.magic * 2 + p.scales.resists * 0.5,
     healthRegen: defense * 0.3,
@@ -124,15 +130,25 @@ interface Scored {
   /** 0–1: the share of the item's stats (in gold) this champion makes use of. */
   fit: number;
   timing?: ItemTiming;
+  empirical?: number;
 }
 
 function score(ip: ItemProfile, p: ChampionProfile, e: EnemyPicture, s: State): Scored {
   const w = statWeights(p, e, s);
   const cost = Math.max(ip.item.gold, 1);
-  const lines = ip.stats.map((l) => ({ ...l, stat: l.key.split(":")[0] as ItemStat, value: l.gold * (w[l.key.split(":")[0] as ItemStat] ?? 0) }));
+  const lines = ip.stats.map((l) => {
+    const stat = l.key.split(":")[0] as ItemStat;
+    const usable = stat === "criticalStrikeChance" ? clamp((100-s.critChance) / Math.max(1,l.amount*p.critMultiplier)) : 1;
+    // Flat penetration removes a fixed amount; it must not inherit the
+    // rising anti-resistance weight used for percentage penetration.
+    const weight = stat === "magicPenetration" && l.key.endsWith(":flat")
+      ? p.scales.AP*p.offense*p.damage.magic*.4/(1+e.purchasedResists.magicResistance/100)
+      : (w[stat]??0);
+    return {...l,stat,value:l.gold*weight*usable,usableWeight:weight*usable};
+  });
   const statValue = lines.reduce((sum, l) => sum + l.value, 0) / cost;
   const rawGold = lines.reduce((sum, l) => sum + l.gold, 0);
-  const fit = rawGold > 0 ? lines.reduce((sum, l) => sum + l.gold * Math.min(1, w[l.stat] ?? 0), 0) / rawGold : 0;
+  const fit = rawGold > 0 ? lines.reduce((sum, l) => sum + l.gold * Math.min(1, l.usableWeight), 0) / rawGold : 0;
   let counterValue = 0;
   const why: string[] = [];
 
@@ -159,6 +175,22 @@ function score(ip: ItemProfile, p: ChampionProfile, e: EnemyPicture, s: State): 
     bonus += p.scales.crit * p.offense * .5 * clamp((s.critChance + ownCrit) / 100);
     why.push(`It increases critical strike damage, which multiplies ${p.name}'s critical strikes.`);
   }
+  // Offensive passive mechanics used to have no value while every defensive counter did.
+  const effects = ip.item.effects.map(ef=>ef.text).join(" ");
+  if (/after using an ability.*(?:next basic attack|next attack)/i.test(effects)) {
+    const scaling = /magic damage/i.test(effects) ? p.scales.AP : p.scales.AD;
+    const synergy = scaling * (p.spellOnHit ? .35 : .18 * p.abilityReliance);
+    bonus += synergy;
+    if (synergy > .08) why.push(p.spellOnHit ? `Its spell-triggered on-hit damage fits ${p.name}'s repeatable on-hit spell.` : `Its empowered attack can follow ${p.name}'s spell casts; this requires weaving an attack.`);
+  }
+  if (/ultimate haste/i.test(effects) && p.damagingUltimate) {
+    bonus += p.abilityReliance * .16;
+    why.push(`Ultimate haste reduces the cooldown of ${p.name}'s damaging ultimate.`);
+  }
+  if (/with your ultimate ability/i.test(effects) && /magic damage/i.test(effects) && p.damagingUltimate) {
+    bonus += p.scales.AP * (p.repeatUltimate ? .18 : .08);
+    why.push(`Its ultimate-triggered damage can be applied by ${p.name}'s ultimate${p.repeatUltimate ? " and its repeated damage" : ""}.`);
+  }
   const armor = lines.find((l) => l.stat === "armor"), mr = lines.find((l) => l.stat === "magicResistance");
   if (armor && e.damage.physical >= 0.55) why.push(`${pct(e.damage.physical)} of the enemy damage is physical.`);
   if (mr && e.damage.magic >= 0.55) why.push(`${pct(e.damage.magic)} of the enemy damage is magic.`);
@@ -173,7 +205,11 @@ function score(ip: ItemProfile, p: ChampionProfile, e: EnemyPicture, s: State): 
     const who = threat.sources.slice(0, 3).map((x) => `${x.name}${x.name === e.laneOpponent ? " (your lane opponent)" : ""}: ${x.why}`);
     why.push(`It ${COUNTERS[c].says}: ${who.join("; ")}.`);
   }
-  return { ip, score: statValue + counterValue + bonus, why, counterValue, statValue, fit };
+  const effectText = ip.item.effects.map(x => x.text).join(" ");
+  const allyDependent = /allied champion[^.]{0,160}(?:damage|detonat|consum)|(?:damage|detonat|consum)[^.]{0,160}allied champion/i.test(effectText);
+  const cooperative = allyDependent && s.position !== "UTILITY" ? .5 : 1;
+  if (cooperative < 1) why.push("Its payoff requires an allied champion; solo-role value is discounted until that cooperation is established.");
+  return { ip, score: (statValue + counterValue + bonus) * cooperative, why, counterValue: counterValue * cooperative, statValue, fit };
 }
 
 /**
@@ -209,7 +245,7 @@ function difference(alt: Scored, first: Scored): string {
   return own ? `${a}: ${own}` : `${a} is almost as good for this game.`;
 }
 
-const pick = (x: Scored): ItemPick => ({ id: x.ip.item.id, name: x.ip.item.name, gold: x.ip.item.gold, score: Math.round(x.score * 100) / 100, why: x.why, ...(x.timing ? { timing: x.timing } : {}) });
+const pick = (x: Scored): ItemPick => ({ id: x.ip.item.id, name: x.ip.item.name, gold: x.ip.item.gold, score: Math.round(x.score * 100) / 100, why: [...x.why, ...(x.empirical === undefined ? ["No sufficiently sampled purchase evidence was used for this choice; this is a mechanics-based estimate, not observed win rate."] : [])], ...(x.timing ? { timing: x.timing } : {}) });
 
 function starter(input: BuildInput, p: ChampionProfile, e: EnemyPicture, s: State, gold: Map<StatKey, number>): BuildRecommendation["starter"] {
   const shop = input.items.filter((i) => i.purchasable);
@@ -268,12 +304,18 @@ function starter(input: BuildInput, p: ChampionProfile, e: EnemyPicture, s: Stat
 }
 
 export function recommendBuild(input: BuildInput): BuildRecommendation {
+  input = { ...input, position: normalizePosition(input.position) };
   const p = championProfile(input.me);
   const seen = enemyPicture(input.enemies);
   // The standard core is built against a neutral enemy: half physical, half magic, no threats.
   const e: EnemyPicture = input.baseline
-    ? { ...seen, damage: { physical: 0.5, magic: 0.5, true: 0 }, threats: Object.fromEntries(Object.entries(seen.threats).map(([k, t]) => [k, { ...t, weight: 0, sources: [] }])) as unknown as EnemyPicture["threats"] }
+    ? { ...seen, purchasedResists: { armor: 0, magicResistance: 0 }, damage: { physical: 0.5, magic: 0.5, true: 0 }, threats: Object.fromEntries(Object.entries(seen.threats).map(([k, t]) => [k, { ...t, weight: 0, sources: [] }])) as unknown as EnemyPicture["threats"] }
     : seen;
+  if (input.me.detail !== "full") return {
+    unavailableReason: "Detailed champion mechanics are unavailable for this patch; item and rune recommendations are withheld.",
+    champion: p.name, kit: [positionReason(normalizePosition(input.position)), "Detailed champion mechanics are unavailable; item recommendations are withheld until the current kit can be evaluated."],
+    enemyDamage:e.damage, threats:[], starter:null, first:null, next:[], boots:null, situational:[], ruledOut:[], certainty:null, alternative:null, adaptation:null,
+  };
   const gold = statGoldValues(input.items);
   const owned = new Set(input.owned ?? []);
   const catalog = new Map(input.items.map((i) => [i.id, i]));
@@ -282,32 +324,97 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
     return { champion: p.name, kit: p.facts, enemyDamage: e.damage, threats: [], starter: null,
       first: null, next: [], boots: null, situational: [], ruledOut: [], certainty: null, alternative: null, adaptation: null };
   }
+  const firstCompletedItem = !equipped.some(i=>i.rank.includes("LEGENDARY") && !i.rank.includes("BOOTS"));
+  const heldCore = equipped.filter(i=>i.rank.includes("LEGENDARY") && !i.rank.includes("BOOTS")).map(i=>i.id);
   const profiles = input.items.map((i) => itemProfile(i, gold, catalog))
-    .filter((ip) => (ip.finished || ip.boots) && (ip.item.requiredChampion === null || ip.item.requiredChampion === p.id) && ip.item.requiredAlly === null);
+    .filter((ip) => (ip.finished || (ip.boots && !p.cannotBuyBoots)) && (ip.item.requiredChampion === null || ip.item.requiredChampion === p.id) && ip.item.requiredAlly === null);
 
   const state: State = {
+    position: input.position,
     threats: Object.fromEntries(Object.entries(e.threats).map(([k, t]) => [k, t.weight])) as Record<ThreatKind, number>,
     manaNeed: p.manaNeed,
     critChance: 0,
     effects: new Set(),
   };
   const take = (ip: ItemProfile) => {
-    state.critChance += ip.stats.filter(l=>l.key.split(":")[0] === "criticalStrikeChance").reduce((sum,l)=>sum+l.amount,0);
+    state.critChance += p.critMultiplier * ip.stats.filter(l=>l.key.split(":")[0] === "criticalStrikeChance").reduce((sum,l)=>sum+l.amount,0);
     // What an item already answers no longer needs answering; its unique effects can't stack.
     for (const c of ip.counters) for (const k of COUNTERS[c].answers) state.threats[k] *= 0.15;
     state.manaNeed *= clamp(1 - ip.mana / 600);
     for (const ef of ip.item.effects) if (ef.unique && ef.name) state.effects.add(ef.name);
   };
-  for (const id of owned) { const it = catalog.get(id); if (it) take(itemProfile(it, gold, catalog)); }
+  const refreshState = (inventory: number[]) => {
+    state.threats = Object.fromEntries(Object.entries(e.threats).map(([k,t])=>[k,t.weight])) as Record<ThreatKind,number>;
+    state.manaNeed = p.manaNeed;
+    state.critChance = 0;
+    state.effects.clear();
+    for (const id of inventory) { const it = catalog.get(id); if (it) take(itemProfile(it,gold,catalog)); }
+  };
+  refreshState(input.owned ?? []);
 
   const componentState = { ...state, threats: { ...state.threats }, effects: new Set(state.effects) };
+  let plannedInventory = [...(input.owned ?? [])];
+  // Recipe upgrades consume their held components. Their unique effects must not
+  // block the parent, while effects on items left in inventory still conflict.
+  const afterRecipe = (item: ItemFacts, held: number[]) => {
+    const remaining = [...held];
+    const consume = (id: number, path = new Set<number>()) => {
+      const at = remaining.indexOf(id);
+      if (at >= 0) { remaining.splice(at,1); return; }
+      if (path.has(id)) return;
+      const next = new Set(path).add(id);
+      for (const child of catalog.get(id)?.from ?? []) consume(child,next);
+    };
+    for (const id of item.from) consume(id);
+    return remaining;
+  };
+  const conflicts = (ip: ItemProfile) => {
+    const names = new Set(ip.item.effects.filter(ef=>ef.unique && ef.name).map(ef=>ef.name));
+    // Percentage penetration families are shop-exclusive even when their named
+    // passives differ or there is no named passive.
+    // Flat penetration is deliberately not included. Consumed recipe pieces do
+    // not block their parent; held components in another branch do.
+    return afterRecipe(ip.item,plannedInventory).some(id=>{
+      const other=catalog.get(id);
+      return other && ((["magicPenetration", "armorPenetration"] as const).some(stat=>
+        (ip.item.stats[stat]?.percent??0)>0 && (other.stats[stat]?.percent??0)>0) ||
+        other.effects.some(ef=>ef.unique && ef.name && names.has(ef.name)));
+    });
+  };
   const ruledOut = new Map<number, { id: number; name: string; why: string; score: number }>();
-  const candidates = (boots: boolean) => profiles
-    .filter((ip) => ip.boots === boots && !owned.has(ip.item.id) && !picked.has(ip.item.id) && !ip.item.effects.some((ef) => ef.unique && ef.name && state.effects.has(ef.name)))
+  const candidates = (boots: boolean) => {
+    const scored = profiles
+    .filter((ip) => ip.boots === boots && !owned.has(ip.item.id) && !picked.has(ip.item.id) && !conflicts(ip))
     .map((ip) => {
+      // Self-healing or a self-shield does not activate effects requiring a
+      // heal/shield on another champion. A role label cannot supply that trigger.
+      const allyTrigger = /healing or shielding (?:an? )?allied champion/i.test(ip.item.effects.map(x=>x.text).join(" "));
+      const allyEffectFromInventory = plannedInventory.some(id => catalog.get(id)?.effects.some(effect => /allies[^.]{0,80}heal|heal[^.]{0,80}(?:target )?allied champion/i.test(effect.text)));
+      if (allyTrigger && !p.allyHealShield && !allyEffectFromInventory) return null;
       const sc = score(ip, p, e, state);
+      if (!boots && input.position === "UTILITY") {
+        // Role affects utility/accessibility, never fabricates a gold-per-minute estimate.
+        const text = ip.item.effects.map(x => x.text).join(" ");
+        const utility = /(?:heal|shield|protect|empower)[^.]{0,100}all(?:y|ies|ied)|all(?:y|ies|ied)[^.]{0,100}(?:heal|shield|damage reduction)/i.test(text);
+        const compatible = Math.max(p.healsOrShields, p.frontline);
+        if (utility && compatible > 0) { sc.score += .3 * compatible; sc.why.push("Support utility: this effect can protect or empower allies when its trigger is met."); }
+        const costWeight = Math.max(0, Math.min(1, (ip.item.gold - 2000) / 2000));
+        sc.score /= 1 + .18 * costWeight;
+        sc.why.push("Support role: expensive recipes carry an accessibility penalty; actual wallet and observed income still decide purchase timing.");
+      }
+      if (!boots && firstCompletedItem && picked.size === 0 && ip.counters.some(c=>THREAT_ONLY.includes(c))) {
+        // Team-wide generic CC/healing is not by itself a reason to rush a defensive counter.
+        // Keep lane-critical counters available, especially against an already fed opponent.
+        const lane = input.enemies.find(x=>x.laneOpponent);
+        const lanePicture = lane ? enemyPicture([lane]) : null;
+        const critical = lanePicture && ip.counters.some(c=>COUNTERS[c].answers.some(k=>lanePicture.threats[k].weight>=.5));
+        const emergency = critical && (lane!.kills??0)-(lane!.deaths??0)>=3;
+        const retained = emergency ? 1 : critical ? .65 : .25;
+        sc.score -= sc.counterValue * (1-retained);
+        sc.why.push(emergency ? "Visible lane results justify urgent defensive counter value." : "First-item counter value is discounted until the lane threat justifies delaying the core spike.");
+      }
       if (!boots) {
-        const timing = itemTiming(ip.item, input.items, input.owned ?? [], input.economy,
+        const timing = itemTiming(ip.item, input.items, plannedInventory, core.length && input.economy ? { ...input.economy, gold: null } : input.economy,
           component => score(itemProfile(component, gold, catalog), p, e, state).score);
         // Value still dominates. Time discounts value, without a price cap or a cheapest-item rule.
         const delay = timing.seconds === null ? 0 : timing.seconds / 60;
@@ -316,9 +423,21 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
         // Credit committed components even before a reliable income estimate exists.
         sc.score += (1 - timing.remaining / Math.max(1, ip.item.gold)) * .2;
         sc.timing = timing;
-        sc.why.push(timing.reason);
+        sc.why.push(core.length ? `Conditional later purchase, after completing earlier targets. ${timing.reason}` : timing.reason);
       }
+      if (!boots) {
+        const prior=purchasePrior({evidence:input.evidence,champion:input.me.id,position:input.position,patch:input.patch,opponent:input.enemies.find(x=>x.laneOpponent)?.kit.id,held:heldCore,chosen:core.map(x=>x.ip.item.id),candidate:ip.item.id});
+        if(prior){sc.empirical=prior.bonus;sc.score+=prior.bonus;sc.why.push(prior.reason);}
+      }
+      // Generic team CC does not establish that an MR-oriented shield should
+      // delay damage or armor when the observed composition is mainly physical.
+      if (!boots && !sc.empirical && ip.counters.includes("spellShield") && (ip.item.stats.magicResistance?.flat ?? 0) > 0 && e.damage.magic < .3) return null;
       const useless = counterWithoutThreat(ip, e);
+      if (!boots && ip.counters.includes("grievousWounds") && !sc.empirical) {
+        const lane = input.enemies.find(x => x.laneOpponent);
+        const urgent = lane && enemyPicture([lane]).threats.healing.weight >= .5;
+        if (!urgent) return null; // Still eligible for the situational alternatives below.
+      }
       if (useless) {
         const kind = COUNTERS[useless].answers[0]!;
         ruledOut.set(ip.item.id, { id: ip.item.id, name: ip.item.name, why: `Its passive ${COUNTERS[useless].says}, and ${NO_THREAT[kind]}.`, score: sc.statValue });
@@ -328,21 +447,39 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
     })
     .filter((x): x is Scored => x !== null)
     .sort((a, b) => b.score - a.score || a.ip.item.gold - b.ip.item.gold || a.ip.item.id - b.ip.item.id);
+    if (boots) return scored;
+    const supported = scored.filter(x=>x.empirical !== undefined);
+    if (!supported.length) return scored;
+    // A generic kit score must not silently displace a sufficiently observed
+    // purchase with an unobserved rush. Keep adaptations when visible urgency
+    // or an already substantially completed recipe supplies a concrete reason.
+    const lane=input.enemies.find(x=>x.laneOpponent);
+    const laneThreat=lane?enemyPicture([lane]):null;
+    return scored.filter(x=>{
+      if(x.empirical !== undefined){x.why.push("Compared among sufficiently sampled, eligible purchases for this champion, role and purchase stage.");return true;}
+      const urgent=lane && (lane.kills??0)-(lane.deaths??0)>=3 && laneThreat && x.ip.counters.some(c=>COUNTERS[c].answers.some(k=>laneThreat.threats[k].weight>=.5));
+      const committed=x.timing && x.timing.remaining<x.ip.item.gold*.5;
+      if(urgent || committed){x.why.push(urgent?"Visible lane urgency permits a situational departure from sampled purchases.":"Most of this recipe is already owned; completion remains an alternative to sampled purchases.");return true;}
+      return false;
+    });
+  };
 
   const core: Scored[] = [];
   const picked = new Set<number>();
-  const hasBoots = [...owned].some((id) => catalog.get(id)?.rank.includes("BOOTS"));
+  const hasBoots = [...owned].some((id) => { const item=catalog.get(id); return item?.rank.includes("BOOTS") && item.from.length > 0; });
   let boots: Scored | null = null;
   let runnerUp: Scored | null = null;
+  let firstPool: Scored[] = [];
   for (let n = 0; n < 3; n++) {
     const pool = candidates(false);
     const best = pool[0];
     if (!best) break;
-    if (n === 0) runnerUp = pool[1] ?? null;
+    if (n === 0) {runnerUp = pool[1] ?? null;firstPool=pool.slice(0,10); }
     core.push(best);
     picked.add(best.ip.item.id);
-    take(best.ip);
-    if (n === 0 && !hasBoots) { boots = candidates(true)[0] ?? null; if (boots) take(boots.ip); }
+    plannedInventory = [...afterRecipe(best.ip.item,plannedInventory),best.ip.item.id];
+    refreshState(plannedInventory);
+    if (n === 0 && !hasBoots) { boots = candidates(true)[0] ?? null; if (boots) { plannedInventory = [...afterRecipe(boots.ip.item,plannedInventory),boots.ip.item.id]; refreshState(plannedInventory); } }
   }
 
   // Situational: a strong threat the core does not answer, with the best item that does.
@@ -352,7 +489,7 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
     if (state.threats[t.kind] < RELEVANT) continue; // already answered by the core
     const who = list(t.sources.slice(0, 3).map((x) => x.name));
     const counter = profiles
-      .filter((ip) => !chosen.has(ip.item.id) && !owned.has(ip.item.id) && ip.counters.some((c) => COUNTERS[c].answers.includes(t.kind)))
+      .filter((ip) => !chosen.has(ip.item.id) && !owned.has(ip.item.id) && !conflicts(ip) && ip.counters.some((c) => COUNTERS[c].answers.includes(t.kind)))
       .map((ip) => score(ip, p, e, state))
       .sort((a, b) => b.score - a.score)[0];
     if (!counter) continue;
@@ -361,18 +498,23 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
     const resist = resistAgainst(t, e);
     const fitting = counter.fit < FITS && resist
       ? profiles
-          .filter((ip) => ip.finished && !chosen.has(ip.item.id) && !owned.has(ip.item.id) && (ip.item.stats[resist]?.flat ?? 0) > 0 && !counterWithoutThreat(ip, e))
+          .filter((ip) => ip.finished && !chosen.has(ip.item.id) && !owned.has(ip.item.id) && !conflicts(ip) && (ip.item.stats[resist]?.flat ?? 0) > 0 && !counterWithoutThreat(ip, e))
           .map((ip) => score(ip, p, e, state))
           .filter((x) => x.fit >= FITS)
           .sort((a, b) => b.score - a.score)[0]
       : undefined;
+    // An already-selected suitable defensive item must not make the fallback
+    // recommend a second counter whose stats the champion barely uses.
+    if (counter.fit < FITS && !fitting) continue;
     const answer = fitting ?? counter;
     chosen.add(answer.ip.item.id);
     situational.push({
       ...pick(answer),
       when: fitting
         ? `Against the ${threatPhrase(t.kind)} from ${who}: ${resist === "armor" ? "armor" : "magic resist"} with stats ${p.name} uses (${counter.ip.item.name} counters it directly but is built for tanky champions).`
-        : `Against the ${threatPhrase(t.kind)} from ${who}.`,
+        : t.kind === "healing"
+          ? `If healing from ${who} is deciding fights; this is a situational alternative, not the next scheduled purchase.`
+          : `Against the ${threatPhrase(t.kind)} from ${who}.`,
     });
     if (situational.length >= 3) break;
   }
@@ -380,8 +522,9 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
     if (share < 0.6 || situational.length >= 3) continue;
     const stat = kind === "physical" ? "armor" : "magicResistance";
     const answer = profiles
-      .filter((ip) => ip.finished && !chosen.has(ip.item.id) && !owned.has(ip.item.id) && (ip.item.stats[stat]?.flat ?? 0) > 0 && !counterWithoutThreat(ip, e))
+      .filter((ip) => ip.finished && !chosen.has(ip.item.id) && !owned.has(ip.item.id) && !conflicts(ip) && (ip.item.stats[stat]?.flat ?? 0) > 0 && !counterWithoutThreat(ip, e))
       .map((ip) => score(ip, p, e, state))
+      .filter(x => x.fit >= FITS)
       .sort((a, b) => b.score - a.score)[0];
     if (!answer) continue;
     chosen.add(answer.ip.item.id);
@@ -389,7 +532,7 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
   }
 
   const first = core[0] ?? null;
-  if (first && core[1]) first.why.push(`It scores ${Math.round(first.score * 100) / 100} for this game, against ${Math.round(core[1].score * 100) / 100} for ${core[1].ip.item.name}, the next best.`);
+  if (first && runnerUp) first.why.push(`Heuristic score ${Math.round(first.score * 100) / 100}, versus ${Math.round(runnerUp.score * 100) / 100} for ${runnerUp.ip.item.name} in the same slot. This is not a win probability.`);
 
   // Certainty: how far the first item is ahead of the best other choice for the same slot.
   const margin = first && runnerUp && first.score > 0 ? (first.score - runnerUp.score) / first.score : first ? 1 : 0;
@@ -412,16 +555,17 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
       standard: same,
       standardCore,
       note: same
-        ? `Nothing in the enemy team changes ${p.name}'s standard core (${standardCore.map((x) => x.name).join(", ")}): continue with it.`
+        ? `The neutral-scenario sequence is unchanged (${standardCore.map((x) => x.name).join(", ")}). ${core.every(x=>x.empirical!==undefined) ? "Each purchase has eligible observations for its matching prefix." : "This includes provisional mechanics-based choices; reassess later purchases as the game changes."}`
         : changedFirst
-          ? `${first.ip.item.name} instead of the standard ${changedFirst.name}: ${lower(changeReason(first, e) ?? "it fits this enemy team better")}`
-          : `Same first item as the standard core; the later items change for this game.`,
+          ? `${first.ip.item.name} instead of the neutral-scenario ${changedFirst.name}: ${lower(changeReason(first, e) ?? "it fits this enemy team better")}`
+          : `Same first item as the neutral scenario; later targets are conditional on this game.`,
     };
   }
 
   return {
     champion: p.name,
-    kit: p.facts,
+    audit: {basis:firstPool.some(x=>x.empirical!==undefined)?"observed":"mechanics",candidates:firstPool.map(x=>({id:x.ip.item.id,name:x.ip.item.name,score:x.score,mechanical:x.score-(x.empirical??0),empirical:x.empirical??0}))},
+    kit: [...p.facts, positionReason(normalizePosition(input.position)), ...(input.me.detail !== "full" ? ["Detailed champion mechanics are incomplete; this recommendation requires review."] : []), firstPool.some(x=>x.empirical!==undefined) ? "Current-patch purchase evidence contributes to the ranking; this is not a predicted win rate." : "No sufficiently sampled current-patch purchase evidence is available for this ranking; guidance is heuristic."],
     enemyDamage: e.damage,
     componentUtility: Object.fromEntries(input.items.filter(i => i.purchasable && i.gold > 0).map(i => [i.id, score(itemProfile(i, gold, catalog), p, e, componentState).score])),
     threats: Object.values(e.threats).filter((t) => t.weight >= RELEVANT).sort((a, b) => b.weight - a.weight),

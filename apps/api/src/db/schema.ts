@@ -213,3 +213,10 @@ export const liveFrames = pgTable("live_frames", {
   receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
   payload: jsonb("payload").notNull(),
 });
+
+/** Per-match enrichment provenance; follows the retained match-id lifetime. */
+export const statsEnrichments = pgTable("stats_enrichments", {
+  matchId: text("match_id").primaryKey().references(() => statsMatches.matchId, { onDelete: "cascade" }),
+  status: text("status").notNull(),
+  processedAt: timestamp("processed_at", { withTimezone: true }).notNull().defaultNow(),
+});

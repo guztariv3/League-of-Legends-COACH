@@ -31,6 +31,7 @@ export interface EnemyPicture {
   threats: Record<ThreatKind, Threat>;
   profiles: ChampionProfile[];
   laneOpponent: string | null;
+  purchasedResists: { armor: number; magicResistance: number };
 }
 
 const clamp = (x: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, x));
@@ -40,10 +41,18 @@ const HEALS = /\b(heals?|healing|restores? .{0,20}health|life steal|lifesteal|om
 const SHIELDS = /\b(shield(?:s|ed)? (?:himself|herself|itself|themselves|an ally|allies|nearby allies)|grants? (?:a |him |her |them )?shield|gains? a shield|shield strength)\b/i;
 
 /** Ability slots (P, Q, W, E, R) whose text or values match. */
-function slots(kit: ChampionKit, test: RegExp): string[] {
+function slots(kit: ChampionKit, test: RegExp, textOf: (text:string)=>string = text=>text): string[] {
   const hit = new Set<string>();
-  for (const a of kit.abilities) if (test.test(a.text) || a.values.some((v) => test.test(v))) hit.add(a.slot);
+  for (const a of kit.abilities) if (test.test(textOf(a.text)) || a.values.some((v) => test.test(textOf(v)))) hit.add(a.slot);
   return [...hit];
+}
+
+/** An attack can apply an externally supplied healing stat without granting it.
+ * Keep direct heals and granted innate sustain; supplied item sustain is counted separately. */
+function intrinsicHealingText(text:string):string {
+  return text
+    .replace(/\b(?:appl(?:y|ies|ying)|benefits? from)\s+(?:life steal|lifesteal|omnivamp)\b[^.;\n]*/gi, "")
+    .replace(/\bheals?\b[^;\n]{0,160}?\bof (?:his|her|their|its) (?:life steal|lifesteal|omnivamp)\b/gi, "");
 }
 
 const stat = (items: ItemFacts[], k: keyof ItemFacts["stats"], part: "flat" | "percent" = "flat") =>
@@ -63,6 +72,7 @@ export function enemyPicture(enemies: EnemyInput[]): EnemyPicture {
 
   let phys = 0, magic = 0, tru = 0, total = 0;
   const profiles: ChampionProfile[] = [];
+  const purchasedResists = { armor: 0, magicResistance: 0 };
   let laneOpponent: string | null = null;
   for (const e of enemies) {
     const p = championProfile(e.kit);
@@ -86,7 +96,7 @@ export function enemyPicture(enemies: EnemyInput[]): EnemyPicture {
       ? `${critItems}% critical strike chance from items`
       : p.scales.crit >= 0.6 && p.attackReliance < 0.6 ? "abilities scale with critical strike chance" : "relies on basic attacks, which can critically strike", w);
 
-    const heal = slots(e.kit, HEALS);
+    const heal = slots(e.kit, HEALS, intrinsicHealingText);
     const healItems = stat(items, "lifesteal", "percent") + stat(items, "omnivamp", "percent");
     add("healing", p.name, Math.max(heal.length * 0.22, clamp(healItems / 15)), healItems > 0
       ? `${healItems}% life steal and omnivamp from items`
@@ -98,13 +108,16 @@ export function enemyPicture(enemies: EnemyInput[]): EnemyPicture {
     const cc = slots(e.kit, HARD_CC);
     add("cc", p.name, cc.length * 0.25, `crowd control on ${list(cc)}`, w);
 
-    const resists = stat(items, "armor") + stat(items, "magicResistance");
+    const armor = stat(items, "armor"), mr = stat(items, "magicResistance");
+    purchasedResists.armor = Math.max(purchasedResists.armor, armor);
+    purchasedResists.magicResistance = Math.max(purchasedResists.magicResistance, mr);
+    const resists = armor + mr;
     const health = stat(items, "health");
     // Built to take hits: the Wiki's top toughness rating, or armor, magic resist and health from items.
     const tankKit = clamp((p.frontline - 0.5) / 0.5);
     const tank = Math.max(tankKit, clamp(resists / 150 + health / 2000));
     add("tanks", p.name, tank, resists + health > 0 && tank > tankKit
-      ? `${resists} armor and magic resist and ${health} health from items`
+      ? `${armor} armor, ${mr} magic resist and ${health} health from items`
       : "built to take hits (Wiki toughness rating)", w);
 
     add("attackSpeed", p.name, clamp((p.attackReliance - 0.4) / 0.5), "relies on basic attacks", w);
@@ -119,5 +132,5 @@ export function enemyPicture(enemies: EnemyInput[]): EnemyPicture {
     sources: acc[k].sources.sort((a, b) => b.x - a.x).map(({ name, why }) => ({ name, why })),
   }])) as Record<ThreatKind, Threat>;
   const t = total || 1;
-  return { damage: { physical: phys / t, magic: magic / t, true: tru / t }, threats, profiles, laneOpponent };
+  return { damage: { physical: phys / t, magic: magic / t, true: tru / t }, threats, profiles, laneOpponent, purchasedResists };
 }

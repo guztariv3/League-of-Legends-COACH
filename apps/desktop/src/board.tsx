@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { certaintyOf, isAdjustment, liveCoach, pickNow, SLOT_KEY, usualMaxOrder, type CoachDecision, type EngineItems, type LiveCoach, type Slot } from "@coach/coach";
 import { parseCatalog, type Catalog, type PurchasePlan, type Suggestion } from "@coach/itemization";
 import type { GameState } from "@coach/live";
@@ -160,21 +160,22 @@ function BuyNow({ p, time, art }: { p: PurchasePlan; time: number; art: Art }) {
       <div className="label">Buy now</div>
       {p.now ? (
         <>
-          <div className="recipe">{p.now.buys.map((b, i) => <ItemArt key={`${b.id}-${i}`} id={b.id} name={b.name} size={32} art={art} />)}</div>
+          <ol className="purchase-order">{p.now.buys.map((b,i)=><li key={`${b.id}-${i}`}><ItemArt id={b.id} name={b.name} size={32} art={art}/><span><strong>{b.name}</strong> · {b.gold} gold{b.targetName && <small> → {b.targetName}</small>}{b.reason && <small>{b.reason}</small>}</span></li>)}</ol>
           <div className="next-name">{p.now.buys.map((b) => b.name).join(" + ")}</div>
           <p className="quiet">
             {p.now.spent} of your {p.now.spent + p.now.leftover} gold
             {p.now.completes.length > 0 ? ` · completes ${p.now.completes.join(" and ")}.` : ` · toward ${p.now.toward}.`}
           </p>
         </>
-      ) : <p className="quiet">Your gold doesn't buy a piece of your next item yet.</p>}
+      ) : <p className="quiet">No useful purchase fits your current gold and inventory.</p>}
+      {!!p.deferred?.length && <p className="quiet">Keep unfinished: {p.deferred.join(", ")}. Re-evaluated as the game changes.</p>}
       {p.wait && (
         <p className="buynow-wait">
-          Next budget threshold: {p.wait.extra} more gold{p.wait.seconds !== null ? ` (about ${p.wait.seconds} s at your pace)` : ""} buys {p.wait.buys.map((b) => b.name).join(" + ")} instead. This does not mean you should wait in base; consider the wave and travel time.
+          Saving alternative: keep your current gold and earn {p.wait.extra} more gold{p.wait.seconds !== null ? ` (about ${p.wait.seconds} s at your pace)` : ""} buys {p.wait.buys.map((b) => b.name).join(" + ")} instead of following Buy now. This does not mean you should wait in base; consider the wave and travel time.
         </p>
       )}
       {p.milestones.length > 0 && (
-        <ul className="milestones" aria-label="When your items arrive">
+        <ul className="milestones" aria-label="Upcoming item costs and next-item estimate">
           {p.milestones.slice(0, 3).map((m, i) => (
             <li key={m.id}>
               <ItemArt id={m.id} name={m.name} size={20} art={art} />
@@ -184,7 +185,7 @@ function BuyNow({ p, time, art }: { p: PurchasePlan; time: number; art: Art }) {
           ))}
         </ul>
       )}
-      {p.pace !== null && <p className="quiet small">At your pace of about {Math.round(p.pace)} gold per minute: the gold and items you hold, over the minutes played. Consumables and sold items aren't counted, so it's a lower bound.</p>}
+      {p.pace !== null && <p className="quiet small">Observed pace: about {Math.round(p.pace)} gold per minute from held gold and items. Only the next unpaid target gets a conditional estimate; later items show their remaining cost. Consumables, sales and future income changes are not captured. This is not a deadline or a prediction that the game will last that long.</p>}
     </section>
   );
 }
@@ -194,7 +195,8 @@ function ItemsTab({ state, coach, build, art, connected, demo, hasCatalog }: {
 }) {
   const me = state.me!;
   if (demo) return <p className="quiet">In the demo the items are made up, so there are no suggestions. In a real game you will see your next suggested item here and how to buy it.</p>;
-  if (!hasCatalog || !coach.items) return <p className="quiet">Loading the patch item catalog… (needs an Internet connection)</p>;
+  if (!hasCatalog) return <p className="quiet">Loading the patch item catalog… (needs an Internet connection)</p>;
+  if (!coach.items) return <p className="quiet">Contextual item guidance unavailable. Connect to a server with current champion and item mechanics; class-only guesses are not shown.</p>;
   const s = coach.items;
   const price = (x: Suggestion) => `${x.item.gold} gold`;
   return (
@@ -430,7 +432,7 @@ export function Board({ state, art, catalog, build, connected, tab, demo = false
   const skillReference = master?.skills
     ? { max: master.skills.max, sequence: master.skills.sequence, games: master.skills.games, total: master.games, patch: master.patch, patchLabel: master.patchLabel }
     : null;
-  const coach = state.me && !suspended ? liveCoach({
+  const coach = useMemo(() => state.me && !suspended ? liveCoach({
     state,
     catalog: demo ? null : catalog,
     usualItems: personal?.items.map((i) => i.id) ?? [],
@@ -438,7 +440,8 @@ export function Board({ state, art, catalog, build, connected, tab, demo = false
     skillHistory: history,
     skillReference,
     engine,
-  }) : null;
+    allowLocalItems: false,
+  }) : null, [state,catalog,demo,suspended,engine,build,plan]);
   previousItem.current = coach?.items?.next?.item.id ?? null;
   const now = coach ? pickNow(coach.decisions, shownId) : null;
   const myItems = state.me?.items ?? [];
