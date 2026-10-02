@@ -8,7 +8,7 @@ import { recordRank } from "./rank.js";
 import { forgetPlayers } from "./retention.js";
 import type { MatchSource } from "./sources.js";
 
-/** First sync pulls the last 50 games (brief §14); later syncs page back until they reach known games. */
+/** First sync pulls the last 50 games (brief §14); later syncs drain bounded time windows. */
 export const INITIAL_SYNC_COUNT = 50;
 export const PAGE_SIZE = 100;
 /** Safety cap for one incremental sync; anything older is picked up by the next one. */
@@ -27,6 +27,20 @@ export interface SyncProgress {
 export class SyncService {
   private readonly running = new Map<string, Promise<void>>();
   private readonly progress = new Map<string, SyncProgress>();
+  private readonly deleting = new Map<string,number>();
+
+  /** Let in-flight writes finish before deletion, and block new local jobs until
+   * the deletion transaction commits. A process restart has no jobs to await. */
+  async withDeletion<T>(accountIds:string[],operation:()=>Promise<T>):Promise<T>{
+    const ids=[...new Set(accountIds)];
+    for(const id of ids)this.deleting.set(id,(this.deleting.get(id)??0)+1);
+    try {
+      await Promise.all(ids.map(id=>this.running.get(id)));
+      return await operation();
+    } finally {
+      for(const id of ids){const n=this.deleting.get(id)!-1;if(n)this.deleting.set(id,n);else this.deleting.delete(id);}
+    }
+  }
 
   constructor(private readonly db: Db, private readonly source: MatchSource) {}
 
@@ -51,6 +65,7 @@ export class SyncService {
 
   /** Starts a sync unless one is already running. The returned promise never rejects. */
   start(accountId: string): Promise<void> {
+    if(this.deleting.has(accountId))return Promise.resolve();
     const existing = this.running.get(accountId);
     if (existing) return existing;
     const job = this.run(accountId)
@@ -79,11 +94,13 @@ export class SyncService {
       if (!account) return;
       await this.markSyncing([accountId]);
 
-      let todo: string[];
+      let windowEnd=account.syncWindowEnd ?? new Date(Math.floor(Date.now()/1000)*1000);
+      await this.db.update(schema.riotAccounts).set({syncWindowEnd:windowEnd}).where(eq(schema.riotAccounts.id,accountId));
+      let batch:{ids:string[];complete:boolean;nextOffset:number};
       try {
-        todo = account.lastSyncedAt === null
-          ? await this.source.matchIds(account.platform, account.puuid, INITIAL_SYNC_COUNT, 0)
-          : await this.newMatchIds(account);
+        batch = account.lastSyncedAt === null
+          ? {ids:await this.source.matchIds(account.platform,account.puuid,INITIAL_SYNC_COUNT,0,undefined,windowEnd.getTime()/1000),complete:true,nextOffset:0}
+          : await this.newMatchIds(account,windowEnd);
       } catch (err) {
         // Riot encrypts PUUIDs per API key: after the server's key changes, the stored one is
         // rejected with a 400. Look the Riot ID up again and start this account's history over.
@@ -91,8 +108,11 @@ export class SyncService {
         const renewed = await this.renewPuuid(account);
         if (!renewed) throw err;
         account = renewed;
-        todo = await this.source.matchIds(account.platform, account.puuid, INITIAL_SYNC_COUNT, 0);
+        windowEnd=new Date(Math.floor(Date.now()/1000)*1000);
+        await this.db.update(schema.riotAccounts).set({syncWindowEnd:windowEnd}).where(eq(schema.riotAccounts.id,accountId));
+        batch={ids:await this.source.matchIds(account.platform,account.puuid,INITIAL_SYNC_COUNT,0,undefined,windowEnd.getTime()/1000),complete:true,nextOffset:0};
       }
+      const todo=batch.ids;
       this.progress.set(accountId, { done: 0, total: todo.length });
 
       for (const matchId of todo) {
@@ -103,7 +123,9 @@ export class SyncService {
       await recordRank(this.db, this.source, account);
 
       await this.db.update(schema.riotAccounts)
-        .set({ syncStatus: "ok", lastSyncedAt: new Date() })
+        .set(batch.complete
+          ? {syncStatus:"ok",lastSyncedAt:windowEnd,syncOffset:0,syncWindowEnd:null}
+          : {syncStatus:"ok",syncOffset:batch.nextOffset,syncWindowEnd:windowEnd})
         .where(eq(schema.riotAccounts.id, accountId));
     } catch (err) {
       await this.setError(accountId, err);
@@ -117,29 +139,26 @@ export class SyncService {
     console.warn(`[sync] account ${account.id}: PUUID changed with the API key; re-syncing its history`);
     await this.db.delete(schema.accountMatches).where(eq(schema.accountMatches.accountId, account.id));
     const [renewed] = await this.db.update(schema.riotAccounts)
-      .set({ puuid: found.puuid, lastSyncedAt: null })
+      .set({ puuid: found.puuid, lastSyncedAt: null, syncOffset:0, syncWindowEnd:null })
       .where(eq(schema.riotAccounts.id, account.id))
       .returning();
     await forgetPlayers(this.db, [account.puuid]);
     return renewed ?? null;
   }
 
-  /** Pages back from the newest game until it reaches games already linked (or the cap). */
-  private async newMatchIds(account: typeof schema.riotAccounts.$inferSelect): Promise<string[]> {
-    const startTime = Math.floor(account.lastSyncedAt!.getTime() / 1000) - 3600;
-    const fresh: string[] = [];
-    for (let start = 0; fresh.length < MAX_INCREMENTAL; start += PAGE_SIZE) {
-      const page = await this.source.matchIds(account.platform, account.puuid, PAGE_SIZE, start, startTime);
-      if (!page.length) break;
-      const linked = new Set(
-        (await this.db.select({ id: schema.accountMatches.matchId }).from(schema.accountMatches)
-          .where(and(eq(schema.accountMatches.accountId, account.id), inArray(schema.accountMatches.matchId, page))))
-          .map((r) => r.id),
-      );
-      fresh.push(...page.filter((id) => !linked.has(id)));
-      if (linked.size > 0 || page.length < PAGE_SIZE) break;
+  /** Resume a bounded time window. Linked pages do not prove that older pages
+   * are complete. Cursor and watermark advance only after all ingests succeed. */
+  private async newMatchIds(account:typeof schema.riotAccounts.$inferSelect,windowEnd:Date):Promise<{ids:string[];complete:boolean;nextOffset:number}>{
+    const startTime=Math.floor(account.lastSyncedAt!.getTime()/1000)-3600;
+    const ids:string[]=[];
+    let start=account.syncOffset;
+    while(ids.length<MAX_INCREMENTAL){
+      const count=Math.min(PAGE_SIZE,MAX_INCREMENTAL-ids.length);
+      const page=await this.source.matchIds(account.platform,account.puuid,count,start,startTime,windowEnd.getTime()/1000);
+      ids.push(...page);start+=page.length;
+      if(page.length<count)return {ids:[...new Set(ids)],complete:true,nextOffset:0};
     }
-    return fresh.slice(0, MAX_INCREMENTAL);
+    return {ids:[...new Set(ids)],complete:false,nextOffset:start};
   }
 
   /**

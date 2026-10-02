@@ -36,7 +36,7 @@ async function call(path: string, init: RequestInit & { cookie?: string; ip?: st
 }
 
 async function player(name: string) {
-  const { res } = await call("/auth/dev-login", { method: "POST", body: JSON.stringify({ displayName: name }) });
+  const { res } = await call("/auth/dev-login", { method: "POST", body: JSON.stringify({ token: "a".repeat(64), displayName: name }) });
   const cookie = res.headers.get("set-cookie")!.split(";")[0]!;
   await call("/accounts", { method: "POST", cookie, body: JSON.stringify({ gameName: name, tagLine: "EUW", platform: "euw1" }) });
   return cookie;

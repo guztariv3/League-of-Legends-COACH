@@ -30,7 +30,7 @@ async function call(path: string, init: RequestInit & { cookie?: string } = {}) 
 }
 
 async function login(name = "Tester") {
-  const { res } = await call("/auth/dev-login", { method: "POST", body: JSON.stringify({ displayName: name }) });
+  const { res } = await call("/auth/dev-login", { method: "POST", body: JSON.stringify({ token: "a".repeat(64), displayName: name }) });
   return res.headers.get("set-cookie")!.split(";")[0]!;
 }
 

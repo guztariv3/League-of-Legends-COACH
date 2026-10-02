@@ -90,7 +90,7 @@ describe("production site", () => {
   it("uses the platform URL as the allowed origin for writes", async () => {
     const evil = await site.request("/api/auth/dev-login", { method: "POST", body: "{}", headers: { Authorization: auth, "Content-Type": "application/json", Origin: "https://evil.example" } });
     expect(evil.status).toBe(403);
-    const ok = await site.request("/api/auth/dev-login", { method: "POST", body: JSON.stringify({ displayName: "Tester" }), headers: { Authorization: auth, "Content-Type": "application/json", Origin: "https://kairos.example" } });
+    const ok = await site.request("/api/auth/dev-login", { method: "POST", body: JSON.stringify({ token: "a".repeat(64), displayName: "Tester" }), headers: { Authorization: auth, "Content-Type": "application/json", Origin: "https://kairos.example" } });
     expect(ok.status).toBe(200);
   });
 });

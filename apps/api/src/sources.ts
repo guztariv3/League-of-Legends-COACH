@@ -53,8 +53,8 @@ export function syntheticTrail(games: SyntheticGame[], puuid: string, seed: numb
 export interface MatchSource {
   readonly kind: DataSource;
   resolveAccount(platform: string, gameName: string, tagLine: string): Promise<ResolvedAccount | null>;
-  /** Newest-first match ids, paged by `start`. `startTime` is epoch seconds. */
-  matchIds(platform: string, puuid: string, count: number, start: number, startTime?: number): Promise<string[]>;
+  /** Newest-first match ids, paged by `start`. `startTime` and `endTime` are epoch seconds. */
+  matchIds(platform: string, puuid: string, count: number, start: number, startTime?: number, endTime?: number): Promise<string[]>;
   match(platform: string, matchId: string): Promise<RawMatch | null>;
   timeline(platform: string, matchId: string): Promise<RawTimeline | null>;
   /** Top champions by mastery; absent in the synthetic environment (scouting falls back to recent games). */
@@ -78,7 +78,7 @@ export function riotSource(client: RiotClient): MatchSource {
       const acc = await client.getAccountByRiotId(platform, gameName, tagLine);
       return acc ? { puuid: acc.puuid, gameName: acc.gameName ?? gameName, tagLine: acc.tagLine ?? tagLine } : null;
     },
-    matchIds: (platform, puuid, count, start, startTime) => client.getMatchIds(platform, puuid, { count, start, startTime }),
+    matchIds: (platform, puuid, count, start, startTime, endTime) => client.getMatchIds(platform, puuid, { count, start, startTime, endTime }),
     match: (platform, id) => client.getMatch(platform, id),
     timeline: (platform, id) => client.getTimeline(platform, id),
     topMasteries: (platform, puuid, count) => client.getTopMasteries(platform, puuid, count),
@@ -139,9 +139,9 @@ export function syntheticSource(now: () => number = Date.now): MatchSource {
       history(platform, puuid, gameName, tagLine);
       return { puuid, gameName, tagLine };
     },
-    async matchIds(platform, puuid, count, start, startTime) {
+    async matchIds(platform, puuid, count, start, startTime, endTime) {
       return history(platform, puuid)
-        .filter((g) => startTime === undefined || g.match.info.gameCreation >= startTime * 1000)
+        .filter((g) => (startTime === undefined || g.match.info.gameCreation >= startTime * 1000) && (endTime === undefined || g.match.info.gameCreation <= endTime * 1000))
         .slice(start, start + count)
         .map((g) => g.match.metadata.matchId);
     },

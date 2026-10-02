@@ -31,7 +31,7 @@ const count = async (table: string) =>
 
 describe("data retention", () => {
   it("keeps a linked account's games and deletes old match data no account uses", async () => {
-    const { res } = await call("/auth/dev-login", { method: "POST", body: JSON.stringify({ displayName: "Keeper" }) });
+    const { res } = await call("/auth/dev-login", { method: "POST", body: JSON.stringify({ token: "a".repeat(64), displayName: "Keeper" }) });
     const cookie = res.headers.get("set-cookie")!.split(";")[0]!;
     const acc = await call("/accounts", { method: "POST", cookie, body: JSON.stringify({ gameName: "Keeper", tagLine: "EUW", platform: "euw1" }) });
     await ctx.sync.start(acc.body.account.id);
@@ -56,15 +56,16 @@ describe("data retention", () => {
     expect(await count("account_matches")).toBe(linked);
     expect((await call("/matches?limit=5", { cookie })).body.matches.length).toBeGreaterThan(0);
 
-    // Unlinking the account removes its analyses at once and lets its games age out.
+    // Unlinking removes its unused analyses and raw history immediately.
     await call(`/accounts/${acc.body.account.id}`, { method: "DELETE", cookie });
     expect(await count("match_analyses")).toBe(0);
+    expect(await count("raw_matches")).toBe(1);
     await purgeUnlinkedMatches(database.db);
     expect(await count("raw_matches")).toBe(1);
   }, 60_000);
 
   it("deleting everything also deletes the player's analyses", async () => {
-    const { res } = await call("/auth/dev-login", { method: "POST", body: JSON.stringify({ displayName: "Leaver" }) });
+    const { res } = await call("/auth/dev-login", { method: "POST", body: JSON.stringify({ token: "a".repeat(64), displayName: "Leaver" }) });
     const cookie = res.headers.get("set-cookie")!.split(";")[0]!;
     const acc = await call("/accounts", { method: "POST", cookie, body: JSON.stringify({ gameName: "Leaver", tagLine: "EUW", platform: "euw1" }) });
     await ctx.sync.start(acc.body.account.id);
@@ -73,4 +74,29 @@ describe("data retention", () => {
     expect(await count("match_analyses")).toBe(0);
     expect(await count("riot_accounts")).toBe(0);
   }, 60_000);
+});
+
+it.each(['same','different'])('preserves shared match data until the last account is deleted (%s player)',async(kind)=>{
+ const cookies:string[]=[];
+ for(const n of [1,2]){
+  const {res}=await call('/auth/dev-login',{method:'POST',body:JSON.stringify({displayName:`Shared-${kind}-${n}`,token:'b'.repeat(64)})});
+  cookies.push(res.headers.get('set-cookie')!.split(';')[0]!);
+ }
+ const users=await Promise.all(cookies.map(cookie=>call('/me',{cookie})));
+ const accounts=[];
+ for(const n of [0,1]){
+  const [a]=await database.db.insert(schema.riotAccounts).values({userId:users[n]!.body.user.id,puuid:`shared-${kind}-${kind==='same'?0:n}`,gameName:'Shared',tagLine:'TEST',platform:'euw1',source:'synthetic'}).returning();accounts.push(a!);
+ }
+ const id=`EUW1_SHARED_${kind}`;
+ await database.db.insert(schema.rawMatches).values({matchId:id,platform:'euw1',source:'synthetic',payload:{}});
+ await database.db.insert(schema.rawTimelines).values({matchId:id,payload:{}});
+ for(const a of accounts)await database.db.insert(schema.accountMatches).values({accountId:a.id,matchId:id,startedAt:new Date()});
+ for(const puuid of new Set([...accounts.map(a=>a.puuid),'unlinked-scout']))await database.db.insert(schema.matchAnalyses).values({matchId:id,puuid,analysisVersion:1,data:{}});
+ expect((await call(`/accounts/${accounts[0]!.id}`,{method:'DELETE',cookie:cookies[0]})).res.status).toBe(200);
+ expect(await database.db.select().from(schema.rawMatches).where(eq(schema.rawMatches.matchId,id))).toHaveLength(1);
+ expect(await database.db.select().from(schema.matchAnalyses).where(eq(schema.matchAnalyses.puuid,accounts[1]!.puuid))).toHaveLength(1);
+ expect((await call('/me',{method:'DELETE',cookie:cookies[1]})).res.status).toBe(200);
+ expect(await database.db.select().from(schema.rawMatches).where(eq(schema.rawMatches.matchId,id))).toHaveLength(0);
+ expect(await database.db.select().from(schema.rawTimelines).where(eq(schema.rawTimelines.matchId,id))).toHaveLength(0);
+ expect(await database.db.select().from(schema.matchAnalyses).where(eq(schema.matchAnalyses.matchId,id))).toHaveLength(0);
 });

@@ -52,7 +52,7 @@ describe("rank snapshots", () => {
   }
 
   it("records rank after a sync only when it changed, and serves the history", async () => {
-    const { res } = await call("/auth/dev-login", { method: "POST", body: JSON.stringify({ displayName: "Climber" }) });
+    const { res } = await call("/auth/dev-login", { method: "POST", body: JSON.stringify({ token: "a".repeat(64), displayName: "Climber" }) });
     const cookie = res.headers.get("set-cookie")!.split(";")[0]!;
     const { body: created } = await call("/accounts", { method: "POST", cookie, body: JSON.stringify({ gameName: "Climber", tagLine: "NA1", platform: "na1" }) });
     const id = created.account.id;
@@ -74,7 +74,7 @@ describe("rank snapshots", () => {
   }, 60_000);
 
   it("keeps syncing when the rank lookup fails", async () => {
-    const { res } = await call("/auth/dev-login", { method: "POST", body: JSON.stringify({ displayName: "Offline" }) });
+    const { res } = await call("/auth/dev-login", { method: "POST", body: JSON.stringify({ token: "a".repeat(64), displayName: "Offline" }) });
     const cookie = res.headers.get("set-cookie")!.split(";")[0]!;
     const { body: created } = await call("/accounts", { method: "POST", cookie, body: JSON.stringify({ gameName: "Offline", tagLine: "NA1", platform: "na1" }) });
     entries = null as unknown as RiotLeagueEntry[]; // a malformed answer makes recordRank throw internally
