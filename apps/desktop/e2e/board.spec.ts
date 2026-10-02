@@ -27,8 +27,10 @@ async function inGame(page: Page, withEngine: boolean) {
       gameData: { gameMode: "CLASSIC", gameTime: 900, mapNumber: 11 },
     };
     localStorage.setItem("koi.link", JSON.stringify({ origin: "https://koi.example", token: "device-token-for-tests-only" }));
-    const auditWindow = window as unknown as { __changeRole?: (position:string)=>void; __plans?: string[]; __delayTop?: boolean; __releaseTop?: ()=>void };
+    const auditWindow = window as unknown as { __changeRole?: (position:string)=>void; __plans?: string[]; __delayTop?: boolean; __releaseTop?: ()=>void; __buy?: (item:{ itemID: number; displayName: string; price: number })=>void; __delayItems?: boolean; __releaseItems?: (()=>void)[] };
     auditWindow.__changeRole = position => { snapshot.allPlayers[0]!.position = position; };
+    auditWindow.__buy = item => { snapshot.allPlayers[0]!.items.push(item); };
+    auditWindow.__releaseItems = [];
     auditWindow.__plans = [];
     (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {
       invoke: async (cmd: string, args: Record<string, unknown>) => {
@@ -70,6 +72,12 @@ async function inGame(page: Page, withEngine: boolean) {
             if (!withEngine) throw "server_error";
             (window as unknown as { __items: unknown }).__items = args;
             if (args.position === "TOP" && auditWindow.__delayTop) await new Promise<void>(resolve => { auditWindow.__releaseTop=resolve; });
+            if (auditWindow.__delayItems) await new Promise<void>(resolve => { auditWindow.__releaseItems!.push(resolve); });
+            // Once Rabadon's Deathcap is owned the engine moves on to the next item.
+            if (String(args.mine).split(".").includes("3089")) return { build: {
+              first: { id: 3165, name: "Morellonomicon", score: 1.2, why: ["It applies Grievous Wounds: Zed: life steal from items."] },
+              next: [], boots: null, situational: [], starter: null,
+            } };
             return {
               build: {
                 first: { id: 3089, name: "Rabadon's Deathcap", score: 1.3, why: ["Gives 130 ability power: Ahri's Q, W, E and R scale with ability power.", `Role ${args.position || "unknown"}`] },
@@ -214,4 +222,22 @@ test("role switches refresh setup and hide an old role's item answer, including 
   await page.evaluate(()=>(window as unknown as {__releaseTop:()=>void}).__releaseTop());
   await expect(next).toContainText('Role MIDDLE');
   await expect(next).not.toContainText('Role TOP');
+});
+
+test("buying the suggested item hides its advice until the engine answers for the new inventory, even when slow", async ({page}) => {
+  await inGame(page, true);
+  await page.goto("/");
+  const board=page.getByRole("region",{name:"Game"});
+  const next=board.getByRole("region",{name:"Next suggested item"});
+  await expect(next).toContainText("Rabadon's Deathcap");
+  // The engine stalls while gold and time keep changing; the item is bought meanwhile.
+  await page.evaluate(()=>{const w=window as unknown as {__delayItems:boolean;__buy:(i:{itemID:number;displayName:string;price:number})=>void};w.__delayItems=true;w.__buy({itemID:3089,displayName:"Rabadon's Deathcap",price:3600});});
+  // The build computed for the old inventory is never offered for the new one.
+  await expect(board).toContainText("Contextual item guidance unavailable");
+  await expect(board.getByRole("region",{name:"Next suggested item"})).toHaveCount(0);
+  await expect.poll(()=>page.evaluate(()=>(window as unknown as {__releaseItems:(()=>void)[]}).__releaseItems.length)).toBeGreaterThan(0);
+  // The late answer for the new inventory is still applied.
+  await page.evaluate(()=>{const w=window as unknown as {__delayItems:boolean;__releaseItems:(()=>void)[]};w.__delayItems=false;w.__releaseItems.splice(0).forEach(r=>r());});
+  await expect(next).toContainText("Morellonomicon");
+  await expect(next).not.toContainText("Rabadon's Deathcap");
 });
