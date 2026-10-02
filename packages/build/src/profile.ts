@@ -36,6 +36,8 @@ export interface ChampionProfile {
   critMultiplier: number;
   damagingUltimate: boolean;
   repeatUltimate: boolean;
+  sustainedSpellDamage: boolean;
+  channeledBasicDamage: boolean;
   /** Plain facts used by the explanations. */
   facts: string[];
 }
@@ -160,6 +162,10 @@ export function championProfile(kit: ChampionKit): ChampionProfile {
   const ultimate = first(kit, "R");
   const damagingUltimate = Boolean(ultimate && /(?:deals?|dealing) .{0,80}damage/i.test(ultimate.text));
   const repeatUltimate = Boolean(damagingUltimate && ultimate && /recast|damage every|per second/i.test(ultimate.text));
+  const sustainedSpellDamage=kit.abilities.some(a=>a.damageType!==null && /damage every [\d.]|damage per (?:second|tick)|damage over [\d.]+ seconds/i.test(a.text));
+  const channeledBasicDamage=kit.abilities.some(a=>BASICS.includes(a.slot as typeof BASICS[number]) && a.damageType!==null && /channel(?:ling|ing|s)? for|channel duration|while channel(?:l)?ing/i.test(a.text));
+  if(sustainedSpellDamage)facts.push(`${kit.name}'s kit documents repeated spell damage over time`);
+  if(channeledBasicDamage)facts.push(`${kit.name} has a channeled basic damage spell; weaving attacks can interrupt its damage window`);
   const total = damage.physical + damage.magic + damage.true || 1;
   return {
     id: kit.id,
@@ -174,7 +180,7 @@ export function championProfile(kit: ChampionKit): ChampionProfile {
     mana,
     healsOrShields,
     allyHealShield,
-    spellOnHit, attackSpeedCooldown, cannotBuyBoots, cannotGainHealth, critMultiplier, damagingUltimate, repeatUltimate,
+    spellOnHit, attackSpeedCooldown, cannotBuyBoots, cannotGainHealth, critMultiplier, damagingUltimate, repeatUltimate, sustainedSpellDamage, channeledBasicDamage,
     ranged: kit.attackType === "RANGED",
     facts,
   };

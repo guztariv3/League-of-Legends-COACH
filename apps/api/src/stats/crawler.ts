@@ -1,6 +1,6 @@
 import type { RawMatch, RawTimeline } from "@coach/domain";
 import { patchFromVersion } from "@coach/domain";
-import type { GameFacts } from "@coach/knowledge";
+import { isCompletedPurchase, type GameFacts } from "@coach/knowledge";
 import { RiotApiError, type RiotApexLeague } from "@coach/riot";
 import type { Db } from "../db/index.js";
 import { SOLO_QUEUE, statRows } from "./aggregate.js";
@@ -17,10 +17,11 @@ export interface StatsRiot {
 /** The patch the game data is on ("16.19") and its finished items, from the daily game facts. */
 export type PatchInfo = { patch: string; completed: Set<number> };
 
-/** The patch of the game data ("16.19.1" → "16.19") and its finished items (Legendary, on the Rift, sold, not built further). */
-export function patchInfoOf(facts: GameFacts): PatchInfo {
+/** The patch of the game data ("16.19.1" → "16.19") and its finished items (Legendary, on the Rift, sold, no further shop purchase required). */
+export function patchInfoOf(facts: Pick<GameFacts, "items" | "version">): PatchInfo {
+  const catalog = new Map(facts.items.map(i=>[i.id,i]));
   const completed = new Set(facts.items
-    .filter((i) => i.purchasable && i.rank.includes("LEGENDARY") && i.into.length === 0 && (!i.maps.length || i.maps.includes(11)))
+    .filter((i) => isCompletedPurchase(i,catalog) && (!i.maps.length || i.maps.includes(11)))
     .map((i) => i.id));
   return { patch: patchFromVersion(facts.version), completed };
 }

@@ -1,3 +1,4 @@
+import { referencePrior, type BuildReference } from "./reference.js";
 import { normalizePosition, positionReason } from "./position.js";
 import { purchasePrior, type BuildEvidence } from "./evidence.js";
 import { itemTiming, type EconomyContext, type ItemTiming } from "./economy.js";
@@ -26,6 +27,9 @@ export interface BuildInput {
   economy?: EconomyContext;
   patch?: string;
   evidence?: BuildEvidence;
+  reference?: BuildReference;
+  /** Offline diagnostics only; reports each planned stage without changing ranking. */
+  onDecision?: (stage: {prefix:number[]; candidates:{id:number;score:number;empirical:number;reference:number;neutralMechanical:number;contextual:number|null}[]; excluded:{id:number;reason:string}[]}) => void;
 }
 
 export interface ItemPick { id: number; name: string; gold: number; score: number; why: string[]; timing?: ItemTiming }
@@ -35,7 +39,7 @@ export interface BuildRecommendation {
   unavailableReason?: string;
   champion: string;
   componentUtility?: Record<number, number>;
-  audit?: { basis: "mechanics" | "observed"; candidates: {id:number;name:string;score:number;mechanical:number;empirical:number}[] };
+  audit?: { basis: "mechanics" | "observed" | "reference"; candidates: {id:number;name:string;score:number;mechanical:number;empirical:number;neutralMechanical:number;contextual:number|null}[] };
   /** Facts about the champion's own kit that drive the build. */
   kit: string[];
   enemyDamage: EnemyPicture["damage"];
@@ -131,6 +135,13 @@ interface Scored {
   fit: number;
   timing?: ItemTiming;
   empirical?: number;
+  empiricalLevel?: "sampled" | "limited";
+  reference?: {bonus:number;reason:string;primary:boolean;order:number};
+  consensus?: boolean;
+  outcomeAgreement?: boolean;
+  neutralMechanical?: number;
+  contextual?: number;
+  calibrated?: boolean;
 }
 
 function score(ip: ItemProfile, p: ChampionProfile, e: EnemyPicture, s: State): Scored {
@@ -164,6 +175,7 @@ function score(ip: ItemProfile, p: ChampionProfile, e: EnemyPicture, s: State): 
     const brief = facts.slice(0, 2).map((f) => f.replace(/ \(ability reliance \d+\/100 on the Wiki\)/, ""));
     why.push(`Gives ${list(parts)}${brief.length ? `: ${brief.join("; ")}.` : "."}`);
   }
+  if (ip.attackReflection) why.push("Returns damage when struck by basic attacks; this effect does not require enemy healing. Its value depends on being attacked.");
   let bonus = 0;
   if ((ip.mana > 0 || ip.manaSustain) && s.manaNeed >= 0.2 && p.mana) {
     // Mana from stats is already in the stat value; restoring mana through a passive is valued here.
@@ -179,9 +191,13 @@ function score(ip: ItemProfile, p: ChampionProfile, e: EnemyPicture, s: State): 
   const effects = ip.item.effects.map(ef=>ef.text).join(" ");
   if (/after using an ability.*(?:next basic attack|next attack)/i.test(effects)) {
     const scaling = /magic damage/i.test(effects) ? p.scales.AP : p.scales.AD;
-    const synergy = scaling * (p.spellOnHit ? .35 : .18 * p.abilityReliance);
+    const synergy = scaling * (p.spellOnHit ? .35 : p.channeledBasicDamage ? 0 : .18 * p.abilityReliance);
     bonus += synergy;
     if (synergy > .08) why.push(p.spellOnHit ? `Its spell-triggered on-hit damage fits ${p.name}'s repeatable on-hit spell.` : `Its empowered attack can follow ${p.name}'s spell casts; this requires weaving an attack.`);
+  }
+  if(p.sustainedSpellDamage && /ability damage.*burn/i.test(effects)){
+    bonus+=p.scales.AP*.2;
+    why.push(`Its ability-damage burn can be refreshed by ${p.name}'s documented repeated spell damage.`);
   }
   if (/ultimate haste/i.test(effects) && p.damagingUltimate) {
     bonus += p.abilityReliance * .16;
@@ -217,7 +233,7 @@ function score(ip: ItemProfile, p: ChampionProfile, e: EnemyPicture, s: State): 
  * enemy team itself (not on what your other items already cover), so the reason is always true.
  */
 function counterWithoutThreat(ip: ItemProfile, e: EnemyPicture): Counter | null {
-  if (!ip.counters.length || !ip.counters.every((c) => THREAT_ONLY.includes(c))) return null;
+  if (ip.attackReflection || !ip.counters.length || !ip.counters.every((c) => THREAT_ONLY.includes(c))) return null;
   const relevant = ip.counters.some((c) => COUNTERS[c].answers.some((k) => e.threats[k].weight * (c === "magicShield" ? clamp(e.damage.magic * 1.5) : 1) >= RELEVANT));
   return relevant ? null : ip.counters[0]!;
 }
@@ -245,7 +261,7 @@ function difference(alt: Scored, first: Scored): string {
   return own ? `${a}: ${own}` : `${a} is almost as good for this game.`;
 }
 
-const pick = (x: Scored): ItemPick => ({ id: x.ip.item.id, name: x.ip.item.name, gold: x.ip.item.gold, score: Math.round(x.score * 100) / 100, why: [...x.why, ...(x.empirical === undefined ? ["No sufficiently sampled purchase evidence was used for this choice; this is a mechanics-based estimate, not observed win rate."] : [])], ...(x.timing ? { timing: x.timing } : {}) });
+const pick = (x: Scored): ItemPick => ({ id: x.ip.item.id, name: x.ip.item.name, gold: x.ip.item.gold, score: Math.round(x.score * 100) / 100, why: [...x.why, ...(x.empirical === undefined && !x.reference ? ["No sufficiently sampled purchase evidence was used for this choice; this is a mechanics-based estimate, not observed win rate."] : [])], ...(x.timing ? { timing: x.timing } : {}) });
 
 function starter(input: BuildInput, p: ChampionProfile, e: EnemyPicture, s: State, gold: Map<StatKey, number>): BuildRecommendation["starter"] {
   const shop = input.items.filter((i) => i.purchasable);
@@ -307,6 +323,7 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
   input = { ...input, position: normalizePosition(input.position) };
   const p = championProfile(input.me);
   const seen = enemyPicture(input.enemies);
+  const neutral = enemyPicture([]);
   // The standard core is built against a neutral enemy: half physical, half magic, no threats.
   const e: EnemyPicture = input.baseline
     ? { ...seen, purchasedResists: { armor: 0, magicResistance: 0 }, damage: { physical: 0.5, magic: 0.5, true: 0 }, threats: Object.fromEntries(Object.entries(seen.threats).map(([k, t]) => [k, { ...t, weight: 0, sources: [] }])) as unknown as EnemyPicture["threats"] }
@@ -324,8 +341,8 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
     return { champion: p.name, kit: p.facts, enemyDamage: e.damage, threats: [], starter: null,
       first: null, next: [], boots: null, situational: [], ruledOut: [], certainty: null, alternative: null, adaptation: null };
   }
-  const firstCompletedItem = !equipped.some(i=>i.rank.includes("LEGENDARY") && !i.rank.includes("BOOTS"));
-  const heldCore = equipped.filter(i=>i.rank.includes("LEGENDARY") && !i.rank.includes("BOOTS")).map(i=>i.id);
+  const heldCore = equipped.filter(i=>i.rank.includes("LEGENDARY") && !i.rank.includes("BOOTS") && !i.automaticUpgrade).map(i=>i.purchaseBase??i.id);
+  const firstCompletedItem = heldCore.length===0;
   const profiles = input.items.map((i) => itemProfile(i, gold, catalog))
     .filter((ip) => (ip.finished || (ip.boots && !p.cannotBuyBoots)) && (ip.item.requiredChampion === null || ip.item.requiredChampion === p.id) && ip.item.requiredAlly === null);
 
@@ -383,25 +400,39 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
   };
   const ruledOut = new Map<number, { id: number; name: string; why: string; score: number }>();
   const candidates = (boots: boolean) => {
+    const excluded:{id:number;reason:string}[]=[];
+    const reject=(ip:ItemProfile,reason:string)=>{if(input.onDecision)excluded.push({id:ip.item.id,reason});return null;};
+    const report=(pool:Scored[])=>{
+      if(!boots && !input.baseline)input.onDecision?.({prefix:core.map(x=>x.ip.item.id),candidates:pool.map(x=>({id:x.ip.item.id,score:x.score,empirical:x.empirical??0,reference:x.reference?.bonus??0,neutralMechanical:x.neutralMechanical??0,contextual:x.contextual??null})),excluded});
+      return pool;
+    };
     const scored = profiles
-    .filter((ip) => ip.boots === boots && !owned.has(ip.item.id) && !picked.has(ip.item.id) && !conflicts(ip))
+    .filter((ip) => {
+      if(ip.boots !== boots)return false;
+      if(owned.has(ip.item.id)||heldCore.includes(ip.item.id)||picked.has(ip.item.id)){reject(ip,"already_owned_or_planned");return false;}
+      if(conflicts(ip)){reject(ip,"shop_or_unique_passive_conflict");return false;}
+      return true;
+    })
     .map((ip) => {
       // Self-healing or a self-shield does not activate effects requiring a
       // heal/shield on another champion. A role label cannot supply that trigger.
       const allyTrigger = /healing or shielding (?:an? )?allied champion/i.test(ip.item.effects.map(x=>x.text).join(" "));
       const allyEffectFromInventory = plannedInventory.some(id => catalog.get(id)?.effects.some(effect => /allies[^.]{0,80}heal|heal[^.]{0,80}(?:target )?allied champion/i.test(effect.text)));
-      if (allyTrigger && !p.allyHealShield && !allyEffectFromInventory) return null;
+      if (allyTrigger && !p.allyHealShield && !allyEffectFromInventory) return reject(ip,"missing_ally_heal_shield_trigger");
       const sc = score(ip, p, e, state);
+      const ordinary = boots || input.baseline || input.enemies.length===0 ? {...sc} : score(ip, p, neutral, {...state,threats:Object.fromEntries(Object.keys(state.threats).map(k=>[k,0])) as Record<ThreatKind,number>});
       if (!boots && input.position === "UTILITY") {
         // Role affects utility/accessibility, never fabricates a gold-per-minute estimate.
         const text = ip.item.effects.map(x => x.text).join(" ");
         const utility = /(?:heal|shield|protect|empower)[^.]{0,100}all(?:y|ies|ied)|all(?:y|ies|ied)[^.]{0,100}(?:heal|shield|damage reduction)/i.test(text);
         const compatible = Math.max(p.healsOrShields, p.frontline);
-        if (utility && compatible > 0) { sc.score += .3 * compatible; sc.why.push("Support utility: this effect can protect or empower allies when its trigger is met."); }
+        if (utility && compatible > 0) { sc.score += .3 * compatible; ordinary.score += .3 * compatible; sc.why.push("Support utility: this effect can protect or empower allies when its trigger is met."); }
         const costWeight = Math.max(0, Math.min(1, (ip.item.gold - 2000) / 2000));
         sc.score /= 1 + .18 * costWeight;
+        ordinary.score /= 1 + .18 * costWeight;
         sc.why.push("Support role: expensive recipes carry an accessibility penalty; actual wallet and observed income still decide purchase timing.");
       }
+      sc.neutralMechanical=ordinary.score;
       if (!boots && firstCompletedItem && picked.size === 0 && ip.counters.some(c=>THREAT_ONLY.includes(c))) {
         // Team-wide generic CC/healing is not by itself a reason to rush a defensive counter.
         // Keep lane-critical counters available, especially against an already fed opponent.
@@ -427,21 +458,22 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
       }
       if (!boots) {
         const prior=purchasePrior({evidence:input.evidence,champion:input.me.id,position:input.position,patch:input.patch,opponent:input.enemies.find(x=>x.laneOpponent)?.kit.id,held:heldCore,chosen:core.map(x=>x.ip.item.id),candidate:ip.item.id});
-        if(prior){sc.empirical=prior.bonus;sc.score+=prior.bonus;sc.why.push(prior.reason);}
+        sc.reference=referencePrior({reference:input.reference,champion:input.me.id,position:input.position,patch:input.patch,held:heldCore,chosen:core.map(x=>x.ip.item.id),candidate:ip.item.id})??undefined;
+        if(prior){sc.outcomeAgreement=prior.separatedGeneralOutcome && sc.reference?.primary;sc.consensus=(prior.dominantGeneral || prior.separatedGeneralOutcome) && sc.reference?.primary;sc.empiricalLevel=prior.level;sc.empirical=prior.bonus;sc.score+=prior.bonus;sc.why.push(prior.reason);}
       }
       // Generic team CC does not establish that an MR-oriented shield should
       // delay damage or armor when the observed composition is mainly physical.
-      if (!boots && !sc.empirical && ip.counters.includes("spellShield") && (ip.item.stats.magicResistance?.flat ?? 0) > 0 && e.damage.magic < .3) return null;
+      if (!boots && !sc.empirical && ip.counters.includes("spellShield") && (ip.item.stats.magicResistance?.flat ?? 0) > 0 && e.damage.magic < .3) return reject(ip,"insufficient_magic_threat_for_shield");
       const useless = counterWithoutThreat(ip, e);
-      if (!boots && ip.counters.includes("grievousWounds") && !sc.empirical) {
+      if (!boots && ip.counters.includes("grievousWounds") && !ip.attackReflection && !sc.empirical) {
         const lane = input.enemies.find(x => x.laneOpponent);
         const urgent = lane && enemyPicture([lane]).threats.healing.weight >= .5;
-        if (!urgent) return null; // Still eligible for the situational alternatives below.
+        if (!urgent) return reject(ip,"no_urgent_lane_healing"); // Still eligible for the situational alternatives below.
       }
       if (useless) {
         const kind = COUNTERS[useless].answers[0]!;
         ruledOut.set(ip.item.id, { id: ip.item.id, name: ip.item.name, why: `Its passive ${COUNTERS[useless].says}, and ${NO_THREAT[kind]}.`, score: sc.statValue });
-        return null;
+        return reject(ip,`absent_threat:${kind}`);
       }
       return sc;
     })
@@ -449,19 +481,51 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
     .sort((a, b) => b.score - a.score || a.ip.item.gold - b.ip.item.gold || a.ip.item.id - b.ip.item.id);
     if (boots) return scored;
     const supported = scored.filter(x=>x.empirical !== undefined);
-    if (!supported.length) return scored;
+    const consensus=supported.find(x=>x.outcomeAgreement)??supported.find(x=>x.consensus);
+    const useReference=!supported.length && scored.some(x=>x.reference);
+    if(!supported.length && !useReference)return report(scored);
+    if(useReference){
+      for(const x of scored)if(x.reference){x.score+=x.reference.bonus;x.why.push(x.reference.reason);}
+      scored.sort((a,b)=>b.score-a.score || a.ip.item.id-b.ip.item.id);
+    } else {
+      // Local evidence defines eligibility; agreement can anchor a majority within
+      // that cohort, without adding an external popularity bonus to its scores.
+      for(const x of scored)x.reference=undefined;
+    }
     // A generic kit score must not silently displace a sufficiently observed
     // purchase with an unobserved rush. Keep adaptations when visible urgency
     // or an already substantially completed recipe supplies a concrete reason.
     const lane=input.enemies.find(x=>x.laneOpponent);
     const laneThreat=lane?enemyPicture([lane]):null;
-    return scored.filter(x=>{
-      if(x.empirical !== undefined){x.why.push("Compared among sufficiently sampled, eligible purchases for this champion, role and purchase stage.");return true;}
+    const eligible=scored.filter(x=>{
       const urgent=lane && (lane.kills??0)-(lane.deaths??0)>=3 && laneThreat && x.ip.counters.some(c=>COUNTERS[c].answers.some(k=>laneThreat.threats[k].weight>=.5));
       const committed=x.timing && x.timing.remaining<x.ip.item.gold*.5;
+      if(consensus && x!==consensus && !urgent && !committed){reject(x.ip,"outside_agreed_majority_baseline");return false;}
+      if(x===consensus)x.why.push(`${x.outcomeAgreement?"An eligible alternative has separated observed outcome intervals above the most frequent purchase and also leads the exact-role specialist reference.":"The sufficiently observed purchase majority also leads the exact-role specialist reference."} Used as the default over generic stat efficiency, not as proof of superior win rate. ${input.reference!.url}`);
+      if(useReference && x.reference)return true;
+      if(x.empirical !== undefined){x.why.push("Compared among evidence-supported, eligible purchases for this champion, role and purchase stage.");return true;}
       if(urgent || committed){x.why.push(urgent?"Visible lane urgency permits a situational departure from sampled purchases.":"Most of this recipe is already owned; completion remains an alternative to sampled purchases.");return true;}
+      reject(x.ip,useReference?"outside_reference_pool":"outside_observed_pool");
       return false;
     });
+    for(const x of eligible){
+      // With observed routes, generic kit/stat efficiency is not a second vote
+      // for the baseline. Only its change caused by this game can adjust it.
+      const prior=x.empirical??(useReference?x.reference?.bonus:undefined)??0;
+      const delta=x.score-prior-(x.neutralMechanical??0);
+      x.contextual=Math.abs(delta)<1e-12?0:delta;
+      // The constant is only an origin for the displayed score; it changes no ordering.
+      x.score=1+prior+x.contextual;
+      x.calibrated=true;
+      x.why.push("Purchase evidence sets the default order. Adjustments reflect enemy threats, damage/resists, existing components and purchase timing; generic stat efficiency does not override that baseline. This score is not a win probability.");
+    }
+    return report(eligible.sort((a,b)=>{
+      const difference=b.score-a.score;
+      if(Math.abs(difference)>1e-12)return difference;
+      // Equally weighted external options retain their displayed order, not an
+      // arbitrary preference for the smaller item id or floating-point noise.
+      return (a.reference?.order??0)-(b.reference?.order??0) || a.ip.item.id-b.ip.item.id;
+    }));
   };
 
   const core: Scored[] = [];
@@ -536,7 +600,7 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
 
   // Certainty: how far the first item is ahead of the best other choice for the same slot.
   const margin = first && runnerUp && first.score > 0 ? (first.score - runnerUp.score) / first.score : first ? 1 : 0;
-  const certainty = !first ? null : margin >= STRONG_MARGIN ? "strong" : margin >= CLOSE_MARGIN ? "preferred" : "close";
+  const certainty = !first ? null : margin >= STRONG_MARGIN && !core[0]?.calibrated && !core[0]?.reference && !core[0]?.consensus && core[0]?.empiricalLevel!=="limited" ? "strong" : margin >= CLOSE_MARGIN ? "preferred" : "close";
   const alternative = first && runnerUp && certainty === "close"
     ? { ...pick(runnerUp), difference: difference(runnerUp, first) }
     : null;
@@ -555,7 +619,7 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
       standard: same,
       standardCore,
       note: same
-        ? `The neutral-scenario sequence is unchanged (${standardCore.map((x) => x.name).join(", ")}). ${core.every(x=>x.empirical!==undefined) ? "Each purchase has eligible observations for its matching prefix." : "This includes provisional mechanics-based choices; reassess later purchases as the game changes."}`
+        ? `The neutral-scenario sequence is unchanged (${standardCore.map((x) => x.name).join(", ")}). ${core.every(x=>x.empirical!==undefined || x.reference) ? "Each purchase has supporting observations or an external reference for its matching prefix; consult the individual explanations." : "This includes provisional mechanics-based choices; reassess later purchases as the game changes."}`
         : changedFirst
           ? `${first.ip.item.name} instead of the neutral-scenario ${changedFirst.name}: ${lower(changeReason(first, e) ?? "it fits this enemy team better")}`
           : `Same first item as the neutral scenario; later targets are conditional on this game.`,
@@ -564,8 +628,8 @@ export function recommendBuild(input: BuildInput): BuildRecommendation {
 
   return {
     champion: p.name,
-    audit: {basis:firstPool.some(x=>x.empirical!==undefined)?"observed":"mechanics",candidates:firstPool.map(x=>({id:x.ip.item.id,name:x.ip.item.name,score:x.score,mechanical:x.score-(x.empirical??0),empirical:x.empirical??0}))},
-    kit: [...p.facts, positionReason(normalizePosition(input.position)), ...(input.me.detail !== "full" ? ["Detailed champion mechanics are incomplete; this recommendation requires review."] : []), firstPool.some(x=>x.empirical!==undefined) ? "Current-patch purchase evidence contributes to the ranking; this is not a predicted win rate." : "No sufficiently sampled current-patch purchase evidence is available for this ranking; guidance is heuristic."],
+    audit: {basis:firstPool.some(x=>x.empirical!==undefined)?"observed":firstPool.some(x=>x.reference)?"reference":"mechanics",candidates:firstPool.map(x=>({id:x.ip.item.id,name:x.ip.item.name,score:x.score,mechanical:x.score-(x.empirical??0)-(x.reference?.bonus??0),empirical:x.empirical??0,neutralMechanical:x.neutralMechanical??0,contextual:x.contextual??null}))},
+    kit: [...p.facts, positionReason(normalizePosition(input.position)), ...(input.me.detail !== "full" ? ["Detailed champion mechanics are incomplete; this recommendation requires review."] : []), firstPool.some(x=>x.reference) ? "External specialist popularity informs this ranking; sample size and win rate are unverified." : firstPool.some(x=>x.empirical!==undefined) ? "Current-patch purchase evidence contributes to the ranking; this is not a predicted win rate." : "No sufficiently sampled current-patch purchase evidence is available for this ranking; guidance is heuristic."],
     enemyDamage: e.damage,
     componentUtility: Object.fromEntries(input.items.filter(i => i.purchasable && i.gold > 0).map(i => [i.id, score(itemProfile(i, gold, catalog), p, e, componentState).score])),
     threats: Object.values(e.threats).filter((t) => t.weight >= RELEVANT).sort((a, b) => b.weight - a.weight),

@@ -5,7 +5,9 @@ import { openDatabase, type Database } from "../db/index.js";
 import { maxOrder, statRows, type StatRow } from "./aggregate.js";
 import { championStats, MIN_GAMES, MIN_OPTION, previousPatch, recordGame, seen } from "./store.js";
 import { RiotApiError } from "@coach/riot";
-import { StatsCrawler, type StatsRiot } from "./crawler.js";
+import { parseItems, isCompletedPurchase } from "@coach/knowledge";
+import { gameData } from "@coach/knowledge/test-data";
+import { patchInfoOf, StatsCrawler, type StatsRiot } from "./crawler.js";
 
 const COMPLETED = new Set(SYNTHETIC_ITEMS.map((i) => i.id));
 const history = generateHistory({ seed: 11, puuid: "p-stats", gameName: "Stats", tagLine: "T1", platform: "EUW1", count: 40, now: Date.UTC(2026, 8, 20) });
@@ -55,6 +57,17 @@ describe("statRows", () => {
     // Wins match the team result.
     const winners = games.filter((r) => r.win).length;
     expect(winners).toBe(5);
+  });
+  it("records the second purchase even when no third item is completed",()=>{
+    const g=structuredClone(history.find(h=>h.scenario==='normal' && h.timeline)!);
+    const original=statRows(g.match,g.timeline,COMPLETED).rows;
+    const core=original.find(r=>r.kind==='core')!;
+    expect(core).toBeDefined();
+    const allowed=new Set(core.key.split('>').slice(0,2).map(Number));
+    const rows=statRows(g.match,g.timeline,allowed).rows.filter(r=>r.champion===core.champion && r.position===core.position);
+    expect(rows.some(r=>r.kind==='core')).toBe(false);
+    expect(rows.filter(r=>r.kind==='purchase_path').map(r=>r.key)).toEqual([core.key.split('>').slice(0,2).join('>')]);
+    expect(rows.some(r=>r.kind==='matchup_purchase_path')).toBe(true);
   });
   it("skips components: only finished items are counted", () => {
     const g = history.find((h) => h.scenario === "normal" && h.timeline)!;
@@ -222,4 +235,15 @@ describe("StatsCrawler", () => {
     expect(await crawler.step()).toBe("no-patch");
     expect(calls.league).toBe(0);
   });
+});
+
+it('records purchased transformation precursors without counting their free transformation',()=>{
+ const d=gameData(),items=parseItems(d.ddragonItems,d.merakiItems),catalog=new Map(items.map(i=>[i.id,i]));
+ const completed=patchInfoOf({items,version:'16.19.1'}).completed;
+ expect(completed.has(2526)).toBe(true);
+ expect(completed.has(2530)).toBe(false);
+ const base=catalog.get(2526)!;
+ expect(isCompletedPurchase({...base,into:[999999]},catalog)).toBe(false);
+ expect(isCompletedPurchase({...base,into:[3003]},catalog)).toBe(false);
+ expect(isCompletedPurchase({...base,into:[],automaticUpgrade:true},catalog)).toBe(false);
 });

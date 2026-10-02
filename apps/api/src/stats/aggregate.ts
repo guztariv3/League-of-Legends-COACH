@@ -16,6 +16,8 @@ export type StatKind =
   | "matchup_spells"
   | "games"      // key "": every game of the champion in that position
   | "first_item" // key item id: the first completed item, with the minute it was completed
+  | "purchase_path" // each completed prefix of length 2–6, one row per game and stage
+  | "matchup_purchase_path"
   | "core"       // key "id>id>id": the first three completed items in order
   | "skill_max"  // key "Q>W>E": the order the basic abilities reached their last rank
   | "skill_seq"  // key "1,2,3,…": the first 9 level-ups (slots 1–4)
@@ -62,6 +64,11 @@ export function statRows(raw: RawMatch, timeline: RawTimeline | null, completed:
       if (done[0]) rows.push({ ...base, kind: "first_item", key: String(done[0].id), minute: done[0].min });
       if (a.laneOpponentChampion && done[0]) rows.push({...base,kind:"matchup_first_item",key:`${a.laneOpponentChampion}|${done[0].id}`,minute:done[0].min});
       if (a.laneOpponentChampion && done.length>=3) rows.push({...base,kind:"matchup_core",key:`${a.laneOpponentChampion}|${done.slice(0,3).map(d=>d.id).join(">")}`,minute:done[2]!.min});
+      for(let length=2;length<=Math.min(6,done.length);length++){
+        const key=done.slice(0,length).map(d=>d.id).join(">"),minute=done[length-1]!.min;
+        rows.push({...base,kind:"purchase_path",key,minute});
+        if(a.laneOpponentChampion)rows.push({...base,kind:"matchup_purchase_path",key:`${a.laneOpponentChampion}|${key}`,minute});
+      }
       if (done.length >= 3) rows.push({ ...base, kind: "core", key: done.slice(0, 3).map((d) => d.id).join(">"), minute: done[2]!.min });
     }
     if (a.skillOrder) {
