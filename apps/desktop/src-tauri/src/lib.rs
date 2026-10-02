@@ -349,6 +349,7 @@ fn lcu_client() -> reqwest::Client {
         // port from the lockfile, with the lockfile's password.
         // TODO(verify): pin Riot's published root certificate (riotgames.pem) instead.
         .danger_accept_invalid_certs(true)
+        .redirect(reqwest::redirect::Policy::none())
         .no_proxy()
         .connect_timeout(Duration::from_millis(500))
         .timeout(Duration::from_millis(2000))
@@ -378,11 +379,11 @@ fn site_client() -> reqwest::Client {
 
 fn live_client() -> reqwest::Client {
     reqwest::Client::builder()
-        // The game serves this local endpoint with a certificate signed by Riot's own
-        // root, which is not in the system store. Invalid certificates are accepted
-        // only by this client, which is only ever used for the fixed 127.0.0.1 URL above.
-        // TODO(verify): pin Riot's published root certificate (riotgames.pem) instead.
-        .danger_accept_invalid_certs(true)
+        // Riot's published Game Client CA, scoped to this fixed loopback client.
+        // Source: RiotGames/leaguedirector/resources/riotgames.pem (see docs/53).
+        .tls_built_in_root_certs(false)
+        .add_root_certificate(reqwest::Certificate::from_pem(include_bytes!("../riotgames.pem")).expect("Riot Game Client CA"))
+        .redirect(reqwest::redirect::Policy::none())
         .no_proxy()
         .connect_timeout(Duration::from_millis(400))
         .timeout(Duration::from_millis(900))
@@ -493,6 +494,55 @@ mod tests {
         let r = reduce_session(&s);
         assert_eq!(r["me"]["championId"], 103);
         assert_eq!(r["me"]["locked"], false);
+    }
+
+    #[test]
+    fn local_clients_never_follow_redirects() {
+        use std::io::{Read, Write};
+        for client in [live_client(), lcu_client()] {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let addr = listener.local_addr().unwrap();
+            let server = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+                let mut buf = [0; 4096];
+                let _ = stream.read(&mut buf);
+                stream.write_all(b"HTTP/1.1 302 Found\r\nLocation: https://127.0.0.1:1/escape\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").unwrap();
+            });
+            let response = tauri::async_runtime::block_on(client.get(format!("http://{addr}/")).send()).unwrap();
+            assert_eq!(response.status(), reqwest::StatusCode::FOUND);
+            server.join().unwrap();
+        }
+    }
+
+    #[test]
+    fn live_client_rejects_an_untrusted_local_certificate() {
+        use std::process::{Command, Stdio};
+        let dir = std::env::temp_dir().join(format!("koi-tls-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let cert = dir.join("test-cert.pem");
+        let key = dir.join("test-key.pem");
+        let status = Command::new("openssl").args(["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", "/CN=127.0.0.1", "-addext", "subjectAltName=IP:127.0.0.1", "-keyout"])
+            .arg(&key).arg("-out").arg(&cert).stdout(Stdio::null()).stderr(Stdio::null()).status().unwrap();
+        assert!(status.success());
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        drop(listener);
+        let mut server = Command::new("openssl").args(["s_server", "-quiet", "-www", "-accept"])
+            .arg(addr.to_string()).arg("-cert").arg(&cert).arg("-key").arg(&key)
+            .stdout(Stdio::null()).stderr(Stdio::null()).spawn().unwrap();
+        let mut ready = false;
+        for _ in 0..80 {
+            if std::net::TcpStream::connect(addr).is_ok() { ready = true; break; }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        let result = tauri::async_runtime::block_on(live_client().get(format!("https://{addr}/")).send());
+        let _ = server.kill();
+        let _ = server.wait();
+        let _ = std::fs::remove_dir_all(dir);
+        assert!(ready, "TLS fixture must be listening");
+        let error = result.expect_err("a non-Riot certificate must be rejected");
+        assert!(format!("{error:?}").to_lowercase().contains("certificate"), "expected a certificate failure: {error:?}");
     }
 
     /// With no game running, a read must fail fast (never block the Coach).
