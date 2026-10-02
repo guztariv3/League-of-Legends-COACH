@@ -32,8 +32,14 @@ export function LiveProvider({children}:{children:ReactNode}) {
   const expireAt=(ms:number)=>{clearTimeout(expiry);
    expiry=setTimeout(()=>setValue(v=>v.frame && !["idle","ended"].includes(v.frame.phase) ? {frame:null,stale:true}:v),Math.max(0,ms));};
   const loop=async()=>{if(busy)return;busy=true;let delay=4000;
-   try{const r=await api.live();if(stopped)return;setValue({frame:r.frame,stale:r.stale});
-    if(r.frame && !["idle","ended"].includes(r.frame.phase)){delay=1000;expireAt(r.expiresInMs??0);} else clearTimeout(expiry);}
+   // The server measured the remaining time while answering: counting it from when the request was
+   // sent (not when the answer arrived) keeps a slow response from extending it.
+   const sent=Date.now();
+   try{const r=await api.live();if(stopped)return;
+    const active=r.frame!==null && !["idle","ended"].includes(r.frame.phase);
+    const left=sent+(r.expiresInMs??0)-Date.now();
+    if(active && left<=0){clearTimeout(expiry);setValue({frame:null,stale:true});}
+    else{setValue({frame:r.frame,stale:r.stale});if(active){delay=1000;expireAt(left);} else clearTimeout(expiry);}}
    catch(e){if(stopped)return;
     // Too many requests is not a lost companion: what is shown stays (until it expires) and the
     // page backs off. Any other failure hides the advice at once.
