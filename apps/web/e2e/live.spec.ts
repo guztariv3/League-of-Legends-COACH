@@ -57,6 +57,9 @@ test("private Live renders shared advice and hides it on pause, reconnect and st
  expect(calls-before).toBeLessThanOrEqual(1); // one 429, then a 10 s pause instead of every second
  await expect(page.getByRole("heading",{name:"Shared desktop decision"})).toBeVisible();
  await expect(page.getByText(/companion connection is stale/)).toHaveCount(0);
+ // Still limited: the retained advice expires 15 s after the last answer instead of staying up.
+ await expect(page.getByText(/companion connection is stale/)).toBeVisible({timeout:16000});
+ await expect(page.getByText("Shared desktop decision")).toHaveCount(0);
  limited=false;
  frame=null;stale=true;
  await expect(page.getByText(/companion connection is stale/)).toBeVisible({timeout:15000});
