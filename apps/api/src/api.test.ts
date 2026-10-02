@@ -110,8 +110,24 @@ describe("API (synthetic mode)", () => {
     await call(`/accounts/${body.account.id}`, { method: "PATCH", cookie, body: JSON.stringify({ includeInProfile: false }) });
     expect((await call("/dashboard", { cookie })).body.summary.totalGames).toBe(0);
 
+    const { schema } = await import("./db/index.js");
+    const { eq, inArray } = await import("drizzle-orm");
+    const accountId = body.account.id;
+    const [accRow] = await database.db.select().from(schema.riotAccounts).where(eq(schema.riotAccounts.id, accountId));
+    const matchIdsBefore = (await database.db.select().from(schema.accountMatches).where(eq(schema.accountMatches.accountId, accountId))).map((r) => r.matchId);
+    expect(matchIdsBefore.length).toBeGreaterThan(0);
+
     expect((await call("/me", { method: "DELETE", cookie })).res.status).toBe(200);
     expect((await call("/me", { cookie })).res.status).toBe(401);
+
+    // Deleting the account+user must garbage-collect the now-unreferenced derived/raw match data,
+    // not just the identity/account/link rows that cascade automatically.
+    const leftoverAnalyses = await database.db.select().from(schema.matchAnalyses).where(eq(schema.matchAnalyses.puuid, accRow!.puuid));
+    expect(leftoverAnalyses).toHaveLength(0);
+    const leftoverRaw = matchIdsBefore.length
+      ? await database.db.select().from(schema.rawMatches).where(inArray(schema.rawMatches.matchId, matchIdsBefore))
+      : [];
+    expect(leftoverRaw).toHaveLength(0);
   }, 60_000);
 
   it("explains insights deterministically when no AI provider is configured", async () => {
@@ -144,6 +160,22 @@ describe("dev login gating", () => {
     expect(devLoginAllowed(loadConfig({}))).toBe(false);
     expect(devLoginAllowed(loadConfig({ DEV_LOGIN: "1" }))).toBe(true);
     expect(devLoginAllowed(loadConfig({ DEV_LOGIN: "1", NODE_ENV: "production" }))).toBe(false);
+  });
+
+  it("can't be used to sign in as a name someone else already claimed with a token", async () => {
+    const owner = await call("/auth/dev-login", { method: "POST", body: JSON.stringify({ displayName: "Claimed", token: "a".repeat(32) }) });
+    expect(owner.res.status).toBe(200);
+
+    const impostor = await call("/auth/dev-login", { method: "POST", body: JSON.stringify({ displayName: "Claimed", token: "b".repeat(32) }) });
+    expect(impostor.res.status).toBe(409);
+    expect(impostor.body.error).toBe("name_taken");
+
+    const noToken = await call("/auth/dev-login", { method: "POST", body: JSON.stringify({ displayName: "Claimed" }) });
+    expect(noToken.res.status).toBe(409);
+
+    const returning = await call("/auth/dev-login", { method: "POST", body: JSON.stringify({ displayName: "Claimed", token: "a".repeat(32) }) });
+    expect(returning.res.status).toBe(200);
+    expect(returning.body.user.id).toBe(owner.body.user.id);
   });
 });
 

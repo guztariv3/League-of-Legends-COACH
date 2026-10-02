@@ -335,10 +335,30 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return body as T;
 }
 
+const DEV_LOGIN_TOKEN_KEY = "koi_dev_login_token";
+
+/**
+ * Opaque per-browser secret so dev-login (brief §13 stopgap, pre-RSO) can't be used to sign in
+ * as someone else just by typing their name. Generated once, kept in this browser only.
+ */
+function devLoginToken(): string {
+  try {
+    const existing = localStorage.getItem(DEV_LOGIN_TOKEN_KEY);
+    if (existing) return existing;
+    const token = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
+    localStorage.setItem(DEV_LOGIN_TOKEN_KEY, token);
+    return token;
+  } catch {
+    // localStorage unavailable (private mode, etc.): fall back to a session-only token.
+    return crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
+  }
+}
+
 export const api = {
   config: () => request<AppConfig>("/config"),
   me: () => request<Me>("/me"),
-  devLogin: (displayName: string) => request<{ user: Me["user"] }>("/auth/dev-login", { method: "POST", body: JSON.stringify({ displayName }) }),
+  devLogin: (displayName: string) =>
+    request<{ user: Me["user"] }>("/auth/dev-login", { method: "POST", body: JSON.stringify({ displayName, token: devLoginToken() }) }),
   logout: () => request<{ ok: true }>("/auth/logout", { method: "POST", body: "{}" }),
   deleteMe: () => request<{ ok: true }>("/me", { method: "DELETE" }),
   linkAccount: (gameName: string, tagLine: string, platform: string) =>

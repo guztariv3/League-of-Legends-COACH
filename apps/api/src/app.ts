@@ -3,13 +3,13 @@ import { mean, summarize } from "@coach/analysis";
 import { isPlatformId, normalizeMatch, PLATFORMS, queueLabel, type RawMatch, type RawTimeline } from "@coach/domain";
 import { matchHeadline } from "@coach/insights";
 import type { KnowledgeRegistry } from "@coach/knowledge";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { z } from "zod";
-import { createSession, csrfGuard, destroySession, requireUser, type AuthVars } from "./auth.js";
+import { createSession, csrfGuard, destroySession, requireUser, sha256Hex, type AuthVars } from "./auth.js";
 import { devLoginAllowed, type Config } from "./config.js";
 import { schema, type Db } from "./db/index.js";
-import { analysesFor, applyFilters, userAccounts, type AccountAnalysis } from "./queries.js";
+import { analysesFor, applyFilters, purgeOrphanedMatchData, userAccounts, type AccountAnalysis } from "./queries.js";
 import type { MatchSource } from "./sources.js";
 import { riotFailure } from "./errors.js";
 import { SyncService } from "./sync.js";
@@ -60,11 +60,30 @@ export function createApp(deps: AppDeps) {
 
   app.post("/auth/dev-login", async (c) => {
     if (!devLoginAllowed(cfg)) return c.json({ error: "dev_login_disabled" }, 403);
-    const body = z.object({ displayName: z.string().trim().min(1).max(40).default("Jugador") }).safeParse(await c.req.json().catch(() => ({})));
+    const body = z.object({
+      displayName: z.string().trim().min(1).max(40).default("Jugador"),
+      // Opaque client-held secret (brief §13 stopgap, pre-RSO): without one, anyone who knows
+      // or guesses an existing display name could sign in as that identity. Optional only
+      // because it lets older/test clients that never send one keep working as before.
+      token: z.string().min(16).max(200).optional(),
+    }).safeParse(await c.req.json().catch(() => ({})));
     if (!body.success) return c.json({ error: "invalid_body" }, 400);
+    const { displayName, token } = body.data;
+    const tokenHash = token ? sha256Hex(token) : null;
+
     // Development identity: same display name → same local user, so data survives logout.
-    const [existing] = await db.select().from(schema.users).where(eq(schema.users.displayName, body.data.displayName));
-    const [user] = existing ? [existing] : await db.insert(schema.users).values({ displayName: body.data.displayName }).returning();
+    const [existing] = await db.select().from(schema.users).where(eq(schema.users.displayName, displayName));
+    let user = existing;
+    if (!user) {
+      [user] = await db.insert(schema.users).values({ displayName, devLoginTokenHash: tokenHash }).returning();
+    } else if (user.devLoginTokenHash) {
+      if (tokenHash !== user.devLoginTokenHash) {
+        return c.json({ error: "name_taken", message: "Ese nombre ya está en uso en otro dispositivo. Elige otro." }, 409);
+      }
+    } else if (tokenHash) {
+      // First login with a token claims this previously-unprotected name from now on.
+      [user] = await db.update(schema.users).set({ devLoginTokenHash: tokenHash }).where(eq(schema.users.id, user.id)).returning();
+    }
     await createSession(db, c, user!.id, secureCookies);
     return c.json({ user: { id: user!.id, displayName: user!.displayName } });
   });
@@ -97,8 +116,15 @@ export function createApp(deps: AppDeps) {
   });
 
   authed.delete("/me", async (c) => {
+    const userId = c.get("userId");
+    const accounts = await userAccounts(db, userId);
+    const matchIds = accounts.length
+      ? (await db.select({ matchId: schema.accountMatches.matchId }).from(schema.accountMatches)
+          .where(inArray(schema.accountMatches.accountId, accounts.map((a) => a.id)))).map((r) => r.matchId)
+      : [];
     // Deletes identity, accounts, links, preferences and sessions (cascade).
-    await db.delete(schema.users).where(eq(schema.users.id, c.get("userId")));
+    await db.delete(schema.users).where(eq(schema.users.id, userId));
+    await purgeOrphanedMatchData(db, accounts.map((a) => a.puuid), matchIds);
     await destroySession(db, c);
     return c.json({ ok: true });
   });
@@ -167,7 +193,10 @@ export function createApp(deps: AppDeps) {
   authed.delete("/accounts/:id", async (c) => {
     const acc = await ownAccount(c.get("userId"), c.req.param("id"));
     if (!acc) return c.json({ error: "not_found" }, 404);
+    const matchIds = (await db.select({ matchId: schema.accountMatches.matchId }).from(schema.accountMatches)
+      .where(eq(schema.accountMatches.accountId, acc.id))).map((r) => r.matchId);
     await db.delete(schema.riotAccounts).where(eq(schema.riotAccounts.id, acc.id));
+    await purgeOrphanedMatchData(db, [acc.puuid], matchIds);
     return c.json({ ok: true });
   });
 

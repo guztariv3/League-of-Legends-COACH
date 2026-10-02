@@ -7,7 +7,9 @@ import { schema, type Db } from "./db/index.js";
 export const SESSION_COOKIE = "coach_session";
 const SESSION_TTL_MS = 30 * 24 * 3600 * 1000;
 
-const hashToken = (t: string) => createHash("sha256").update(t).digest("hex");
+/** SHA-256 hex digest, used so raw secrets (session tokens, dev-login tokens) are never stored. */
+export const sha256Hex = (t: string) => createHash("sha256").update(t).digest("hex");
+const hashToken = sha256Hex;
 
 /** Opaque random session token; only its SHA-256 hash is stored. */
 export async function createSession(db: Db, c: Context, userId: string, secure: boolean): Promise<void> {

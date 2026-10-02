@@ -9,6 +9,12 @@ import { boolean, doublePrecision, integer, jsonb, pgTable, primaryKey, text, ti
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   displayName: text("display_name").notNull(),
+  /**
+   * Hash of a client-held dev-login token (brief §13 stopgap, pre-RSO). Claimed by whoever
+   * first logs in as this display name with a token; required to reuse the name afterwards,
+   * so knowing someone else's chosen name is no longer enough to sign in as them.
+   */
+  devLoginTokenHash: text("dev_login_token_hash"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -34,6 +40,8 @@ export const riotAccounts = pgTable(
     syncStatus: text("sync_status").$type<"never" | "syncing" | "ok" | "error">().notNull().default("never"),
     syncError: text("sync_error"),
     lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    /** Resume point (page offset) for a backlog scan truncated by MAX_INCREMENTAL; 0 when fully caught up. */
+    syncOffset: integer("sync_offset").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("riot_accounts_user_puuid").on(t.userId, t.puuid)],

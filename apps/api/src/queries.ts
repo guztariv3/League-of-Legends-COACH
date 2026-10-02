@@ -1,11 +1,45 @@
 import { ANALYSIS_VERSION, type MatchAnalysis } from "@coach/analysis";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, notExists } from "drizzle-orm";
 import { schema, type Db } from "./db/index.js";
 
 export type Account = typeof schema.riotAccounts.$inferSelect;
 
 export async function userAccounts(db: Db, userId: string): Promise<Account[]> {
   return db.select().from(schema.riotAccounts).where(eq(schema.riotAccounts.userId, userId));
+}
+
+/**
+ * Garbage-collects derived/raw match data left behind by deleting an account or user.
+ * `matchAnalyses`, `rawMatches` and `rawTimelines` aren't owned by one account — a raw match
+ * can be shared by several linked accounts, and `matchAnalyses` only keys off `puuid` — so they
+ * don't cascade from `riotAccounts`. Call this with the puuids/matchIds that were about to lose
+ * their last reference, captured *before* the account/user delete removes that reference.
+ */
+export async function purgeOrphanedMatchData(db: Db, puuids: string[], matchIds: string[]): Promise<void> {
+  const uniquePuuids = [...new Set(puuids)];
+  const uniqueMatchIds = [...new Set(matchIds)];
+  if (uniquePuuids.length) {
+    await db.delete(schema.matchAnalyses).where(
+      and(
+        inArray(schema.matchAnalyses.puuid, uniquePuuids),
+        notExists(db.select().from(schema.riotAccounts).where(eq(schema.riotAccounts.puuid, schema.matchAnalyses.puuid))),
+      ),
+    );
+  }
+  if (uniqueMatchIds.length) {
+    await db.delete(schema.rawTimelines).where(
+      and(
+        inArray(schema.rawTimelines.matchId, uniqueMatchIds),
+        notExists(db.select().from(schema.accountMatches).where(eq(schema.accountMatches.matchId, schema.rawTimelines.matchId))),
+      ),
+    );
+    await db.delete(schema.rawMatches).where(
+      and(
+        inArray(schema.rawMatches.matchId, uniqueMatchIds),
+        notExists(db.select().from(schema.accountMatches).where(eq(schema.accountMatches.matchId, schema.rawMatches.matchId))),
+      ),
+    );
+  }
 }
 
 export interface AccountAnalysis extends MatchAnalysis {

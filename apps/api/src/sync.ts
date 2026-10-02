@@ -75,9 +75,11 @@ export class SyncService {
       const [account] = await this.db.select().from(schema.riotAccounts).where(eq(schema.riotAccounts.id, accountId));
       if (!account) return;
       await this.markSyncing([accountId]);
+      // Captured before fetching: a game that finishes mid-sync is still "new" to the next sync's lower bound.
+      const syncStartedAt = new Date();
 
-      const todo = account.lastSyncedAt === null
-        ? await this.source.matchIds(account.platform, account.puuid, INITIAL_SYNC_COUNT, 0)
+      const { ids: todo, complete, nextOffset } = account.lastSyncedAt === null
+        ? { ids: await this.source.matchIds(account.platform, account.puuid, INITIAL_SYNC_COUNT, 0), complete: true, nextOffset: 0 }
         : await this.newMatchIds(account);
       this.progress.set(accountId, { done: 0, total: todo.length });
 
@@ -88,29 +90,36 @@ export class SyncService {
       await this.reanalyze(account);
 
       await this.db.update(schema.riotAccounts)
-        .set({ syncStatus: "ok", lastSyncedAt: new Date() })
+        .set(complete
+          ? { syncStatus: "ok", lastSyncedAt: syncStartedAt, syncOffset: 0 }
+          : { syncStatus: "ok", syncOffset: nextOffset })
         .where(eq(schema.riotAccounts.id, accountId));
     } catch (err) {
       await this.setError(accountId, err);
     }
   }
 
-  /** Pages back from the newest game until it reaches games already linked (or the cap). */
-  private async newMatchIds(account: typeof schema.riotAccounts.$inferSelect): Promise<string[]> {
+  /**
+   * Pages back from `syncOffset` (0 unless a previous pass was truncated by MAX_INCREMENTAL)
+   * until a short page proves there's nothing older left in the time window, or the cap is
+   * hit again. Never stops early on already-linked matches: on a truncated-sync retry, or
+   * after a failed `ingest()` partway through, the newest matches are already linked while
+   * older, never-ingested ones remain further down — stopping there would discard them
+   * permanently once `lastSyncedAt` advances past them.
+   */
+  private async newMatchIds(
+    account: typeof schema.riotAccounts.$inferSelect,
+  ): Promise<{ ids: string[]; complete: boolean; nextOffset: number }> {
     const startTime = Math.floor(account.lastSyncedAt!.getTime() / 1000) - 3600;
     const fresh: string[] = [];
-    for (let start = 0; fresh.length < MAX_INCREMENTAL; start += PAGE_SIZE) {
+    let start = account.syncOffset;
+    for (; fresh.length < MAX_INCREMENTAL; start += PAGE_SIZE) {
       const page = await this.source.matchIds(account.platform, account.puuid, PAGE_SIZE, start, startTime);
-      if (!page.length) break;
-      const linked = new Set(
-        (await this.db.select({ id: schema.accountMatches.matchId }).from(schema.accountMatches)
-          .where(and(eq(schema.accountMatches.accountId, account.id), inArray(schema.accountMatches.matchId, page))))
-          .map((r) => r.id),
-      );
-      fresh.push(...page.filter((id) => !linked.has(id)));
-      if (linked.size > 0 || page.length < PAGE_SIZE) break;
+      if (!page.length) return { ids: fresh, complete: true, nextOffset: 0 };
+      fresh.push(...page);
+      if (page.length < PAGE_SIZE) return { ids: fresh.slice(0, MAX_INCREMENTAL), complete: true, nextOffset: 0 };
     }
-    return fresh.slice(0, MAX_INCREMENTAL);
+    return { ids: fresh.slice(0, MAX_INCREMENTAL), complete: false, nextOffset: start };
   }
 
   /**
