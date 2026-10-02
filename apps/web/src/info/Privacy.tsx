@@ -42,14 +42,22 @@ export function Privacy() {
         <li>Unlinking a Riot account deletes its history in KOI Master.</li>
         <li>Match data no linked account uses any more (for example, opponents' games looked up at the loading screen) is deleted automatically after 30 days.</li>
         <li>Unused connection codes and expired sessions are deleted automatically.</li>
+        <li>Web Live updates are deleted once they are no longer current; the end-of-match summary after one day.</li>
       </ul>
 
       <h2>The desktop app</h2>
       <p>
         During a game, the app only reads the data the game itself publishes on your computer (the Live Client Data API). During champion select, it reads the
         League client on your computer, read-only, and keeps only the champions and your own position; other players' names are never read into it.
-        If you connect it to the website, it sends your KOI Master account only the champions of your game, to build your game plan, and asks for your
-        opponents' list at the loading screen, always with its token. Nothing else leaves your computer, and you can disconnect it from Settings at any time.
+        If you connect it to the website, it sends your KOI Master account the champions of your game, to build your game plan, and asks for your
+        opponents' list at the loading screen, always with its token. You can disconnect it from Settings at any time.
+      </p>
+      <p>
+        <strong>Private web Live sharing</strong> is off until you turn it on in the app. While it is on, the app sends your private Live page what it
+        shows you: your champion select or game (champions, items, scores, the coach's advice) and, in a game, the other players' Riot IDs and, for your
+        opponents, the rank and recent champions shown at the loading screen. Only you can see it. Each update replaces the previous one and is deleted once it is no longer
+        current (within a few minutes, even if the app is closed mid-game); only the end-of-match summary of your own game stays for one day.
+        Turning sharing off clears what was shared.
       </p>
 
       <h2>Your rights</h2>

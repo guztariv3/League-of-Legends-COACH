@@ -6,7 +6,8 @@ test("private Live renders shared advice and hides it on pause, reconnect and st
  let frame:LiveFrame|null={version:1,streamId:"0d400d84-a7b4-46c2-a4e6-f019a772186f",sequence:1,capturedAt:Date.now(),phase:"live",champion:"Ahri",position:"MIDDLE",patch:"16.19.1",time:600,gold:850,allies:["LeeSin"],enemies:["Zed"],headline:"Shared desktop decision",sections:[{title:"What matters now",primary:true,lines:["Stay behind your minion wave."]},{title:"Equipped runes and summoner spells",lines:["Electrocute","Flash + Ignite"]}]};
  let stale=false;
  let sharing=false;
- await page.route("**/api/live",route=>route.fulfill({json:{frame:sharing?frame:null,stale}}));
+ let limited=false, calls=0;
+ await page.route("**/api/live",route=>{calls++;return limited ? route.fulfill({status:429,json:{error:"rate_limited"}}) : route.fulfill({json:{frame:sharing?frame:null,stale}});});
  await page.goto("/");
  await page.getByText("Development sign-in (private prototype only)").click();
  await page.getByLabel("Your name").fill(player);
@@ -47,7 +48,17 @@ test("private Live renders shared advice and hides it on pause, reconnect and st
  await expect(page.getByRole("heading",{name:"Waiting for fresh game data"})).toBeVisible();
  await expect(page.getByText("Stay behind your minion wave.")).toHaveCount(0);
  await expect(page.getByRole("tab",{name:"Recommended Build"})).toHaveCount(0);
+ // Too many requests is not a lost companion: what is shown stays, and the page backs off.
+ frame={...frame,phase:"live",headline:"Shared desktop decision"};
+ await expect(page.getByRole("heading",{name:"Shared desktop decision"})).toBeVisible();
+ limited=true;
+ const before=calls;
+ await page.waitForTimeout(4000);
+ expect(calls-before).toBeLessThanOrEqual(1); // one 429, then a 10 s pause instead of every second
+ await expect(page.getByRole("heading",{name:"Shared desktop decision"})).toBeVisible();
+ await expect(page.getByText(/companion connection is stale/)).toHaveCount(0);
+ limited=false;
  frame=null;stale=true;
- await expect(page.getByText(/companion connection is stale/)).toBeVisible();
+ await expect(page.getByText(/companion connection is stale/)).toBeVisible({timeout:15000});
  await expect(page.getByText("Shared desktop decision")).toHaveCount(0);
 });
