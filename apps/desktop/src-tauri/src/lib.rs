@@ -509,7 +509,7 @@ mod tests {
                 let _ = stream.read(&mut buf);
                 stream.write_all(b"HTTP/1.1 302 Found\r\nLocation: https://127.0.0.1:1/escape\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").unwrap();
             });
-            let response = tauri::async_runtime::block_on(client.get(format!("http://{addr}/")).send()).unwrap();
+            let response = tauri::async_runtime::block_on(async { client.get(format!("http://{addr}/")).send().await }).unwrap();
             assert_eq!(response.status(), reqwest::StatusCode::FOUND);
             server.join().unwrap();
         }
@@ -536,7 +536,7 @@ mod tests {
             if std::net::TcpStream::connect(addr).is_ok() { ready = true; break; }
             std::thread::sleep(Duration::from_millis(25));
         }
-        let result = tauri::async_runtime::block_on(live_client().get(format!("https://{addr}/")).send());
+        let result = tauri::async_runtime::block_on(async { live_client().get(format!("https://{addr}/")).send().await });
         let _ = server.kill();
         let _ = server.wait();
         let _ = std::fs::remove_dir_all(dir);
