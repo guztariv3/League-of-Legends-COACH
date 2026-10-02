@@ -47,6 +47,10 @@ test("private Live renders shared advice and hides it on pause, reconnect and st
  await expect(page.getByRole("heading",{name:"Waiting for fresh game data"})).toBeVisible();
  await expect(page.getByText("Stay behind your minion wave.")).toHaveCount(0);
  await expect(page.getByRole("tab",{name:"Recommended Build"})).toHaveCount(0);
+ // Even if a response contains a payload alongside stale=true, no advice can render.
+ frame={...frame,phase:"live",headline:"Stale advice must stay hidden"};stale=true;
+ await expect(page.getByText(/companion connection is stale/)).toBeVisible();
+ await expect(page.getByRole("heading",{name:"Stale advice must stay hidden"})).toHaveCount(0);
  frame=null;stale=true;
  await expect(page.getByText(/companion connection is stale/)).toBeVisible();
  await expect(page.getByText("Shared desktop decision")).toHaveCount(0);

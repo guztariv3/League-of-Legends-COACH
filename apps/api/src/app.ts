@@ -8,6 +8,8 @@ import type { GameFactsSource, KnowledgeRegistry, WikiSource } from "@coach/know
 import { and, eq, ne, gt, isNull, inArray } from "drizzle-orm";
 import { getCookie } from "hono/cookie";
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
+import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { createSession, csrfGuard, hashToken, SESSION_COOKIE, destroySession, dummyPasswordHash, hashPassword, PASSWORD_MAX, PASSWORD_MIN, requireUser, USERNAME, verifyPassword, type AuthVars } from "./auth.js";
 import { AttemptLimiter, clientIp } from "./limits.js";
@@ -49,7 +51,9 @@ export function createApp(deps: AppDeps) {
   const secureCookies = cfg.env === "production";
 
   app.use("*", csrfGuard(cfg.webOrigin));
+  app.use("*", bodyLimit({ maxSize: 96 * 1024 }));
   app.onError((err, c) => {
+    if (err instanceof HTTPException) return err.getResponse();
     console.error(err);
     const riot = riotFailure(err);
     if (riot) return c.json({ error: "riot_unavailable", message: riot.message }, riot.status);
@@ -88,8 +92,10 @@ export function createApp(deps: AppDeps) {
     });
   });
 
+  const devPerIp = new AttemptLimiter(30, 60_000);
   app.post("/auth/dev-login", async (c) => {
     if (!devLoginAllowed(cfg)) return c.json({ error: "dev_login_disabled" }, 403);
+    if (!devPerIp.allow(clientIp(c))) return c.json({ error: "rate_limited" }, 429);
     const body = z.object({
       displayName: z.string().trim().min(1).max(40).default("Jugador"),
       token: z.string().regex(/^[a-f0-9]{64}$/),
@@ -175,6 +181,20 @@ export function createApp(deps: AppDeps) {
 
   const authed = new Hono<AuthVars>();
   authed.use("*", requireUser(db));
+  const reads = new AttemptLimiter(1800, 60_000);
+  const writes = new AttemptLimiter(120, 60_000);
+  const expensive = new AttemptLimiter(20, 60_000);
+  authed.use("*", async (c, next) => {
+    const userId = c.get("userId");
+    const path = c.req.path;
+    const costly = /\/(?:sync|accounts|coach\/explain|desktop\/pair|game\/scout)$/.test(path);
+    const limiter = costly ? expensive : ["GET", "HEAD"].includes(c.req.method) ? reads : writes;
+    if (!limiter.allow(costly ? `${userId}:${path}` : userId)) {
+      c.header("Retry-After", "60");
+      return c.json({ error: "rate_limited", message: "Too many requests. Please wait a minute." }, 429);
+    }
+    await next();
+  });
 
   const accountView = (a: Awaited<ReturnType<typeof userAccounts>>[number]) => ({
     id: a.id,
@@ -235,12 +255,19 @@ export function createApp(deps: AppDeps) {
   authed.put("/preferences", async (c) => {
     const body = await c.req.json().catch(() => null);
     if (!body || typeof body !== "object") return c.json({ error: "invalid_body" }, 400);
-    const current = await prefsFor(c.get("userId"));
+    return db.transaction(async tx => {
+    const userId = c.get("userId");
+    // Lock the parent even if the preferences row does not exist yet.
+    const [owner] = await tx.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.id, userId)).for("update");
+    if (!owner) return c.json({ error: "unauthenticated" }, 401);
+    const [row] = await tx.select().from(schema.preferences).where(eq(schema.preferences.userId, userId));
+    const current = Preferences.parse(row?.data ?? {});
     const parsed = Preferences.safeParse({ ...current, ...body, memory: { ...current.memory, ...(body.memory ?? {}) } });
     if (!parsed.success) return c.json({ error: "invalid_body" }, 400);
-    await db.insert(schema.preferences).values({ userId: c.get("userId"), data: parsed.data })
+    await tx.insert(schema.preferences).values({ userId, data: parsed.data })
       .onConflictDoUpdate({ target: schema.preferences.userId, set: { data: parsed.data } });
     return c.json(parsed.data);
+    });
   });
 
   // accounts

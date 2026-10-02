@@ -14,6 +14,12 @@ test("match review, manual draft and scouting", async ({ page }, info) => {
   const player = `P3${info.project.name}`;
   await onboard(page, player);
 
+  let reviewPayload: any;
+  await page.route("**/api/matches/*/review", async route => {
+    const response = await route.fetch();
+    reviewPayload = await response.json();
+    await route.fulfill({ response });
+  }, { times: 1 });
   // Match review from a Summoner's Rift game
   await page.goto("/matches?mode=summoners_rift");
   await page.locator(".match").first().click();
@@ -35,6 +41,20 @@ test("match review, manual draft and scouting", async ({ page }, info) => {
   await page.getByLabel("Impact map").check();
   await expect(page.getByRole("img", { name: /Impact map/ })).toBeVisible();
 
+  // Client-side navigation to a shorter replay resets the old playback position.
+  const nextMatch = "REPLAY_SHORT_FIXTURE";
+  const shortReview = structuredClone(reviewPayload);
+  shortReview.review.matchId = nextMatch;
+  shortReview.review.frames = shortReview.review.frames.slice(0, 1);
+  shortReview.review.highlights = [];
+  await page.route(`**/api/matches/${nextMatch}/review`, route => route.fulfill({ json: shortReview }));
+  await page.evaluate(id => {
+    history.pushState({}, "", `/matches/${id}/review`);
+    dispatchEvent(new PopStateEvent("popstate"));
+  }, nextMatch);
+  await expect(page.getByRole("img", { name: "Positions at minute 0", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Impact map")).not.toBeChecked();
+
   // Pre-game area
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Live", exact: true }).click();
   await page.getByRole("link", { name: "Prepare a draft manually" }).click();
@@ -51,6 +71,28 @@ test("match review, manual draft and scouting", async ({ page }, info) => {
   await expect(plan).toContainText("Your power spike");
   await expect(plan).toContainText(/Your usual setup \(\d+ games\)/);
   await page.screenshot({ path: `test-results/gameplan-${info.project.name}.png`, fullPage: true });
+
+  // A delayed analysis belongs to the selection that requested it, never a later one.
+  let release!: () => void;
+  let started!: () => void;
+  const waiting = new Promise<void>(resolve => { started = resolve; });
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route("**/api/draft", async route => {
+    const response = await route.fetch();
+    started();
+    await gate;
+    await route.fulfill({ response });
+  }, { times: 1 });
+  await page.getByRole("button", { name: "Analyze", exact: true }).click();
+  await waiting;
+  await page.getByLabel("Your champion").selectOption({ label: "Veyl" });
+  await expect(plan).toHaveCount(0);
+  const received = page.waitForResponse(r => r.url().endsWith("/api/draft"));
+  release();
+  await received;
+  await expect(plan).toHaveCount(0);
+  await page.getByRole("button", { name: "Analyze", exact: true }).click();
+  await expect(plan).toBeVisible();
 
   await page.getByRole("button", { name: "Find my game" }).click();
   await expect(page.getByRole("heading", { name: "Your opponents" })).toBeVisible({ timeout: 30_000 });
