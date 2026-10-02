@@ -67,7 +67,10 @@ export function desktopSessionRoutes({ db }: { db: Db }) {
     // A stale frame can never be shown again, and live frames name the other players in the game:
     // it is deleted now rather than kept (exactly this row, so a newer frame is never lost).
     if (stale && !ended) await db.delete(schema.liveFrames).where(and(eq(schema.liveFrames.deviceId, row.deviceId), eq(schema.liveFrames.receivedAt, row.receivedAt), eq(schema.liveFrames.capturedAt, row.capturedAt)));
-    return c.json({ frame: stale && !ended ? null : parsed.data, stale: stale && !ended });
+    // How much longer this frame stays current, so the page can drop it on time even while it
+    // cannot read again (e.g. rate-limited); relative, so the browser's clock does not matter.
+    const expiresInMs = stale || ended ? null : Math.max(0, Math.min(row.receivedAt.getTime(), row.capturedAt.getTime()) + LIVE_TTL_MS - Date.now());
+    return c.json({ frame: stale && !ended ? null : parsed.data, stale: stale && !ended, expiresInMs });
   });
 
   r.post("/desktop/pair", async (c) => {

@@ -370,11 +370,15 @@ describe("desktop load limits",()=>{
   const frame={version:1,streamId:"5f0c2b7e-1d3a-4c8e-9b6f-2e4a7d1c3b90",sequence:1,capturedAt:Date.now(),phase:"live",champion:"Ahri",position:"MIDDLE",patch:"16.19.1",time:600,gold:1200,allies:[],enemies:[],headline:"Fresh",sections:[]};
   expect((await call("/desktop/live",{method:"POST",headers:auth,body:JSON.stringify(frame)})).body.accepted).toBe(true);
   const rows=async()=>(await database.db.select().from(schema.liveFrames).where(eq(schema.liveFrames.streamId,frame.streamId))).length;
-  expect((await call("/live",{cookie})).body.frame.headline).toBe("Fresh");
+  const fresh=(await call("/live",{cookie})).body;
+  expect(fresh.frame.headline).toBe("Fresh");
+  // The page is told how long this advice stays current (at most the 15 s freshness limit).
+  expect(fresh.expiresInMs).toBeGreaterThan(10_000);
+  expect(fresh.expiresInMs).toBeLessThanOrEqual(15_000);
   expect(await rows()).toBe(1);
   // The frame ages past 15 s: it is hidden and deleted as soon as it is read.
   await database.db.update(schema.liveFrames).set({receivedAt:new Date(Date.now()-20_000),capturedAt:new Date(Date.now()-20_000)}).where(eq(schema.liveFrames.streamId,frame.streamId));
-  expect((await call("/live",{cookie})).body).toEqual({frame:null,stale:true});
+  expect((await call("/live",{cookie})).body).toEqual({frame:null,stale:true,expiresInMs:null});
   expect(await rows()).toBe(0);
   // 240 reads a minute per user (several tabs every second); beyond that, wait.
   let limited=0;

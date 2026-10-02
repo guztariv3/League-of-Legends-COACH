@@ -4,8 +4,6 @@ import { Link, useNavigate } from "react-router";
 import type { LiveFrame } from "@coach/ui";
 import { api, ApiError } from "../api";
 import { ChampionIcon } from "../assets";
-/** Shared advice expires 15 s after it was current (the API's freshness limit). */
-const LIVE_KEEP_MS=15_000;
 const Context=createContext<{frame:LiveFrame|null;stale:boolean}>({frame:null,stale:false});
 export function LiveProvider({children}:{children:ReactNode}) {
  const [value,setValue]=useState<{frame:LiveFrame|null;stale:boolean}>({frame:null,stale:false});
@@ -28,14 +26,15 @@ export function LiveProvider({children}:{children:ReactNode}) {
  useEffect(()=>{let stopped=false;let timer:ReturnType<typeof setTimeout>;
   // Every second while a game or champion select is being shared and the page is visible; slower
   // otherwise (a new game is still picked up within a few seconds), and much slower when hidden.
-  let busy=false, lastOk=Date.now();
+  // When the advice on screen stops being current, as the API reported it (relative to this clock).
+  let busy=false, deadline=0;
   const loop=async()=>{if(busy)return;busy=true;let delay=4000;
-   try{const r=await api.live();if(stopped)return;lastOk=Date.now();setValue(r);if(r.frame && !["idle","ended"].includes(r.frame.phase))delay=1000;}
+   try{const r=await api.live();if(stopped)return;deadline=Date.now()+(r.expiresInMs??0);setValue({frame:r.frame,stale:r.stale});if(r.frame && !["idle","ended"].includes(r.frame.phase))delay=1000;}
    catch(e){if(stopped)return;
     if(e instanceof ApiError && e.status===429){
      // Too many requests is not a lost companion: what is shown stays and the page backs off, but
-     // advice is never kept longer than it would have stayed current (15 s after the last answer).
-     const left=LIVE_KEEP_MS-(Date.now()-lastOk);
+     // advice is never kept past the moment the API would have stopped showing it.
+     const left=deadline-Date.now();
      if(left<=0)setValue(v=>v.frame && !["idle","ended"].includes(v.frame.phase) ? {frame:null,stale:true}:v);
      delay=left>0 ? Math.min(10000,left):10000;
     } else setValue({frame:null,stale:true});}
