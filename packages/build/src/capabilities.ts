@@ -1,3 +1,4 @@
+import { isCompletedPurchase } from "@coach/knowledge";
 import type { ItemFacts, ItemStat } from "@coach/knowledge";
 import type { ThreatKind } from "./threats.js";
 
@@ -64,6 +65,8 @@ export interface ItemProfile {
   mana: number;
   /** Its passive restores or regenerates mana. */
   manaSustain: boolean;
+  /** Deals damage back when struck by an enemy basic attack, independently of healing reduction. */
+  attackReflection: boolean;
   /** Amplifies critical strikes (critical strike damage), which the shop's basic items cannot price. */
   critAmplify: boolean;
   /** An item a player builds towards (finished, bought from the shop on Summoner's Rift). */
@@ -127,8 +130,9 @@ export function itemProfile(item: ItemFacts, gold: Map<StatKey, number>, catalog
   // Upgraded boots (a recipe that contains boots) take the boots slot, not an item slot.
   const fromBoots = item.from.some((id) => catalog.get(id)?.rank.includes("BOOTS"));
   const canBuild = buildable(item, catalog);
-  const finished = canBuild && item.rank.includes("LEGENDARY") && item.into.length === 0 && !fromBoots;
+  const finished = canBuild && isCompletedPurchase(item, catalog) && !fromBoots;
   const boots = canBuild && (item.rank.includes("BOOTS") || fromBoots) && item.from.length > 0;
   const manaSustain = parts.some((t) => /restor\w*[^.]{0,40}\bmana\b|\bmana regeneration\b|regenerat\w*[^.]{0,30}\bmana\b/i.test(t));
-  return { item, stats, counters, mana: item.stats.mana?.flat ?? 0, manaSustain, critAmplify: (item.stats.criticalStrikeDamage?.percent ?? 0) > 0, finished, boots };
+  const attackReflection = parts.some(t => /when struck by a basic attack[^.]*deal[^.]*damage to the attacker/i.test(t));
+  return { item, stats, counters, attackReflection, mana: item.stats.mana?.flat ?? 0, manaSustain, critAmplify: (item.stats.criticalStrikeDamage?.percent ?? 0) > 0, finished, boots };
 }

@@ -13,6 +13,7 @@ export const users = pgTable("users", {
   username: text("username").unique(),
   /** scrypt hash (see auth.ts); never the password. */
   passwordHash: text("password_hash"),
+  devLoginTokenHash: text("dev_login_token_hash"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -38,6 +39,8 @@ export const riotAccounts = pgTable(
     syncStatus: text("sync_status").$type<"never" | "syncing" | "ok" | "error">().notNull().default("never"),
     syncError: text("sync_error"),
     lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    syncOffset: integer("sync_offset").notNull().default(0),
+    syncWindowEnd: timestamp("sync_window_end", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("riot_accounts_user_puuid").on(t.userId, t.puuid)],

@@ -59,6 +59,15 @@ function tree(item: CatalogItem, catalog: Catalog, pool: number[], parent: Node 
   return node;
 }
 
+/** The shop consumes any applicable held descendants. It cannot reserve one for
+ * another branch. Buying a second copy of the root still costs its full price. */
+function purchaseTree(item: CatalogItem, catalog: Catalog, inventory: number[]): Node {
+  const pool=[...inventory];
+  const root:Node={item,children:[],parent:null,owned:false};
+  root.children=item.from.map(id=>catalog.items.get(id)).filter((i):i is CatalogItem=>!!i).map(i=>tree(i,catalog,pool,root,1));
+  return root;
+}
+
 /** What buying this node costs now: its own price minus the pieces under it you already hold. */
 function cost(n: Node): number {
   if (n.owned) return 0;
@@ -99,19 +108,24 @@ function options(root: Node): { set: Node[]; spent: number }[] {
 /** Apply purchases in an order that frees component slots before buying loose pieces. */
 function fitPurchases(set: Node[], inventory: number[], catalog: Catalog): { ordered: Node[]; inventory: number[] } | null {
   const held = (n: Node): number[] => n.owned ? [n.item.id] : n.children.flatMap(held);
-  const ordered = [...set].sort((a, b) => held(b).length - held(a).length);
+  const ordered = [...set].sort((a, b) =>
+    held(purchaseTree(b.item,catalog,inventory)).length - held(purchaseTree(a.item,catalog,inventory)).length ||
+    b.item.gold-a.item.gold);
   const next = [...inventory];
   const slots = () => next.filter((id) => !catalog.items.get(id)?.tags.includes("Trinket")).length;
-  for (const node of ordered) {
+  const purchases:Node[]=[];
+  for (const candidate of ordered) {
+    const node=purchaseTree(candidate.item,catalog,next);
     for (const id of held(node)) {
       const at = next.indexOf(id);
       if (at < 0) return null;
       next.splice(at, 1);
     }
     next.push(node.item.id);
+    purchases.push(node);
     if (slots() > 6) return null;
   }
-  return { ordered, inventory: next };
+  return { ordered:purchases, inventory: next };
 }
 
 function sequentialBuy(targets: CatalogItem[], inventory: number[], gold: number, catalog: Catalog, utility?: Record<number, number>) {
@@ -133,9 +147,9 @@ function sequentialBuy(targets: CatalogItem[], inventory: number[], gold: number
       actual = fit.inventory;
       continue;
     }
-    const best = options(root).filter((o) => o.spent <= left)
-      .map((o) => ({ ...o, fit: fitPurchases(o.set, actual, catalog) }))
-      .filter((o) => o.fit !== null)
+    const best = options(root)
+      .map(o=>{const fit=fitPurchases(o.set,actual,catalog);const set=fit?.ordered??o.set;return {set,spent:set.reduce((sum,n)=>sum+cost(n),0),fit};})
+      .filter((o) => o.fit !== null && o.spent <= left)
       .sort((a, b) => {
         const worth = (o: typeof a) => o.set.reduce((s,n) => s + cost(n) * (utility?.[n.item.id] ?? 1), 0);
         return worth(b)-worth(a) || b.spent-a.spent || a.set.length-b.set.length;
@@ -182,9 +196,10 @@ function bestBuy(targets: CatalogItem[], inventory: number[], gold: number, cata
       if (state.inventory.includes(target.id)) continue;
       const root = tree(target, catalog, [...state.inventory]);
       for (const node of nodes(root).slice(0, 20)) {
-        const price = cost(node);
+        const purchase=purchaseTree(node.item,catalog,state.inventory);
+        const price = cost(purchase);
         if (node.item.purchasable === false || price <= 0 || price + state.spent > gold) continue;
-        const fit = fitPurchases([node], state.inventory, catalog);
+        const fit = fitPurchases([purchase], state.inventory, catalog);
         if (!fit) continue;
         const completed = node === root;
         // Spending outside the current recipe delays its completion. Charge that
@@ -208,6 +223,14 @@ function bestBuy(targets: CatalogItem[], inventory: number[], gold: number, cata
     }
     beam = [...next.values()].sort((a,b)=>b.value-a.value || a.buys.length-b.buys.length).slice(0, 24);
     if (!beam.length) break;
+  }
+  // A coarse utility estimate may value held components above their completed
+  // upgrade. It must not produce an empty shop plan when the recommended target
+  // can legally be finished. Keep better contextual purchases found by the search.
+  if (!best.buys.length && primary && primary.purchasable !== false && primaryCost >= 0 && primaryCost <= gold && worth(primary.id)>0) {
+    const root=tree(primary,catalog,[...inventory]);
+    const fit=fitPurchases([root],inventory,catalog);
+    if(fit) return {buys:[{id:primary.id,name:primary.name,gold:primaryCost,targetId:primary.id,targetName:primary.name,reason:'Completes the recommended target using your existing components.'}],spent:primaryCost,completes:[primary.name],toward:primary.name,value:Math.max(Number.EPSILON,primaryCost*worth(primary.id)),inventory:fit.inventory};
   }
   return {buys:best.buys,spent:best.spent,completes:best.completes,toward:best.buys[0]?.targetName ?? targets[0]?.name ?? '',value:best.value,inventory:best.inventory};
 }
@@ -304,7 +327,7 @@ export function recipeView(item: CatalogItem, inventory: number[], catalog: Cata
 export function nextRecipePurchase(item: CatalogItem, inventory: number[], gold: number | null, catalog: Catalog): Buy | null {
   if (gold === null) return null;
   const root=tree(item,catalog,[...inventory]);
-  const candidate=nodes(root).filter(n=>n.item.purchasable!==false && cost(n)>0 && cost(n)<=gold && fitPurchases([n],inventory,catalog))
+  const candidate=nodes(root).map(n=>purchaseTree(n.item,catalog,inventory)).filter(n=>n.item.purchasable!==false && cost(n)>0 && cost(n)<=gold && fitPurchases([n],inventory,catalog))
     .sort((a,b)=>cost(b)-cost(a))[0];
   return candidate ? {id:candidate.item.id,name:candidate.item.name,gold:cost(candidate)} : null;
 }

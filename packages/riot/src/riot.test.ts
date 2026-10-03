@@ -146,8 +146,10 @@ describe("Master+ ladders (phase 4 statistics)", () => {
       },
     });
     expect((await client.getApexLeague("euw1", "challenger"))?.entries[0]).toMatchObject({ puuid: "p", leaguePoints: 1500 });
-    await client.getMatchIds("euw1", "p", { count: 20, queue: 420 });
+    await client.getMatchIds("euw1", "p", { count: 20, queue: 420, startTime: 100, endTime: 200 });
     expect(urls[0]).toBe("https://euw1.api.riotgames.com/lol/league/v4/challengerleagues/by-queue/RANKED_SOLO_5x5");
     expect(new URL(urls[1]!).searchParams.get("queue")).toBe("420");
+    expect(new URL(urls[1]!).searchParams.get("startTime")).toBe("100");
+    expect(new URL(urls[1]!).searchParams.get("endTime")).toBe("200");
   });
 });

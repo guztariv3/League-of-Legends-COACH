@@ -281,3 +281,41 @@ it('saves surplus gold instead of opening an equally useful unrelated recipe', (
   expect(p.now!.buys.map(x=>x.id)).toEqual([1]);
   expect(p.now!.leftover).toBe(450);
 });
+
+it('does not leave the shop plan empty when component utility undervalues a legal recommended completion',()=>{
+ const make=(id:number,gold:number,from:number[]=[])=>({...item(WAND),id,name:`Completion ${id}`,gold,from,purchasable:true});
+ const a=make(1,400),b=make(2,400),target=make(3,1000,[1,2]);
+ const local={...catalog,items:new Map([a,b,target].map(i=>[i.id,i]))};
+ const run=(gold:number,inventory:number[])=>planPurchases({targets:[target],inventory,gold,time:900,itemGold:800,catalog:local,utility:{1:2,2:2,3:.5}});
+ expect(run(199,[1,2]).now).toBeNull();
+ const ready=run(200,[1,2,900001,900002,900003,900004]);
+ expect(ready.now?.buys.map(x=>x.id)).toEqual([3]);
+ expect(ready.now?.spent).toBe(200);expect(ready.now?.leftover).toBe(0);
+ expect(run(1000,[900001,900002,900003,900004,900005,900006]).now).toBeNull();
+});
+
+it.each([undefined,{1:1,2:2,3:1}])('prices shared pieces using actual shop consumption, not recipe reservations (%s)',utility=>{
+ const make=(id:number,gold:number,from:number[]=[])=>({...item(WAND),id,name:`Shared ${id}`,gold,from,purchasable:true});
+ const piece=make(1,400),upgrade=make(2,800,[1]),target=make(3,2400,[1,2]);
+ const local={...catalog,items:new Map([piece,upgrade,target].map(i=>[i.id,i]))};
+ // The full recipe assigns the held piece to its first branch. Buying the
+ // upgrade nevertheless consumes it, leaving only the upgrade in inventory.
+ const compact=purchasePath(target,[1],400,local);
+ expect(compact.affordableNow?.id).toBe(2);
+ expect(compact.affordableNow?.gold).toBe(400);
+ const p=planPurchases({targets:[target],inventory:[1],gold:400,time:900,itemGold:400,catalog:local,utility});
+ if(utility)expect(p.now?.buys.map(b=>[b.id,b.gold])).toEqual([[2,400]]);
+ else expect(p.now?.buys.map(b=>[b.id,b.gold])).toEqual([[1,400]]);
+ expect(p.now?.spent).toBe(400);
+ // With an empty inventory, recompute the price after every suggested click.
+ const empty=planPurchases({targets:[target],inventory:[],gold:1200,time:900,itemGold:0,catalog:local,utility});
+ const held:number[]=[];let total=0;
+ for(const b of empty.now!.buys){
+  const current=local.items.get(b.id)!;let credit=0;
+  for(const id of current.from){const at=held.indexOf(id);if(at>=0){held.splice(at,1);credit+=local.items.get(id)!.gold;}}
+  expect(b.gold).toBe(current.gold-credit);total+=b.gold;held.push(b.id);
+ }
+ expect(empty.now!.spent).toBe(total);
+ expect(empty.now!.leftover).toBe(1200-total);
+ if(!utility){expect(held.sort()).toEqual([1,2]);expect(total).toBe(1200);}
+});

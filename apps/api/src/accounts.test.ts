@@ -26,7 +26,7 @@ async function call(path: string, init: RequestInit & { cookie?: string; ip?: st
   const res = await ctx.app.request(`/api${path}`, { ...init, headers });
   return { res, body: (await res.json()) as any, cookie: res.headers.get("set-cookie")?.split(";")[0] ?? null };
 }
-const post = (path: string, body: unknown, extra: { cookie?: string; ip?: string } = {}) => call(path, { method: "POST", body: JSON.stringify(body), ...extra });
+const post = (path: string, body: unknown, extra: { cookie?: string; ip?: string } = {}) => call(path, { method: "POST", body: JSON.stringify(path === "/auth/dev-login" ? {token:"a".repeat(64),...body as object}:body), ...extra });
 
 describe("passwords", () => {
   it("stores a salted scrypt hash, never the password, and verifies it", async () => {
@@ -88,4 +88,32 @@ describe("own accounts", () => {
     for (let i = 0; i < 6; i++) last = (await post("/auth/register", { username: `spam${i}`, password: "spam-password" }, { ip: "10.9.9.9" })).res.status;
     expect(last).toBe(429); // sign-ups per address
   });
+});
+
+it('requires the original dev token and never opens password accounts with it',async()=>{
+ const owner=await post('/auth/dev-login',{displayName:'TokenOwner',token:'b'.repeat(64)});
+ expect(owner.res.status).toBe(200);
+ expect((await post('/auth/dev-login',{displayName:'TokenOwner',token:'c'.repeat(64)})).res.status).toBe(409);
+ expect((await call('/auth/dev-login',{method:'POST',body:JSON.stringify({displayName:'TokenOwner'})})).res.status).toBe(400);
+ const again=await post('/auth/dev-login',{displayName:'TokenOwner',token:'b'.repeat(64)});
+ expect(again.body.user.id).toBe(owner.body.user.id);
+ const [stored]=await database.db.select().from(schema.users).where(eq(schema.users.id,owner.body.user.id));
+ expect(stored!.devLoginTokenHash).not.toBe('b'.repeat(64));
+ await call('/me/credentials',{method:'PUT',cookie:owner.cookie!,body:JSON.stringify({username:'tokenowner',password:'test-password-long'})});
+ expect((await post('/auth/dev-login',{displayName:'TokenOwner',token:'b'.repeat(64)})).res.status).toBe(409);
+});
+it('requires a valid owner session to bind a legacy dev identity',async()=>{
+ const {hashToken}=await import('./auth.js');
+ const [legacy]=await database.db.insert(schema.users).values({displayName:'LegacyOwner'}).returning();
+ expect((await post('/auth/dev-login',{displayName:'LegacyOwner',token:'d'.repeat(64)})).res.status).toBe(409);
+ await database.db.insert(schema.sessions).values({userId:legacy!.id,tokenHash:hashToken('legacy-session'),expiresAt:new Date(Date.now()+60000)});
+ const bound=await post('/auth/dev-login',{displayName:'LegacyOwner',token:'d'.repeat(64)},{cookie:'coach_session=legacy-session'});
+ expect(bound.res.status).toBe(200);expect(bound.body.user.id).toBe(legacy!.id);
+ expect((await post('/auth/dev-login',{displayName:'LegacyOwner',token:'e'.repeat(64)})).res.status).toBe(409);
+});
+it('allows only one token to claim a new name concurrently',async()=>{
+ const results=await Promise.all(['e','f'].map(t=>post('/auth/dev-login',{displayName:'ConcurrentOwner',token:t.repeat(64)})));
+ expect(results.map(r=>r.res.status).sort()).toEqual([200,409]);
+ const rows=await database.db.select().from(schema.users).where(eq(schema.users.displayName,'ConcurrentOwner'));
+ expect(rows).toHaveLength(1);
 });

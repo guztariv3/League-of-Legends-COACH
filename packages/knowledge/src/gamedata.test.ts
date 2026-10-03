@@ -140,3 +140,11 @@ describe("runes and summoner spells (real data)", () => {
     expect(new Set(names).size).toBe(names.length);
   });
 });
+
+it('tracks purchased precursors of transformations and free support quest upgrades',()=>{
+ expect(items.find(i=>i.id===3040)?.purchaseBase).toBe(3003);
+ expect(items.find(i=>i.id===3042)?.purchaseBase).toBe(3004);
+ expect(items.find(i=>i.id===3121)?.purchaseBase).toBe(3119);
+ expect(items.find(i=>i.id===3869)?.automaticUpgrade).toBe(true);
+ expect(items.find(i=>i.id===3003)?.purchaseBase).toBeNull();
+});

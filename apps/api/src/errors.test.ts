@@ -26,7 +26,7 @@ afterAll(async () => {
 
 it("tells the player when Riot rejects the API key instead of a generic server error", async () => {
   const json = { "Content-Type": "application/json" };
-  const login = await app.request("/api/auth/dev-login", { method: "POST", headers: json, body: JSON.stringify({ displayName: "KeyTest" }) });
+  const login = await app.request("/api/auth/dev-login", { method: "POST", headers: json, body: JSON.stringify({ token: "a".repeat(64), displayName: "KeyTest" }) });
   const cookie = login.headers.get("set-cookie")!.split(";")[0]!;
   const res = await app.request("/api/accounts", {
     method: "POST",
