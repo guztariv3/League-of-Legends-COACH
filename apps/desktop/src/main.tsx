@@ -223,25 +223,37 @@ function LiveWindow() {
   // The site's build engine during the game (Summoner's Rift): asked again when your items, the
   // enemies' items or scores change. Without a connected site contextual item guidance is unavailable.
   const [engineResponse, setEngine] = useState<{context:string;build:EngineItems} | null>(null);
-  const engineContext = st?.me && rivals.link ? JSON.stringify([rivals.link.origin,rivals.link.token,st.me.championId,st.me.position,laneOpponent(st)?.championId]) : null;
-  const engine = engineResponse?.context === engineContext ? engineResponse.build : null;
   const opening = Boolean(st?.me && st.time < STARTER_WINDOW_SEC && st.me.itemGold < 300);
   const engineKey = st?.me && st.map === 11 && st.enemies.length
     ? [st.me.championId, st.me.position ?? "", laneOpponent(st)?.championId ?? "", Math.floor((st.gold ?? 0)/100), Math.floor(st.time/15), opening ? "open" : "", [...st.me.items].sort().join("."), "|",
        ...st.enemies.map((e) => `${e.championId}:${[...e.items].sort().join(".")}:${e.kills}:${e.deaths}`)].join(",")
     : null;
+  // An answer is shown only for the inventories it was computed from: once you or an enemy buy
+  // something, the old build is hidden until the engine answers for the new items. Gold and time
+  // are left out so the current answer stays on screen while a fresh one is on its way.
+  const engineContext = engineKey && st?.me && rivals.link ? JSON.stringify([rivals.link.origin,rivals.link.token,st.me.championId,st.me.position,laneOpponent(st)?.championId,
+    [...st.me.items].sort(),st.enemies.map((e) => [e.championId,[...e.items].sort()])]) : null;
+  const engine = engineResponse?.context === engineContext ? engineResponse.build : null;
+  // Answers are kept even when newer requests are on their way (a slow engine must not freeze the
+  // old build forever); only one older than the last answer applied is dropped.
+  const engineSeq = useRef({ sent: 0, applied: 0 });
   useEffect(() => {
     const link = rivals.link;
-    if (!link || !engineKey || !st?.me) { setEngine(null); return; }
-    let stopped = false;
+    if (!link || !engineKey || !engineContext || !st?.me) { engineSeq.current.applied = engineSeq.current.sent; setEngine(null); return; }
+    const context = engineContext;
     const me = st.me;
     const enemies = st.enemies.map((e) => ({ championId: e.championId, items: e.items, kills: e.kills, deaths: e.deaths }));
     const opponent = laneOpponent(st)?.championId ?? null;
     const t = setTimeout(() => {
+      const seq = ++engineSeq.current.sent;
       void fetchItems<{ build: EngineItems | null }>(link.origin, link.token, { me: me.championId, mine: me.items, enemies, opponent, position: me.position || null, opening, economy: {gold:st.gold,time:st.time,income:goldPace(st.time,st.gold,me.itemGold),opponentCompleted: Boolean(laneOpponent(st)?.items.some(id=>catalog?.items.get(id)?.completed))} })
-        .then((r) => { if (!stopped) setEngine(r.ok && r.data.build && engineContext ? {context:engineContext,build:r.data.build} : null); });
+        .then((r) => {
+          if (seq <= engineSeq.current.applied) return;
+          engineSeq.current.applied = seq;
+          setEngine(r.ok && r.data.build ? {context,build:r.data.build} : null);
+        });
     }, 250);
-    return () => { stopped = true; clearTimeout(t); };
+    return () => clearTimeout(t);
   }, [rivals.link, engineKey, engineContext]);
 
   // Champion select (D-13): read-only polling of the League Client while no game is running.
