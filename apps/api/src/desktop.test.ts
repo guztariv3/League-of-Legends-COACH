@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import { parseChampionKits, parseItems, parseRunes, parseSummonerSpells, syntheticSource as syntheticKnowledge } from "@coach/knowledge";
 import { gameData } from "@coach/knowledge/test-data";
 import { patchFromVersion } from "@coach/domain";
@@ -331,6 +332,59 @@ describe("private Live companion frames",()=>{
   expect((await send({...frame,sequence:6,capturedAt:now-1500,headline:"old stream late"})).body.accepted).toBe(false);
   expect((await call("/live",{cookie})).body.frame.headline).toBe("new stream");
  });
+});
+
+describe("desktop load limits",()=>{
+ const linked=async(name:string,ip:string)=>{
+  const cookie=await player(name);
+  const pair=await call("/desktop/pair",{method:"POST",cookie,body:"{}"});
+  return {cookie,auth:{Authorization:`Bearer ${(await claim(pair.body.code,ip)).body.token}`}};
+ };
+ it("reuses the hover plan for the same champions while bans and the timer change, and limits new plans per device",async()=>{
+  const {auth}=await linked("PlanLimits","10.0.0.81");
+  const ctxParam=(phase:string,bans:number[])=>encodeURIComponent(JSON.stringify({bans:{allies:bans,enemies:[]},timerPhase:phase}));
+  const ask=(enemies:string,phase:string,bans:number[],preview="1")=>call(`/desktop/plan?me=9001&allies=9003&enemies=${enemies}&preview=${preview}&draftContext=${ctxParam(phase,bans)}`,{headers:auth});
+  const first=await ask("9002","BAN_PICK",[]);
+  expect(first.res.status).toBe(200);
+  // A ban and a new timer phase: same plan, fresh draft state.
+  const again=await ask("9002","FINALIZATION",[9003]);
+  expect(again.res.status).toBe(200);
+  expect(again.body.draftState).toMatchObject({phase:"FINALIZATION",allyBans:["Brannoc"]});
+  expect(first.body.draftState).toMatchObject({phase:"BAN_PICK",allyBans:[]});
+  const {draftState:_a,...planA}=first.body, {draftState:_b,...planB}=again.body;
+  expect(planB).toEqual(planA);
+  // Locked in: always computed fresh (it counts towards the limit below).
+  const locked=await ask("9002","FINALIZATION",[9003],"0");
+  expect(locked.res.status).toBe(200);
+  expect(locked.body.draftState).toMatchObject({phase:"FINALIZATION"});
+  // New champions each time: after 40 computed plans in a minute the device is told to wait,
+  // while plans already computed are still served.
+  let limited=0;
+  for(let i=0;i<45;i++){const r=await call(`/desktop/plan?me=9001&allies=Ally${i}&enemies=9002&preview=1`,{headers:auth});if(r.res.status===429){limited++;expect(r.body.error).toBe("rate_limited");expect(r.res.headers.get("retry-after")).toBe("10");}}
+  expect(limited).toBe(7); // the 2 computed plans above + 38 new ones fit in the 40
+  expect((await ask("9002","BAN_PICK",[])).res.status).toBe(200);
+ },60_000);
+
+ it("deletes a stale shared frame once it is read, and limits how often one user reads Live",async()=>{
+  const {cookie,auth}=await linked("LiveRetention","10.0.0.82");
+  const frame={version:1,streamId:"5f0c2b7e-1d3a-4c8e-9b6f-2e4a7d1c3b90",sequence:1,capturedAt:Date.now(),phase:"live",champion:"Ahri",position:"MIDDLE",patch:"16.19.1",time:600,gold:1200,allies:[],enemies:[],headline:"Fresh",sections:[]};
+  expect((await call("/desktop/live",{method:"POST",headers:auth,body:JSON.stringify(frame)})).body.accepted).toBe(true);
+  const rows=async()=>(await database.db.select().from(schema.liveFrames).where(eq(schema.liveFrames.streamId,frame.streamId))).length;
+  const fresh=(await call("/live",{cookie})).body;
+  expect(fresh.frame.headline).toBe("Fresh");
+  // The page is told how long this advice stays current (at most the 15 s freshness limit).
+  expect(fresh.expiresInMs).toBeGreaterThan(10_000);
+  expect(fresh.expiresInMs).toBeLessThanOrEqual(15_000);
+  expect(await rows()).toBe(1);
+  // The frame ages past 15 s: it is hidden and deleted as soon as it is read.
+  await database.db.update(schema.liveFrames).set({receivedAt:new Date(Date.now()-20_000),capturedAt:new Date(Date.now()-20_000)}).where(eq(schema.liveFrames.streamId,frame.streamId));
+  expect((await call("/live",{cookie})).body).toEqual({frame:null,stale:true,expiresInMs:null});
+  expect(await rows()).toBe(0);
+  // 240 reads a minute per user (several tabs every second); beyond that, wait.
+  let limited=0;
+  for(let i=0;i<245;i++){const r=await call("/live",{cookie});if(r.res.status===429)limited++;}
+  expect(limited).toBe(245+2-240);
+ },60_000);
 });
 
 it("does not double-count a completed game when ingestion retries",async()=>{

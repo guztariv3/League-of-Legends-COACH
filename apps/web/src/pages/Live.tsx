@@ -2,7 +2,7 @@ import { LiveCompanion } from "./LiveDetail";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import type { LiveFrame } from "@coach/ui";
-import { api } from "../api";
+import { api, ApiError } from "../api";
 import { ChampionIcon } from "../assets";
 const Context=createContext<{frame:LiveFrame|null;stale:boolean}>({frame:null,stale:false});
 export function LiveProvider({children}:{children:ReactNode}) {
@@ -24,9 +24,35 @@ export function LiveProvider({children}:{children:ReactNode}) {
   navigate("/live");
  },[value,navigate]);
  useEffect(()=>{let stopped=false;let timer:ReturnType<typeof setTimeout>;
-  const loop=async()=>{try{const r=await api.live();if(!stopped)setValue(r);}catch{if(!stopped)setValue({frame:null,stale:true});}
-   if(!stopped)timer=setTimeout(loop,document.hidden ? 2000:1000);
-  };void loop();return()=>{stopped=true;clearTimeout(timer);};},[]);
+  // Every second while a game or champion select is being shared and the page is visible; slower
+  // otherwise (a new game is still picked up within a few seconds), and much slower when hidden.
+  // Advice on screen is dropped the moment the API said it stops being current, whatever happens
+  // to the polling (rate-limited, slow or hidden): its own timer, reset by every fresh answer.
+  let busy=false, expiry:ReturnType<typeof setTimeout>|undefined;
+  const expireAt=(ms:number)=>{clearTimeout(expiry);
+   expiry=setTimeout(()=>setValue(v=>v.frame && !["idle","ended"].includes(v.frame.phase) ? {frame:null,stale:true}:v),Math.max(0,ms));};
+  const loop=async()=>{if(busy)return;busy=true;let delay=4000;
+   // The server measured the remaining time while answering: counting it from when the request was
+   // sent (not when the answer arrived) keeps a slow response from extending it.
+   const sent=Date.now();
+   try{const r=await api.live();if(stopped)return;
+    const active=r.frame!==null && !["idle","ended"].includes(r.frame.phase);
+    const left=sent+(r.expiresInMs??0)-Date.now();
+    if(active && left<=0){clearTimeout(expiry);setValue({frame:null,stale:true});}
+    else{setValue({frame:r.frame,stale:r.stale});if(active){delay=1000;expireAt(left);} else clearTimeout(expiry);}}
+   catch(e){if(stopped)return;
+    // Too many requests is not a lost companion: what is shown stays (until it expires) and the
+    // page backs off. Any other failure hides the advice at once.
+    if(e instanceof ApiError && e.status===429)delay=10000;
+    else{clearTimeout(expiry);setValue({frame:null,stale:true});}}
+   finally{busy=false;}
+   if(stopped)return;
+   clearTimeout(timer);timer=setTimeout(loop,document.hidden ? Math.max(delay,10000):delay);
+  };
+  // Coming back to the tab refreshes at once instead of waiting for the slow hidden-tab timer.
+  const visible=()=>{if(!document.hidden && !stopped){clearTimeout(timer);void loop();}};
+  document.addEventListener("visibilitychange",visible);
+  void loop();return()=>{stopped=true;clearTimeout(timer);clearTimeout(expiry);document.removeEventListener("visibilitychange",visible);};},[]);
  return <Context.Provider value={value}>{children}</Context.Provider>;
 }
 export function LiveBanner(){const {frame}=useContext(Context);return frame && !["idle","ended"].includes(frame.phase) ? <Link className="live-banner" to="/live">● {frame.phase==="draft"||frame.phase==="pregame" ? "Champion select":"Live game"}</Link>:null;}
