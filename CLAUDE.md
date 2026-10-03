@@ -41,3 +41,9 @@ Web app + Live Coach de escritorio que analiza las partidas del jugador y le mue
 - Escritorio: el tag `desktop-vX.Y.Z` lanza `desktop-release.yml` (firmado, Release en borrador). La clave de firma de Tauri nunca va al repositorio.
 - No uses la base de producción para pruebas: no copies `DATABASE_URL` de Render, mantén `STATS_CRAWL=0` en local y no ejecutes `stats:backfill` sin una tarea específica y acotada.
 - Configuración opcional en `.env.example`. Los secretos (`RIOT_API_KEY`, `ANTHROPIC_API_KEY`, `PROTOTYPE_PASSWORD`) se configuran en Render o en el equipo, nunca en el repo ni en el chat.
+
+## Segundo cerebro (Obsidian de Gustavo)
+- Este proyecto tiene su nota en el vault de Obsidian de Gustavo: `C:\Users\Gustavo\Documents\Obsidian Vault\proyectos\koi-master.md`. La historia de su construcción está en `sesiones/koi-master/` del mismo vault. Esa ruta existe solo en su PC.
+- Antes de trabajar, si tienes acceso al vault, lee `memoria/como-trabaja-gustavo.md` (su manual: cómo trabaja y qué exige). Con él, español de Puerto Rico y siempre "tú".
+- Cuando haya una decisión de producto o arquitectura, un avance importante, un error corregido o un pendiente cerrado, actualiza esa nota. Si la sesión corre en la nube y no ve esa ruta, deja un resumen en la descripción del PR para que Gustavo lo pase al vault.
+- No guardes claves ni datos de producción en el vault.
