@@ -75,7 +75,8 @@ describe("data retention", () => {
     expect(await count("riot_accounts")).toBe(0);
   }, 60_000);
   it("keeps a shared Live frame only while it can be shown; the match summary for a day", async () => {
-    await call("/auth/dev-login", { method: "POST", body: JSON.stringify({ displayName: "Sharer", token: "s".repeat(64) }) });
+    const login = await call("/auth/dev-login", { method: "POST", body: JSON.stringify({ displayName: "Sharer", token: "f".repeat(64) }) });
+    expect(login.res.status, JSON.stringify(login.body)).toBe(200);
     const userId = (await database.db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.displayName, "Sharer")))[0]!.id;
     const now = Date.now();
     const frame = (phase: string, ageMs: number) => ({ phase, ageMs });
