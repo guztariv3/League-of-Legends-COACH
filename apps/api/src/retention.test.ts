@@ -5,7 +5,7 @@ import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { openDatabase, schema, type Database } from "./db/index.js";
 import { bootKnowledge } from "./knowledge.js";
-import { purgeUnlinkedMatches, UNLINKED_MATCH_TTL_DAYS } from "./retention.js";
+import { purgeStaleLiveFrames, purgeUnlinkedMatches, UNLINKED_MATCH_TTL_DAYS } from "./retention.js";
 import { syntheticSource } from "./sources.js";
 
 let database: Database;
@@ -74,6 +74,26 @@ describe("data retention", () => {
     expect(await count("match_analyses")).toBe(0);
     expect(await count("riot_accounts")).toBe(0);
   }, 60_000);
+  it("keeps a shared Live frame only while it can be shown; the match summary for a day", async () => {
+    const login = await call("/auth/dev-login", { method: "POST", body: JSON.stringify({ displayName: "Sharer", token: "f".repeat(64) }) });
+    expect(login.res.status, JSON.stringify(login.body)).toBe(200);
+    const userId = (await database.db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.displayName, "Sharer")))[0]!.id;
+    const now = Date.now();
+    const frame = (phase: string, ageMs: number) => ({ phase, ageMs });
+    const cases = [frame("live", 5_000), frame("live", 120_000), frame("draft", 120_000), frame("ended", 120_000), frame("ended", 25 * 3600_000)];
+    const ids: string[] = [];
+    for (const c of cases) {
+      const [device] = await database.db.insert(schema.deviceLinks).values({ userId, codeHash: `h-${c.phase}-${c.ageMs}`, codeExpiresAt: new Date(now) }).returning({ id: schema.deviceLinks.id });
+      const at = new Date(now - c.ageMs);
+      await database.db.insert(schema.liveFrames).values({ deviceId: device!.id, userId, streamId: "s", sequence: 1, capturedAt: at, receivedAt: at,
+        payload: { phase: c.phase, detail: { players: { enemies: [{ name: "Another player" }] } } } });
+      ids.push(device!.id);
+    }
+    await purgeStaleLiveFrames(database.db, new Date(now));
+    const left = (await database.db.select({ deviceId: schema.liveFrames.deviceId }).from(schema.liveFrames)).map((r) => r.deviceId);
+    // Kept: the current frame and the recent match summary. Gone: stale frames naming other players, and old summaries.
+    expect(ids.map((id) => left.includes(id))).toEqual([true, false, false, true, false]);
+  });
 });
 
 it.each(['same','different'])('preserves shared match data until the last account is deleted (%s player)',async(kind)=>{

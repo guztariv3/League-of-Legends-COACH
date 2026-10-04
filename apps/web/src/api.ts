@@ -572,7 +572,7 @@ function devLoginToken(): string {
 }
 
 export const api = {
-  live: () => request<{frame: import("@coach/ui").LiveFrame | null; stale:boolean}>("/live", {signal:AbortSignal.timeout(5000)}),
+  live: () => request<{frame: import("@coach/ui").LiveFrame | null; stale:boolean; expiresInMs?:number|null}>("/live", {signal:AbortSignal.timeout(5000)}),
   config: () => request<AppConfig>("/config"),
   assets: () => request<GameAssets>("/assets"),
   me: () => request<Me>("/me"),

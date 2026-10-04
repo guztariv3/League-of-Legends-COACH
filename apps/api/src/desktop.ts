@@ -51,9 +51,12 @@ function newCode(): string {
 export function desktopSessionRoutes({ db }: { db: Db }) {
   const r = new Hono<AuthVars>();
 
+  // Several open tabs polling every second stay well inside this; a runaway client does not.
+  const liveReads = new AttemptLimiter(240, 60_000);
   r.get("/live", async c => {
     c.header("Cache-Control", "no-store");
-    const [row] = await db.select({ payload: schema.liveFrames.payload, receivedAt: schema.liveFrames.receivedAt, capturedAt: schema.liveFrames.capturedAt })
+    if (!liveReads.allow(c.get("userId"))) { c.header("Retry-After", "10"); return c.json({ error: "rate_limited" }, 429); }
+    const [row] = await db.select({ deviceId: schema.liveFrames.deviceId, payload: schema.liveFrames.payload, receivedAt: schema.liveFrames.receivedAt, capturedAt: schema.liveFrames.capturedAt })
       .from(schema.liveFrames).innerJoin(schema.deviceLinks, eq(schema.deviceLinks.id, schema.liveFrames.deviceId))
       .where(and(eq(schema.liveFrames.userId, c.get("userId")), isNull(schema.deviceLinks.revokedAt), gt(schema.liveFrames.receivedAt,new Date(Date.now()-86400000))))
       .orderBy(sql`CASE WHEN ${schema.liveFrames.receivedAt} > ${new Date(Date.now()-LIVE_TTL_MS)} AND ${schema.liveFrames.payload}->>'phase' NOT IN ('idle','ended') THEN 0 WHEN ${schema.liveFrames.payload}->>'phase' = 'ended' THEN 1 ELSE 2 END`, desc(schema.liveFrames.receivedAt)).limit(1);
@@ -63,7 +66,13 @@ export function desktopSessionRoutes({ db }: { db: Db }) {
     const stale = Date.now()-row.receivedAt.getTime()>LIVE_TTL_MS || !freshFrame(row.capturedAt.getTime(),Date.now());
     // A stale frame is never presented as live advice. Completed summaries expire after one day.
     const ended = parsed.data.phase === "ended" && Date.now()-row.receivedAt.getTime()<86400000;
-    return c.json({ frame: stale && !ended ? null : parsed.data, stale: stale && !ended });
+    // A stale frame can never be shown again, and live frames name the other players in the game:
+    // it is deleted now rather than kept (exactly this row, so a newer frame is never lost).
+    if (stale && !ended) await db.delete(schema.liveFrames).where(and(eq(schema.liveFrames.deviceId, row.deviceId), eq(schema.liveFrames.receivedAt, row.receivedAt), eq(schema.liveFrames.capturedAt, row.capturedAt)));
+    // How much longer this frame stays current, so the page can drop it on time even while it
+    // cannot read again (e.g. rate-limited); relative, so the browser's clock does not matter.
+    const expiresInMs = stale || ended ? null : Math.max(0, Math.min(row.receivedAt.getTime(), row.capturedAt.getTime()) + LIVE_TTL_MS - Date.now());
+    return c.json({ frame: stale && !ended ? null : parsed.data, stale: stale && !ended, expiresInMs });
   });
 
   r.post("/desktop/pair", async (c) => {
@@ -205,6 +214,12 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
    * Champions come as Data Dragon ids ("MonkeyKing", from the game) or numeric keys ("62", from
    * champion select); numeric keys are mapped with the active catalog.
    */
+  // While hovering, champion select asks again whenever a ban or the timer phase changes, which
+  // only affects the cheap draft state: the expensive provisional plan for the same champions is
+  // reused for a short while. The plan for a locked-in champion is always computed fresh.
+  const PLAN_CACHE_MS = 30_000;
+  const planCache = new Map<string, { at: number; body: Record<string, unknown> }>();
+  const planRate = new AttemptLimiter(40, 60_000);
   r.get("/desktop/plan", async (c) => {
     const device = await deviceFor(c);
     if (!device) return disconnected(c);
@@ -229,6 +244,12 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
     const known = (xs: string[]) => xs.map(resolve).filter((x): x is string => x !== null);
     const opponent = q.data.opponent ? resolve(q.data.opponent) ?? undefined : undefined;
     const enemies = known(q.data.enemies);
+    const cacheKey = JSON.stringify([device.userId, me, known(q.data.allies), enemies, opponent ?? null, q.data.position ?? null]);
+    const now = Date.now();
+    const preview = c.req.query("preview") === "1";
+    const hit = preview ? planCache.get(cacheKey) : undefined;
+    if (hit && now - hit.at < PLAN_CACHE_MS) return c.json({ ...hit.body, draftState });
+    if (!planRate.allow(device.id)) { c.header("Retry-After", "10"); return c.json({ error: "rate_limited" }, 429); }
     // Hover and lock-in use the same recommendation engine; the client labels hover as provisional.
     const { analyses } = await deps.services.profileAnalyses(device.userId);
     const { draft, plan } = prepareGame({ myChampion: me, allies: known(q.data.allies), enemies, laneOpponent: opponent }, analyses, bundle);
@@ -290,7 +311,12 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
           attribution: GAME_DATA_ATTRIBUTION,
         }
       : null;
-    return c.json({ champion: me, draftState, playerContext:[`${analyses.filter(a=>a.championName===me&&a.analyzable).length} analyzed games on this champion.`, ...(memory?.patterns.slice(0,2).map(p=>`${p.text}: ${p.why}`)??[])], roster: {allies:known(q.data.allies), enemies}, draftRead: myKit ? draftRead(myKit, known(q.data.allies).flatMap(a => kits.get(a) ? [kits.get(a)!] : []), enemyInput.map(e => e.kit), opponent) : null, plan: gamePlan, keyPoints: draft.keyPoints, limits: draft.limits, build, memory });
+    const body = { champion: me, playerContext:[`${analyses.filter(a=>a.championName===me&&a.analyzable).length} analyzed games on this champion.`, ...(memory?.patterns.slice(0,2).map(p=>`${p.text}: ${p.why}`)??[])], roster: {allies:known(q.data.allies), enemies}, draftRead: myKit ? draftRead(myKit, known(q.data.allies).flatMap(a => kits.get(a) ? [kits.get(a)!] : []), enemyInput.map(e => e.kit), opponent) : null, plan: gamePlan, keyPoints: draft.keyPoints, limits: draft.limits, build, memory };
+    if (preview) {
+      for (const [k, v] of planCache) if (now - v.at >= PLAN_CACHE_MS || planCache.size > 500) planCache.delete(k);
+      planCache.set(cacheKey, { at: now, body });
+    }
+    return c.json({ ...body, draftState });
   });
 
   /**
