@@ -72,3 +72,21 @@ export async function forgetPlayers(db: Db, puuids: string[]): Promise<void> {
       WHERE puuid = ${puuid} AND NOT EXISTS (SELECT 1 FROM riot_accounts WHERE puuid = ${puuid})`);
   }
 }
+
+/** Only the deleted account's captured match IDs are eligible. Run in the same
+ * transaction as deletion; retain data still used by another linked account. */
+export async function purgeDeletedMatches(db:Db,matchIds:string[]):Promise<void>{
+  const ids=[...new Set(matchIds)];
+  for(let offset=0;offset<ids.length;offset+=500){
+    const list=sql.join(ids.slice(offset,offset+500).map(id=>sql`${id}`),sql`, `);
+    await db.execute(sql`DELETE FROM match_analyses ma WHERE ma.match_id IN (${list})
+      AND NOT EXISTS (SELECT 1 FROM account_matches am WHERE am.match_id=ma.match_id)
+      AND NOT EXISTS (SELECT 1 FROM riot_accounts ra WHERE ra.puuid=ma.puuid)`);
+    await db.execute(sql`DELETE FROM raw_timelines rt WHERE rt.match_id IN (${list})
+      AND NOT EXISTS (SELECT 1 FROM account_matches am WHERE am.match_id=rt.match_id)
+      AND NOT EXISTS (SELECT 1 FROM match_analyses ma WHERE ma.match_id=rt.match_id)`);
+    await db.execute(sql`DELETE FROM raw_matches rm WHERE rm.match_id IN (${list})
+      AND NOT EXISTS (SELECT 1 FROM account_matches am WHERE am.match_id=rm.match_id)
+      AND NOT EXISTS (SELECT 1 FROM match_analyses ma WHERE ma.match_id=rm.match_id)`);
+  }
+}

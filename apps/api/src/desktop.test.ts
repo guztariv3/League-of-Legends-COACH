@@ -37,7 +37,7 @@ async function call(path: string, init: RequestInit & { cookie?: string; ip?: st
 }
 
 async function player(name: string) {
-  const { res } = await call("/auth/dev-login", { method: "POST", body: JSON.stringify({ displayName: name }) });
+  const { res } = await call("/auth/dev-login", { method: "POST", body: JSON.stringify({ token: "a".repeat(64), displayName: name }) });
   const cookie = res.headers.get("set-cookie")!.split(";")[0]!;
   await call("/accounts", { method: "POST", cookie, body: JSON.stringify({ gameName: name, tagLine: "EUW", platform: "euw1" }) });
   return cookie;
@@ -184,7 +184,8 @@ describe("desktop pairing", () => {
       ] });
     }
     const withStats = (await call("/desktop/plan?me=Malphite&enemies=Syndra,Brand,Lux,Veigar,Annie&opponent=Syndra&position=top", { headers: auth })).body.build;
-    expect(withStats.first.id).toBe(tank.body.build.first.id); // the statistics never change the engine's pick
+    expect(withStats.first.id).toBe(common); // Dominant limited evidence now participates, with its uncertainty visible.
+    expect(withStats.first.why.join(" ")).toContain("Limited sample");
     const st = withStats.stats;
     expect(st).toMatchObject({ patch, patchLabel: "current", position: "TOP", games: 40 });
     expect(st.firstItem).toMatchObject({ id: common, games: 40, avgMinute: 12 });
@@ -192,8 +193,8 @@ describe("desktop pairing", () => {
     expect(st.spells.names).toEqual(["Flash", "Teleport"]);
     expect(st.skills).toMatchObject({ max: ["Q", "E", "W"], sequence: [1, 3, 2, 1, 1, 4, 1, 3, 1] });
     expect(st.matchup).toEqual({ opponent: "Syndra", games: 12, winRate: 0.5 });
-    // The coach says when it suggests something else, and why; a win rate never decides.
-    expect(st.notes.join(" ")).toMatch(new RegExp(`the coach suggests ${withStats.first.name}`));
+    // Agreement is stated explicitly; a win rate alone does not decide.
+    expect(st.notes.join(" ")).toContain(`The coach's first item, ${withStats.first.name}, is also`);
     expect(st.notes.join(" ")).toMatch(/doesn't decide your build/);
     // Without a position: the champion's most played position that patch.
     expect((await call("/desktop/plan?me=Malphite", { headers: auth })).body.build.stats.position).toBe("TOP");

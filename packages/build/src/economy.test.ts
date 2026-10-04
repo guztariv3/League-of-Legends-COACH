@@ -82,3 +82,13 @@ it('can buy the second copy of a component when the recipe needs two and one is 
  expect(t.affordable).toBe(1);
  expect(t.componentFit).toBe(2);
 });
+
+it('recognizes an affordable upgrade even when the full recipe allocates its held piece elsewhere',()=>{
+ const part={...seed,id:990401,gold:400,from:[],purchasable:true};
+ const upgrade={...seed,id:990402,gold:800,from:[part.id],purchasable:true};
+ const target={...seed,id:990403,gold:2400,from:[part.id,upgrade.id],purchasable:true};
+ const t=itemTiming(target,[part,upgrade,target],[part.id,91,92,93,94,95],{gold:400,time:600,income:300},i=>i.id===upgrade.id?5:1);
+ expect(t.remaining).toBe(2000);
+ expect(t.affordable).toBe(1);
+ expect(t.componentFit).toBe(5);
+});

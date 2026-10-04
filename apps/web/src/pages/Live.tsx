@@ -55,11 +55,11 @@ export function LiveProvider({children}:{children:ReactNode}) {
   void loop();return()=>{stopped=true;clearTimeout(timer);clearTimeout(expiry);document.removeEventListener("visibilitychange",visible);};},[]);
  return <Context.Provider value={value}>{children}</Context.Provider>;
 }
-export function LiveBanner(){const {frame}=useContext(Context);return frame && !["idle","ended"].includes(frame.phase) ? <Link className="live-banner" to="/live">● {frame.phase==="draft"||frame.phase==="pregame" ? "Champion select":"Live game"}</Link>:null;}
+export function LiveBanner(){const {frame,stale}=useContext(Context);return !stale && frame && !["idle","ended"].includes(frame.phase) ? <Link className="live-banner" to="/live">● {frame.phase==="draft"||frame.phase==="pregame" ? "Champion select":"Live game"}</Link>:null;}
 export function Live(){
  const {frame,stale}=useContext(Context);
  useEffect(()=>{if(frame?.phase==="ended")void api.syncAll().catch(()=>{});},[frame?.streamId,frame?.phase]);
- if(!frame || frame.phase==="idle")return <section className="stack"><h1 className="page-title">Live Coach</h1><p>{stale ? "The companion connection is stale. Advice is hidden until fresh data arrives: waiting for recent data from the desktop companion." : "Open the desktop companion, connect your account, and enable private Live sharing in its settings."}</p><Link to="/game">Prepare a draft manually</Link></section>;
+ if(stale || !frame || frame.phase==="idle")return <section className="stack"><h1 className="page-title">Live Coach</h1><p>{stale ? "The companion connection is stale. Advice is hidden until fresh data arrives: waiting for recent data from the desktop companion." : "Open the desktop companion, connect your account, and enable private Live sharing in its settings."}</p><Link to="/game">Prepare a draft manually</Link></section>;
  const blocked=["paused","reconnecting","loading"].includes(frame.phase);
  return <div className="stack"><header><h1 className="page-title">{frame.headline}</h1><p>{frame.champion && !/^\d+$/.test(frame.champion) && <ChampionIcon champion={frame.champion} size={40}/>} {frame.champion} {frame.position} · {frame.phase}{frame.patch ? ` · Data ${frame.patch}`:""}</p>{frame.time!==null && <p>{Math.floor(frame.time/60)}:{String(Math.floor(frame.time%60)).padStart(2,"0")} · {frame.gold===null ? "Gold unavailable":`${Math.floor(frame.gold)} gold`}</p>}</header>
  {!blocked && frame.detail && <LiveCompanion frame={frame}/>}

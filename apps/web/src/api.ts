@@ -558,12 +558,25 @@ export interface RankResponse {
   accounts: { accountId: string; riotId: string; queues: { queueType: "RANKED_SOLO_5x5" | "RANKED_FLEX_SR"; current: RankPoint; history: RankPoint[] }[] }[];
 }
 
+let memoryDevToken: string | undefined;
+function devLoginToken(): string {
+  if(memoryDevToken)return memoryDevToken;
+  try {
+    const stored=localStorage.getItem("koi_dev_login_token");
+    if(stored && /^[a-f0-9]{64}$/.test(stored))return memoryDevToken=stored;
+  } catch { /* Browser storage may be unavailable. */ }
+  const bytes=crypto.getRandomValues(new Uint8Array(32));
+  memoryDevToken=Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join("");
+  try { localStorage.setItem("koi_dev_login_token",memoryDevToken); } catch { /* Keep the in-memory token for this page. */ }
+  return memoryDevToken;
+}
+
 export const api = {
   live: () => request<{frame: import("@coach/ui").LiveFrame | null; stale:boolean; expiresInMs?:number|null}>("/live", {signal:AbortSignal.timeout(5000)}),
   config: () => request<AppConfig>("/config"),
   assets: () => request<GameAssets>("/assets"),
   me: () => request<Me>("/me"),
-  devLogin: (displayName: string) => request<{ user: Me["user"] }>("/auth/dev-login", { method: "POST", body: JSON.stringify({ displayName }) }),
+  devLogin: (displayName: string) => request<{ user: Me["user"] }>("/auth/dev-login", { method: "POST", body: JSON.stringify({ displayName, token:devLoginToken() }) }),
   register: (username: string, password: string) => request<{ user: Me["user"] }>("/auth/register", { method: "POST", body: JSON.stringify({ username, password }) }),
   signIn: (username: string, password: string) => request<{ user: Me["user"] }>("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
   setCredentials: (username: string, password: string, currentPassword?: string) =>

@@ -38,7 +38,9 @@ export function MatchReview() {
       </div>
     );
   }
-  return <ReviewPlayer review={data.review} coach={data.coach} synthetic={data.dataSource === "synthetic"} />;
+  if (data.review.matchId !== matchId) return <Loading label="Reconstructing the game…" />;
+  if (!data.review.frames.length || !data.review.participants.some(p => p.isMe)) return <div className="notice">This game's timeline is incomplete, so map playback is unavailable.</div>;
+  return <ReviewPlayer key={matchId} review={data.review} coach={data.coach} synthetic={data.dataSource === "synthetic"} />;
 }
 
 function ReviewPlayer({ review, coach, synthetic }: { review: Review; coach: CoachReviewData; synthetic: boolean }) {
@@ -53,9 +55,10 @@ function ReviewPlayer({ review, coach, synthetic }: { review: Review; coach: Coa
 
   useEffect(() => {
     if (!playing) return;
-    const t = setInterval(() => setMinute((m) => (m >= last ? (setPlaying(false), m) : m + 1)), 800);
+    const t = setInterval(() => setMinute((m) => Math.min(last, m + 1)), 800);
     return () => clearInterval(t);
   }, [playing, last]);
+  useEffect(() => { if (minute >= last) setPlaying(false); }, [minute, last]);
 
   const frame = review.frames[minute]!;
   const eventsNow = review.events.filter((e) => e.t > (minute - 1) * 60_000 && e.t <= minute * 60_000);

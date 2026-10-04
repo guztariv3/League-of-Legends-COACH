@@ -75,6 +75,7 @@ export interface MatchIdQuery {
   count?: number;
   /** Epoch seconds. */
   startTime?: number;
+  endTime?: number;
   /** Only games of this queue (e.g. 420 = ranked solo/duo). */
   queue?: number;
 }
@@ -131,6 +132,7 @@ export class RiotClient {
     params.set("start", String(q.start ?? 0));
     params.set("count", String(Math.min(100, q.count ?? 20)));
     if (q.startTime !== undefined) params.set("startTime", String(q.startTime));
+    if (q.endTime !== undefined) params.set("endTime", String(q.endTime));
     if (q.queue !== undefined) params.set("queue", String(q.queue));
     const path = `/lol/match/v5/matches/by-puuid/${encodeURIComponent(puuid)}/ids?${params}`;
     return (await this.get(route, "match.ids", path, z.array(z.string()))) ?? [];

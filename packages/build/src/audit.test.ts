@@ -47,7 +47,7 @@ describe('sample-weighted purchase observations (fictional statistical fixtures)
    const evidence:BuildEvidence={champion,position,patch:'16.19',first:[{key:String(id),games:120,wins:61}],core:[]};
    const b=recommendBuild({me:kit(champion),items,position,patch:'16.19',evidence,enemies:[]});
    expect(b.first?.id,champion).toBe(id);
-   expect(b.first?.why.join(' ')).toContain('sufficiently sampled');
+   expect(b.first?.why.join(' ')).toContain('evidence-supported');
   }
  });
  it('preserves substantial recipe investment as an explicit departure from observed purchases',()=>{
@@ -62,7 +62,8 @@ describe('sample-weighted purchase observations (fictional statistical fixtures)
   const input={me:kit('Ahri'),items,position:'MIDDLE',patch:'16.19',enemies:[{kit:kit('Zed'),laneOpponent:true}]};
   const plain=recommendBuild(input),supported=recommendBuild({...input,evidence});
   const candidate=(b:ReturnType<typeof recommendBuild>)=>b.audit!.candidates.find(c=>c.id===3118)!;
-  expect(candidate(supported).score).toBeGreaterThan(candidate(plain).score);
+  expect(candidate(supported).contextual).not.toBeNull();
+  expect(candidate(supported).score).toBeCloseTo(1+candidate(supported).empirical+candidate(supported).contextual!);
   expect(candidate(supported).empirical).toBeGreaterThan(0);
   expect(supported.first!.why.join(' ')).toContain('800 games');
   expect(recommendBuild({...input,evidence:{...evidence,patch:'16.18'}}).audit).toEqual(plain.audit);
@@ -98,8 +99,9 @@ describe('user-provided Render excerpt (2026-09-28, patch 16.19; top five only)'
   const input={me:kit(champion),items,position,patch:'16.19',enemies:[]};
   const plain=recommendBuild(input),actual=recommendBuild({...input,evidence:observed});
   if(champion==='Smolder') {
-   expect(actual.audit).toEqual(plain.audit); // 74 observed completions cannot pass 100-game gate.
-   expect(actual.first!.id).toBe(3508); // Mechanics, not a fabricated statistical endorsement.
+   expect(actual.audit?.basis).toBe('observed');
+   expect(actual.first!.why.join(' ')).toContain('Limited sample');
+   expect(actual.first!.id).toBe(3508); // Dominant purchase frequency, not a proven WR advantage.
   } else {
    expect(actual.audit!.candidates.some(c=>c.empirical>0)).toBe(true);
    for(const c of actual.audit!.candidates.filter(c=>c.empirical>0)) {
@@ -170,4 +172,116 @@ describe('live follow-up purchases and exclusive penetration families',()=>{
    for(const stat of ['magicPenetration','armorPenetration'] as const)
     expect(selected.filter(i=>(i.stats[stat]?.percent??0)>0).length,`${me.id} ${stat}`).toBeLessThanOrEqual(1);
  });
+});
+
+it('reads sustained/channelled damage from the kit instead of assuming every caster can weave attacks',()=>{
+ const profile=championProfile(kit('AurelionSol'));
+ expect(profile.channeledBasicDamage).toBe(true);expect(profile.sustainedSpellDamage).toBe(true);
+ const base={me:kit('AurelionSol'),items,enemies:[],position:'MIDDLE',baseline:true};
+ const score=(b:ReturnType<typeof recommendBuild>,id:number)=>b.componentUtility![id]!;
+ const normal=recommendBuild(base);
+ const noBurn=recommendBuild({...base,items:items.map(i=>i.id===6653?{...i,effects:[]}:i)});
+ expect(score(normal,6653)).toBeGreaterThan(score(noBurn,6653));
+ const unchanneled={...base.me,abilities:base.me.abilities.map(a=>({...a,text:a.text.replace(/channel/gi,'sequence')}))};
+ expect(score(recommendBuild({...base,me:unchanneled}),3100)).toBeGreaterThan(score(normal,3100));
+});
+
+describe('independent reflected damage and offline stage diagnostics',()=>{
+ const reference={champion:'Rammus',position:'JUNGLE',patch:'16.19',source:'Fixture',url:'https://example.com',retrievedAt:'2026-10-01',stages:[{prefix:[],item:3075,weight:1}]};
+ it('keeps a reflected-damage purchase eligible without inventing enemy healing',()=>{
+  const input={me:kit('Rammus'),items,position:'JUNGLE',patch:'16.19',reference,enemies:[]};
+  const actual=recommendBuild(input);
+  expect(actual.first?.id).toBe(3075);
+  expect(actual.first?.why.join(' ')).toContain('does not require enemy healing');
+  expect(actual.threats.some(x=>x.kind==='healing')).toBe(false);
+  const noReflection=items.map(i=>i.id===3075?{...i,effects:[{...i.effects[0]!,text:'Inflicts Grievous Wounds.'}]}:i);
+  expect(recommendBuild({...input,items:noReflection}).first?.id).not.toBe(3075);
+ });
+ it('does not let a specialist reference override the no-healing guard for a pure antiheal passive',()=>{
+  const b=recommendBuild({me:kit('Akali'),items,position:'MIDDLE',patch:'16.19',enemies:[],reference:{...reference,champion:'Akali',position:'MIDDLE',stages:[{prefix:[],item:3165,weight:1}]}});
+  expect([b.first,...b.next,...b.situational].some(x=>x?.id===3165)).toBe(false);
+ });
+ it('reports each real decision stage without changing any recommendation',()=>{
+  const input={me:kit('Rammus'),items,position:'JUNGLE',patch:'16.19',reference,enemies:[]};
+  const decisions:any[]=[];
+  const b=recommendBuild({...input,onDecision:stage=>decisions.push(stage)});
+  expect(b).toEqual(recommendBuild(input));
+  expect(decisions).toHaveLength(3);
+  expect(decisions[0].prefix).toEqual([]);
+  expect(decisions[0].candidates[0].id).toBe(b.first?.id);
+  expect(decisions[1].prefix).toEqual([b.first!.id]);
+  expect(decisions[0].excluded.find((x:any)=>x.id===3165)?.reason).toBe('no_urgent_lane_healing');
+ });
+});
+
+it('recommends a completed purchasable precursor despite its automatic transformation',()=>{
+ const reference={champion:'Janna',position:'TOP',patch:'16.19',source:'Fixture',url:'https://example.com',retrievedAt:'2026-10-01',stages:[{prefix:[],item:2526,weight:1}]};
+ const b=recommendBuild({me:kit('Janna'),items,position:'TOP',patch:'16.19',reference,enemies:[]});
+ expect(b.first?.id).toBe(2526);
+ expect(recommendBuild({me:kit('Janna'),items,owned:[2530],position:'TOP',patch:'16.19',reference,enemies:[]}).first?.id).not.toBe(2526);
+});
+
+describe('agreed purchase majority as a baseline, not a causal win-rate claim',()=>{
+ const reference={champion:'Fizz',position:'MIDDLE',patch:'16.19',source:'Fixture',url:'https://example.com',retrievedAt:'2026-10-01',stages:[{prefix:[],item:3100,weight:.68},{prefix:[],item:2503,weight:.21}]};
+ const evidence:BuildEvidence={champion:'Fizz',position:'MIDDLE',patch:'16.19',first:[{key:'3100',games:272,wins:152},{key:'2503',games:73,wins:40}],core:[]};
+ const input={me:kit('Fizz'),items,position:'MIDDLE',patch:'16.19',reference,evidence,enemies:[]};
+ it('does not let generic stat efficiency silently override agreement between a sampled majority and the specialist leader',()=>{
+  const b=recommendBuild(input);expect(b.first?.id).toBe(3100);
+  expect(b.first?.why.join(' ')).toContain('not as proof of superior win rate');
+  expect(b.certainty).not.toBe('strong');
+ });
+ it('does not borrow a broad reference to override a sufficiently sampled matchup cohort',()=>{
+  const scoped={...evidence,matchup:{opponent:'Zed',first:[{key:'2503',games:150,wins:80}],core:[]}};
+  expect(recommendBuild({...input,evidence:scoped,enemies:[{kit:kit('Zed'),laneOpponent:true}]}).first?.id).toBe(2503);
+ });
+ it('keeps a substantially purchased alternate recipe eligible',()=>{
+  const b=recommendBuild({...input,owned:[3802,2508]});
+  expect(b.audit?.candidates.some(x=>x.id===2503)).toBe(true);
+ });
+ it('retains a counter when visible lane results establish urgency',()=>{
+  const b=recommendBuild({...input,enemies:[{kit:kit('Soraka'),laneOpponent:true,kills:5,deaths:0}]});
+  expect(b.audit?.candidates.some(x=>x.id===3165)).toBe(true);
+ });
+});
+
+
+describe('evidence default with game-specific mechanical adjustments',()=>{
+ it('does not replace observed purchase frequency with neutral stat efficiency',()=>{
+  const evidence:BuildEvidence={champion:'Aatrox',position:'TOP',patch:'16.19',first:[{key:'6692',games:181,wins:87},{key:'3071',games:76,wins:42}],core:[]};
+  const b=recommendBuild({me:kit('Aatrox'),items,position:'TOP',patch:'16.19',evidence,enemies:[]});
+  expect(b.first?.id).toBe(6692);
+  for(const x of b.audit!.candidates)expect(x.contextual).toBeCloseTo(0);
+ });
+ it('uses scoped specialist order when own observations are insufficient, even if neutral AP efficiency changes',()=>{
+  const reference={champion:'Ahri',position:'TOP',patch:'16.19',source:'Fixture',url:'https://example.com',retrievedAt:'2026-10-01',stages:[{prefix:[],item:2503,weight:.6},{prefix:[],item:3118,weight:.3}]};
+  const input={me:kit('Ahri'),items,position:'TOP',patch:'16.19',reference,enemies:[]};
+  expect(recommendBuild(input).first?.id).toBe(2503);
+  const changed=items.map(i=>i.id===3118?{...i,stats:{...i.stats,abilityPower:{flat:1000,percent:0}}}:i);
+  expect(recommendBuild({...input,items:changed}).first?.id).toBe(2503);
+ });
+ it('still adapts supported defensive purchases to observed magic versus physical damage',()=>{
+  const reference={champion:'Malphite',position:'TOP',patch:'16.19',source:'Fixture',url:'https://example.com',retrievedAt:'2026-10-01',stages:[{prefix:[],item:3068,weight:1},{prefix:[],item:6664,weight:1}]};
+  const input={me:kit('Malphite'),items,position:'TOP',patch:'16.19',reference};
+  const physical=recommendBuild({...input,enemies:['Zed','Talon','Draven'].map(id=>({kit:kit(id)}))});
+  const magic=recommendBuild({...input,enemies:['Syndra','Lux','Veigar'].map(id=>({kit:kit(id)}))});
+  expect(physical.first?.id).toBe(3068);expect(magic.first?.id).toBe(6664);
+  expect(magic.first?.why.join(' ')).toContain('enemy');
+ });
+});
+
+it('retains source order for tied specialist choices instead of ordering by numeric item id',()=>{
+ const reference={champion:'Ahri',position:'TOP',patch:'16.19',source:'Fixture',url:'https://example.com',retrievedAt:'2026-10-01',stages:[{prefix:[],item:3118,weight:1},{prefix:[],item:2503,weight:1}]};
+ const input={me:kit('Ahri'),items,position:'TOP',patch:'16.19',reference,enemies:[]};
+ const b=recommendBuild(input);expect(b.first?.id).toBe(3118);expect(b.certainty).toBe('close');
+ expect(b.alternative?.id).toBe(2503);
+ expect(recommendBuild({...input,reference:{...reference,stages:[...reference.stages].reverse()}}).first?.id).toBe(2503);
+});
+
+it('does not let raw popularity displace a reference leader with separated observed outcomes',()=>{
+ const evidence:BuildEvidence={champion:'Mordekaiser',position:'TOP',patch:'16.19',first:[[3116,64,24],[4633,50,32],[2510,14,9],[3152,10,2],[6653,4,1],[3137,3,1],[3146,2,1]].map(([id,games,wins])=>({key:String(id),games:games!,wins:wins!})),core:[]};
+ const reference={champion:'Mordekaiser',position:'TOP',patch:'16.19',source:'Fixture',url:'https://example.com',retrievedAt:'2026-10-01',stages:[{prefix:[],item:4633,weight:.6},{prefix:[],item:3116,weight:.3}]};
+ const b=recommendBuild({me:kit('Mordekaiser'),items,position:'TOP',patch:'16.19',reference,evidence,enemies:[]});
+ expect(b.first?.id).toBe(4633);
+ expect(b.first?.why.join(' ')).toContain('separated observed outcome intervals');
+ expect(b.certainty).not.toBe('strong');
 });
