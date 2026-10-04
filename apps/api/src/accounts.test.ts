@@ -111,6 +111,38 @@ it('requires a valid owner session to bind a legacy dev identity',async()=>{
  expect(bound.res.status).toBe(200);expect(bound.body.user.id).toBe(legacy!.id);
  expect((await post('/auth/dev-login',{displayName:'LegacyOwner',token:'e'.repeat(64)})).res.status).toBe(409);
 });
+it('lets a signed-in legacy dev user bind this browser and sign back in after logging out',async()=>{
+ const {hashToken}=await import('./auth.js');
+ // A passwordless account from before migration 0012: an open session and no dev token.
+ const [legacy]=await database.db.insert(schema.users).values({displayName:'LegacyLogout'}).returning();
+ await database.db.insert(schema.sessions).values({userId:legacy!.id,tokenHash:hashToken('legacy-logout'),expiresAt:new Date(Date.now()+60000)});
+ const cookie='coach_session=legacy-logout';
+ expect((await call('/me',{cookie})).body.user.devLoginBound).toBe(false);
+ const bind=await post('/me/dev-token',{token:'1'.repeat(64)},{cookie});
+ expect(bind.res.status).toBe(200);
+ expect((await call('/me',{cookie})).body.user.devLoginBound).toBe(true);
+ // Binding again from the same browser is harmless; another browser cannot replace it.
+ expect((await post('/me/dev-token',{token:'1'.repeat(64)},{cookie})).res.status).toBe(200);
+ expect((await post('/me/dev-token',{token:'2'.repeat(64)},{cookie})).res.status).toBe(409);
+ // The ordinary logout no longer locks the profile: the same browser signs back in by name.
+ await post('/auth/logout',{},{cookie});
+ const back=await post('/auth/dev-login',{displayName:'LegacyLogout',token:'1'.repeat(64)});
+ expect(back.res.status).toBe(200);expect(back.body.user.id).toBe(legacy!.id);
+ expect((await post('/auth/dev-login',{displayName:'LegacyLogout',token:'2'.repeat(64)})).res.status).toBe(409);
+});
+it('binds dev tokens only for signed-in passwordless accounts without a name clash',async()=>{
+ const {hashToken}=await import('./auth.js');
+ expect((await post('/me/dev-token',{token:'3'.repeat(64)})).res.status).toBe(401);
+ const withPassword=await post('/auth/register',{username:'bindpass',password:'bind-password-long'},{ip:'10.4.4.4'});
+ expect((await post('/me/dev-token',{token:'3'.repeat(64)},{cookie:withPassword.cookie!})).res.status).toBe(409);
+ expect((await post('/me/dev-token',{token:'short'},{cookie:withPassword.cookie!})).res.status).toBe(400);
+ // Two legacy rows share a name: only one can hold a token for it, so the other cannot bind.
+ const owner=await post('/auth/dev-login',{displayName:'SharedLegacy',token:'4'.repeat(64)});
+ expect(owner.res.status).toBe(200);
+ const [twin]=await database.db.insert(schema.users).values({displayName:'SharedLegacy'}).returning();
+ await database.db.insert(schema.sessions).values({userId:twin!.id,tokenHash:hashToken('shared-twin'),expiresAt:new Date(Date.now()+60000)});
+ expect((await post('/me/dev-token',{token:'5'.repeat(64)},{cookie:'coach_session=shared-twin'})).res.status).toBe(409);
+});
 it('allows only one token to claim a new name concurrently',async()=>{
  const results=await Promise.all(['e','f'].map(t=>post('/auth/dev-login',{displayName:'ConcurrentOwner',token:t.repeat(64)})));
  expect(results.map(r=>r.res.status).sort()).toEqual([200,409]);

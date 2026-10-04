@@ -5,7 +5,7 @@ import { gameAchievements, gameRanking, RANKING_EXPLANATION } from "@coach/coach
 import { MERAKI_ATTRIBUTION } from "@coach/knowledge";
 import { matchHeadline } from "@coach/insights";
 import type { GameFactsSource, KnowledgeRegistry, WikiSource } from "@coach/knowledge";
-import { and, eq, ne, gt, isNull, inArray } from "drizzle-orm";
+import { and, eq, ne, gt, isNull, isNotNull, inArray } from "drizzle-orm";
 import { getCookie } from "hono/cookie";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -190,7 +190,33 @@ export function createApp(deps: AppDeps) {
     const userId = c.get("userId");
     const [user] = await db.select().from(schema.users).where(eq(schema.users.id, userId));
     const accounts = await userAccounts(db, userId);
-    return c.json({ user: { id: user!.id, displayName: user!.displayName, username: user!.username, hasPassword: Boolean(user!.passwordHash) }, accounts: accounts.map(accountView), preferences: await prefsFor(userId) });
+    return c.json({ user: { id: user!.id, displayName: user!.displayName, username: user!.username, hasPassword: Boolean(user!.passwordHash), devLoginBound: Boolean(user!.devLoginTokenHash) }, accounts: accounts.map(accountView), preferences: await prefsFor(userId) });
+  });
+
+  /**
+   * Binds this browser's development token to the signed-in account. Identities created before
+   * migration 0012 have no token, and dev-login only lets their owner bind one while signed in;
+   * the web calls this as soon as it sees such a session, so an ordinary logout cannot lock the
+   * profile. It never replaces another browser's token and never applies to password accounts.
+   */
+  authed.post("/me/dev-token", async (c) => {
+    if (!devLoginAllowed(cfg)) return c.json({ error: "dev_login_disabled" }, 403);
+    const body = z.object({ token: z.string().regex(/^[a-f0-9]{64}$/) }).safeParse(await c.req.json().catch(() => ({})));
+    if (!body.success) return c.json({ error: "invalid_body" }, 400);
+    const userId = c.get("userId"), tokenHash = hashToken(body.data.token);
+    const conflict = (error: string, message: string) => c.json({ error, message }, 409);
+    return db.transaction(async tx => {
+      const [user] = await tx.select().from(schema.users).where(eq(schema.users.id, userId)).for("update");
+      if (user!.passwordHash) return conflict("account_has_password", "This account signs in with its password.");
+      if (user!.devLoginTokenHash) return user!.devLoginTokenHash === tokenHash ? c.json({ ok: true }) : conflict("dev_token_bound", "Another browser already holds this development sign-in.");
+      // Only one passwordless identity per name may hold a token (index users_claimed_dev_name).
+      const [clash] = await tx.select({ id: schema.users.id }).from(schema.users).where(and(
+        eq(schema.users.displayName, user!.displayName), ne(schema.users.id, userId), isNotNull(schema.users.devLoginTokenHash), isNull(schema.users.passwordHash)));
+      if (clash) return conflict("name_taken", "Another account already uses this development name.");
+      const [bound] = await tx.update(schema.users).set({ devLoginTokenHash: tokenHash })
+        .where(and(eq(schema.users.id, userId), isNull(schema.users.devLoginTokenHash), isNull(schema.users.passwordHash))).returning();
+      return bound ? c.json({ ok: true }) : conflict("dev_token_bound", "Another browser already holds this development sign-in.");
+    });
   });
 
   /**

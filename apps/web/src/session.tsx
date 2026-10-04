@@ -21,7 +21,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
-      setMe(await api.me());
+      const next = await api.me();
+      // A passwordless account from before dev tokens: bind this browser while the session is
+      // still valid, or logging out would leave its name unclaimable. Failure keeps the session.
+      if (next.user.hasPassword === false && next.user.devLoginBound === false) {
+        try { await api.bindDevToken(); next.user = { ...next.user, devLoginBound: true }; } catch { /* Retried on the next refresh. */ }
+      }
+      setMe(next);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) setMe(null);
       else throw err;
