@@ -27,9 +27,14 @@ export function itemTiming(item: ItemFacts, items: ItemFacts[], owned: number[],
     const cost=Math.max(0,i.gold-children.reduce((sum,c)=>sum+c.item.gold-c.cost,0));
     const consumed=children.flatMap(c=>c.consumed);
     const remainingInventory=[...owned];
-    for(const id of consumed){const index=remainingInventory.indexOf(id);if(index>=0)remainingInventory.splice(index,1);}
+    // Buying an upgrade consumes applicable pieces from the actual inventory,
+    // even when the full target recipe allocated them to another branch.
+    const purchaseCost=i.gold-i.from.reduce((sum,id)=>{
+      const c=catalog.get(id);
+      return sum+(c ? c.gold-remainingCost(c,catalog,remainingInventory) : 0);
+    },0);
     const occupied=remainingInventory.filter(id=>!catalog.get(id)?.tags.includes("Trinket")).length;
-    if(budget!=null && i.purchasable && cost>0 && cost<=budget && occupied<6)affordable.push(i);
+    if(budget!=null && i.purchasable && purchaseCost>0 && purchaseCost<=budget && occupied<6)affordable.push(i);
     return {cost,consumed};
   };
   visit(item);

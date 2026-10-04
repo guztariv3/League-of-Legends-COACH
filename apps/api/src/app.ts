@@ -5,7 +5,7 @@ import { gameAchievements, gameRanking, RANKING_EXPLANATION } from "@coach/coach
 import { MERAKI_ATTRIBUTION } from "@coach/knowledge";
 import { matchHeadline } from "@coach/insights";
 import type { GameFactsSource, KnowledgeRegistry, WikiSource } from "@coach/knowledge";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, gt, isNull, inArray } from "drizzle-orm";
 import { getCookie } from "hono/cookie";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -20,7 +20,7 @@ import { SyncService } from "./sync.js";
 import { makeServices, Preferences } from "./services.js";
 import { personalRoutes } from "./personal.js";
 import { gameRoutes } from "./game.js";
-import { forgetPlayers } from "./retention.js";
+import { forgetPlayers, purgeDeletedMatches } from "./retention.js";
 import { desktopDeviceRoutes, desktopSessionRoutes } from "./desktop.js";
 import { evolutionRoutes } from "./evolution.js";
 import { rankRoutes } from "./rank.js";
@@ -90,15 +90,39 @@ export function createApp(deps: AppDeps) {
 
   app.post("/auth/dev-login", async (c) => {
     if (!devLoginAllowed(cfg)) return c.json({ error: "dev_login_disabled" }, 403);
-    const body = z.object({ displayName: z.string().trim().min(1).max(40).default("Jugador") }).safeParse(await c.req.json().catch(() => ({})));
+    const body = z.object({
+      displayName: z.string().trim().min(1).max(40).default("Jugador"),
+      token: z.string().regex(/^[a-f0-9]{64}$/),
+    }).safeParse(await c.req.json().catch(() => ({})));
     if (!body.success) return c.json({ error: "invalid_body" }, 400);
-    // Development identity: same display name → same local user, so data survives logout.
-    // Never for an account that has a password: that one only opens with it.
-    const [existing] = await db.select().from(schema.users).where(eq(schema.users.displayName, body.data.displayName));
-    if (existing?.passwordHash) return c.json({ error: "account_has_password", message: "This name belongs to an account with a password: sign in with it." }, 409);
-    const [user] = existing ? [existing] : await db.insert(schema.users).values({ displayName: body.data.displayName }).returning();
-    await createSession(db, c, user!.id, secureCookies);
-    return c.json({ user: { id: user!.id, displayName: user!.displayName } });
+    const {displayName,token}=body.data;
+    const tokenHash=hashToken(token);
+    return db.transaction(async tx=>{
+      const matches=await tx.select().from(schema.users).where(eq(schema.users.displayName,displayName)).for("update");
+      if(matches.some(u=>u.passwordHash)) return c.json({error:"account_has_password",message:"Sign in with this account's password."},409);
+      const taken=()=>c.json({error:"name_taken",message:"This development name is already in use. Sign in to the existing account or choose another name."},409);
+      if(matches.length>1)return taken();
+      let user=matches[0];
+      if(user && !user.devLoginTokenHash){
+        // A legacy name cannot be claimed by whoever guesses it first.
+        const sessionToken=getCookie(c,SESSION_COOKIE);
+        if(!sessionToken)return taken();
+        const [session]=await tx.select().from(schema.sessions).where(and(
+          eq(schema.sessions.tokenHash,hashToken(sessionToken)),eq(schema.sessions.userId,user.id),gt(schema.sessions.expiresAt,new Date())));
+        if(!session)return taken();
+        const [claimed]=await tx.update(schema.users).set({devLoginTokenHash:tokenHash})
+          .where(and(eq(schema.users.id,user.id),isNull(schema.users.devLoginTokenHash),isNull(schema.users.passwordHash))).returning();
+        if(!claimed)return taken();
+        user=claimed;
+      }else if(!user){
+        const [created]=await tx.insert(schema.users).values({displayName,devLoginTokenHash:tokenHash}).onConflictDoNothing().returning();
+        if(!created)return taken();
+        user=created;
+      }
+      if(user.devLoginTokenHash!==tokenHash)return taken();
+      await createSession(tx, c, user!.id, secureCookies);
+      return c.json({ user: { id: user!.id, displayName: user!.displayName } });
+    });
   });
 
   // Own accounts: a username and a password (scrypt hash). Attempts are limited per address and
@@ -194,10 +218,15 @@ export function createApp(deps: AppDeps) {
   });
 
   authed.delete("/me", async (c) => {
-    // Deletes identity, accounts, links, preferences and sessions (cascade), then the analyses.
-    const accounts = await db.select({ puuid: schema.riotAccounts.puuid }).from(schema.riotAccounts).where(eq(schema.riotAccounts.userId, c.get("userId")));
-    await db.delete(schema.users).where(eq(schema.users.id, c.get("userId")));
-    await forgetPlayers(db, accounts.map((a) => a.puuid));
+    const owned=await userAccounts(db,c.get("userId"));
+    await sync.withDeletion(owned.map(a=>a.id),()=>db.transaction(async tx=>{
+      const accounts=await tx.select().from(schema.riotAccounts).where(eq(schema.riotAccounts.userId,c.get("userId")));
+      const links=accounts.length ? await tx.select({id:schema.accountMatches.matchId}).from(schema.accountMatches)
+        .where(inArray(schema.accountMatches.accountId,accounts.map(a=>a.id))) : [];
+      await tx.delete(schema.users).where(eq(schema.users.id,c.get("userId")));
+      await forgetPlayers(tx,accounts.map(a=>a.puuid));
+      await purgeDeletedMatches(tx,links.map(l=>l.id));
+    }));
     await destroySession(db, c);
     return c.json({ ok: true });
   });
@@ -266,8 +295,12 @@ export function createApp(deps: AppDeps) {
   authed.delete("/accounts/:id", async (c) => {
     const acc = await ownAccount(c.get("userId"), c.req.param("id"));
     if (!acc) return c.json({ error: "not_found" }, 404);
-    await db.delete(schema.riotAccounts).where(eq(schema.riotAccounts.id, acc.id));
-    await forgetPlayers(db, [acc.puuid]);
+    await sync.withDeletion([acc.id],()=>db.transaction(async tx=>{
+      const links=await tx.select({id:schema.accountMatches.matchId}).from(schema.accountMatches).where(eq(schema.accountMatches.accountId,acc.id));
+      await tx.delete(schema.riotAccounts).where(eq(schema.riotAccounts.id,acc.id));
+      await forgetPlayers(tx,[acc.puuid]);
+      await purgeDeletedMatches(tx,links.map(l=>l.id));
+    }));
     return c.json({ ok: true });
   });
 

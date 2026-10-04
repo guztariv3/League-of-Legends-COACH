@@ -45,7 +45,7 @@ afterEach(async()=>{
  }
 });
 async function legacy() {
- await recordGame(opened.db,{...candidate,counted:true,rows:extracted.rows.filter(r=>!ENRICHMENT_KINDS.includes(r.kind))});
+ await recordGame(opened.db,{...candidate,counted:true,rows:extracted.rows.filter(r=>!ENRICHMENT_KINDS.includes(r.kind) && !["purchase_path","matchup_purchase_path"].includes(r.kind))});
  // Simulate a pre-migration historical game: no per-match enrichment provenance.
  await opened.db.delete(schema.statsEnrichments);
 }

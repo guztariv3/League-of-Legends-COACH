@@ -43,19 +43,22 @@ describe("sync after the Riot API key changes", () => {
     const base = syntheticSource(() => Date.UTC(2026, 5, 1));
     const before = createApp({ cfg, db: database.db, source: base, knowledge, aiProviders: [] });
 
-    const login = await before.app.request("/api/auth/dev-login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayName: "KeySwap" }) });
+    const login = await before.app.request("/api/auth/dev-login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: "a".repeat(64), displayName: "KeySwap" }) });
     const cookie = login.headers.get("set-cookie")!.split(";")[0]!;
     const linked = await before.app.request("/api/accounts", { method: "POST", headers: { "Content-Type": "application/json", Cookie: cookie }, body: JSON.stringify({ gameName: "KeySwap", tagLine: "EUW", platform: "euw1" }) });
     const accountId = ((await linked.json()) as { account: { id: string } }).account.id;
     await before.sync.start(accountId);
     const oldPuuid = (await database.db.select().from(schema.riotAccounts).where(eq(schema.riotAccounts.id, accountId)))[0]!.puuid;
 
+    await database.db.update(schema.riotAccounts).set({syncOffset:900,syncWindowEnd:new Date(Date.UTC(2026,5,1))}).where(eq(schema.riotAccounts.id,accountId));
     const after = createApp({ cfg, db: database.db, source: afterKeyChange(base), knowledge, aiProviders: [] });
     await after.sync.start(accountId);
 
     const [acc] = await database.db.select().from(schema.riotAccounts).where(eq(schema.riotAccounts.id, accountId));
     expect(acc!.puuid).toBe(`${oldPuuid}-newkey`);
     expect(acc!.syncStatus).toBe("ok");
+    expect(acc!.syncOffset).toBe(0);
+    expect(acc!.syncWindowEnd).toBeNull();
     expect(await database.db.select().from(schema.matchAnalyses).where(eq(schema.matchAnalyses.puuid, oldPuuid))).toHaveLength(0);
 
     const res = await after.app.request("/api/matches?limit=5", { headers: { Cookie: cookie } });

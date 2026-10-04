@@ -6,7 +6,7 @@ import type { LiveFrame } from "@coach/ui";
 // represented by fixtures; this does not exercise the native Windows reader.
 test("paired device → real API → private Live: ordering, isolation, pause, end and revoke", async ({ page, browser }, info) => {
   const name = `Relay${info.project.name}`;
-  expect((await page.request.post("/api/auth/dev-login", { data: { displayName: name } })).ok()).toBe(true);
+  expect((await page.request.post("/api/auth/dev-login", { data: { token: "a".repeat(64), displayName: name } })).ok()).toBe(true);
   expect((await page.request.post("/api/accounts", { data: { gameName: name, tagLine: "EUW", platform: "euw1" } })).ok()).toBe(true);
   const pair = await page.request.post("/api/desktop/pair", { data: {} });
   expect(pair.status()).toBe(201);
@@ -34,7 +34,7 @@ test("paired device → real API → private Live: ordering, isolation, pause, e
   await expect(page).toHaveURL(/\/matches$/);
   const other = await browser.newContext({ baseURL: info.project.use.baseURL });
   try {
-    expect((await other.request.post("/api/auth/dev-login", { data: { displayName: `${name}Other` } })).ok()).toBe(true);
+    expect((await other.request.post("/api/auth/dev-login", { data: { token: "a".repeat(64), displayName: `${name}Other` } })).ok()).toBe(true);
     expect((await (await other.request.get("/api/live")).json()).frame).toBeNull();
     for (const phase of ["live"] as const) {
       await publish({ phase, headline: `Integrated ${phase}`, time: phase === "live" ? 600 : null, gold: phase === "live" ? 850 : null });

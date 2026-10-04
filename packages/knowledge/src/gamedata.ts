@@ -193,6 +193,10 @@ export interface ItemEffect {
 }
 
 export interface ItemFacts {
+  /** Purchased precursor of a non-shop transformation, verified against the named catalog entry. */
+  purchaseBase?: number | null;
+  /** Quest progression is not a completed-item purchase. */
+  automaticUpgrade?: boolean;
   id: number;
   name: string;
   /** Total price in gold (Data Dragon). */
@@ -317,6 +321,8 @@ export function parseItems(ddragonItems: unknown, merakiItems: unknown): ItemFac
       id,
       name,
       gold: num(gold?.["total"]) ?? 0,
+      purchaseBase: gold?.["purchasable"]===false && m && num(m["specialRecipe"]) && data[String(m["specialRecipe"])] ? num(m["specialRecipe"]) : null,
+      automaticUpgrade: tags.includes("GoldPer") && gold?.["base"]===0,
       purchasable: gold?.["purchasable"] === true && d["inStore"] !== false && maps.includes(SUMMONERS_RIFT) && id < MODE_COPY_ID,
       maps,
       rank: rank.length ? rank : derivedRank(tags, from, into, d["consumed"] === true),
@@ -657,4 +663,11 @@ export function parseSummonerSpells(ddragonSummoner: unknown, mode = "CLASSIC"):
       modes: arr(s["modes"]).filter((m): m is string => typeof m === "string"),
     };
   }).filter((s): s is SummonerSpellFacts => s !== null && s.modes.includes(mode)).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** A shop-completed item can still have a verified automatic transformation.
+ * Unknown successors stay excluded rather than being assumed automatic. */
+export function isCompletedPurchase(item: ItemFacts, catalog: ReadonlyMap<number, ItemFacts>): boolean {
+  return item.purchasable && !item.automaticUpgrade && item.rank.includes("LEGENDARY") &&
+    item.into.every(id => { const next = catalog.get(id); return next !== undefined && !next.purchasable && next.purchaseBase === item.id; });
 }

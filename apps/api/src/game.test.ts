@@ -25,7 +25,7 @@ async function call(path: string, init: RequestInit & { cookie?: string } = {}) 
 }
 
 async function player(name: string) {
-  const { res } = await call("/auth/dev-login", { method: "POST", body: JSON.stringify({ displayName: name }) });
+  const { res } = await call("/auth/dev-login", { method: "POST", body: JSON.stringify({ token: "a".repeat(64), displayName: name }) });
   const cookie = res.headers.get("set-cookie")!.split(";")[0]!;
   const { body } = await call("/accounts", { method: "POST", cookie, body: JSON.stringify({ gameName: name, tagLine: "EUW", platform: "euw1" }) });
   await ctx.sync.start(body.account.id);
@@ -100,7 +100,7 @@ describe("scouting", () => {
     };
     const knowledge = await bootKnowledge(database.db, syntheticKnowledge());
     const app = createApp({ cfg: loadConfig({ NODE_ENV: "test" }), db: database.db, source, knowledge, aiProviders: [] });
-    const login = await app.app.request("/api/auth/dev-login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayName: "RankScout" }) });
+    const login = await app.app.request("/api/auth/dev-login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: "a".repeat(64), displayName: "RankScout" }) });
     const cookie = login.headers.get("set-cookie")!.split(";")[0]!;
     const acc = await app.app.request("/api/accounts", { method: "POST", headers: { "Content-Type": "application/json", Cookie: cookie }, body: JSON.stringify({ gameName: "RankScout", tagLine: "EUW", platform: "euw1" }) });
     await app.sync.start(((await acc.json()) as any).account.id);
@@ -135,7 +135,7 @@ describe("scouting with several accounts", () => {
       const res = await app.app.request(`/api${path}`, { ...init, headers });
       return (await res.json()) as any;
     };
-    const login = await app.app.request("/api/auth/dev-login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayName: "MultiScout" }) });
+    const login = await app.app.request("/api/auth/dev-login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: "a".repeat(64), displayName: "MultiScout" }) });
     const cookie = login.headers.get("set-cookie")!.split(";")[0]!;
     const a = await req("/accounts", { method: "POST", cookie, body: JSON.stringify({ gameName: "MainAcc", tagLine: "EUW", platform: "euw1" }) });
     const b = await req("/accounts", { method: "POST", cookie, body: JSON.stringify({ gameName: "SmurfAcc", tagLine: "EUW", platform: "euw1" }) });
