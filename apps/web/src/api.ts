@@ -39,7 +39,7 @@ export interface Preferences {
 }
 
 export interface Me {
-  user: { id: string; displayName: string; username?: string | null; hasPassword?: boolean };
+  user: { id: string; displayName: string; username?: string | null; hasPassword?: boolean; devLoginBound?: boolean };
   accounts: Account[];
   preferences: Preferences;
 }
@@ -577,6 +577,7 @@ export const api = {
   assets: () => request<GameAssets>("/assets"),
   me: () => request<Me>("/me"),
   devLogin: (displayName: string) => request<{ user: Me["user"] }>("/auth/dev-login", { method: "POST", body: JSON.stringify({ displayName, token:devLoginToken() }) }),
+  bindDevToken: () => request<{ ok: true }>("/me/dev-token", { method: "POST", body: JSON.stringify({ token:devLoginToken() }) }),
   register: (username: string, password: string) => request<{ user: Me["user"] }>("/auth/register", { method: "POST", body: JSON.stringify({ username, password }) }),
   signIn: (username: string, password: string) => request<{ user: Me["user"] }>("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
   setCredentials: (username: string, password: string, currentPassword?: string) =>
