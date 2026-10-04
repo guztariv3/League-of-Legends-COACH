@@ -12,6 +12,7 @@ import { patchFromVersion } from "@coach/domain";
 import { challengeTitle, evaluateChallenge, type ChallengeKind, type GoalMetric } from "@coach/insights";
 import { and, asc, desc, eq, gt, inArray, isNull } from "drizzle-orm";
 import { Hono, type Context } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { z } from "zod";
 import { hashToken, type AuthVars } from "./auth.js";
 import { AttemptLimiter, clientIp } from "./limits.js";
@@ -125,9 +126,13 @@ export function desktopDeviceRoutes(deps: { db: Db; source: MatchSource; knowled
   });
 
   /** The device behind a bearer token, or null. Also records when it was last used. */
+  const deviceRate = new AttemptLimiter(600, 60_000);
   const deviceFor = async (c: Context) => {
     const bearer = c.req.header("Authorization")?.match(/^Bearer ([A-Za-z0-9_-]{20,})$/)?.[1];
     if (!bearer) return null;
+    if (!deviceRate.allow(hashToken(bearer))) throw new HTTPException(429, {
+      res: new Response(JSON.stringify({ error: "rate_limited" }), { status: 429, headers: { "Content-Type": "application/json", "Retry-After": "60" } }),
+    });
     const [device] = await db.select().from(schema.deviceLinks)
       .where(and(eq(schema.deviceLinks.tokenHash, hashToken(bearer)), isNull(schema.deviceLinks.revokedAt)));
     if (!device) return null;

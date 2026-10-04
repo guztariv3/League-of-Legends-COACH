@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChampionIcon } from "../assets";
 import { RivalCard } from "../components/RivalCard";
 import { api, type DraftAnalysis, type DraftPoint, type GamePlan, type PlanLine, type ScoutResult } from "../api";
@@ -155,14 +155,16 @@ function ManualDraft() {
   const [opponent, setOpponent] = useState("");
   const [allies, setAllies] = useState<string[]>(["", "", "", ""]);
   const [enemies, setEnemies] = useState<string[]>(["", "", "", "", ""]);
-  const [result, setResult] = useState<{ data?: DraftAnalysis; error?: unknown }>({});
+  const [result, setResult] = useState<{ data?: DraftAnalysis; error?: unknown; loading?: boolean }>({});
+  const requestId = useRef(0);
+  useEffect(() => () => { requestId.current++; }, []);
 
   if (!champs.data) return champs.error ? <ErrorNotice error={champs.error} /> : <Loading />;
   const options = [...champs.data.champions].sort((a, b) => a.name.localeCompare(b.name));
   const select = (id: string, label: string, value: string, onChange: (v: string) => void) => (
     <div className="field" key={id}>
       <label htmlFor={id}>{label}</label>
-      <select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
+      <select id={id} value={value} onChange={(e) => { requestId.current++; setResult({}); onChange(e.target.value); }}>
         <option value="">—</option>
         {options.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
       </select>
@@ -178,9 +180,12 @@ function ManualDraft() {
         onSubmit={async (e) => {
           e.preventDefault();
           if (!me) return;
+          const id = ++requestId.current;
+          setResult({ loading: true });
           try {
-            setResult({ data: await api.draft({ myChampion: me, allies: clean(allies), enemies: clean(enemies), laneOpponent: opponent || undefined }) });
-          } catch (error) { setResult({ error }); }
+            const data = await api.draft({ myChampion: me, allies: clean(allies), enemies: clean(enemies), laneOpponent: opponent || undefined });
+            if (id === requestId.current) setResult({ data });
+          } catch (error) { if (id === requestId.current) setResult({ error }); }
         }}
       >
         <div className="row">
@@ -196,7 +201,7 @@ function ManualDraft() {
             {enemies.map((v, i) => select(`draft-enemy-${i}`, `Enemy ${i + 1}`, v, (x) => setEnemies(enemies.map((a, j) => (j === i ? x : a)))))}
           </div>
         </details>
-        <div><button className="btn btn-primary" disabled={!me}>Analyze</button></div>
+        <div><button className="btn btn-primary" disabled={!me || result.loading}>{result.loading ? "Analyzing…" : "Analyze"}</button></div>
       </form>
       {result.error ? <ErrorNotice error={result.error} /> : null}
       {result.data?.plan && <GamePlanCard plan={result.data.plan} />}

@@ -72,9 +72,6 @@ export function personalRoutes({ db, knowledge, services, wiki }: { db: Db; sour
     }).safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) return c.json({ error: "invalid_body" }, 400);
     const userId = c.get("userId");
-    if ((await services.activeGoals(userId)).length >= MAX_ACTIVE_GOALS) {
-      return c.json({ error: "too_many_goals", message: `You can have at most ${MAX_ACTIVE_GOALS} active goals at a time.` }, 409);
-    }
     const { analyses } = await services.profileAnalyses(userId);
     let target = parsed.data.target;
     let baselineRate: number;
@@ -86,9 +83,18 @@ export function personalRoutes({ db, knowledge, services, wiki }: { db: Db; sour
     } else {
       baselineRate = successRate({ metric: parsed.data.metric, target }, analyses).rate;
     }
-    const [goal] = await db.insert(schema.goals).values({
+    const goal = await db.transaction(async tx => {
+      const [owner] = await tx.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.id, userId)).for("update");
+      if (!owner) return null;
+      const active = await tx.select({ id: schema.goals.id }).from(schema.goals)
+        .where(and(eq(schema.goals.userId, userId), eq(schema.goals.status, "active")));
+      if (active.length >= MAX_ACTIVE_GOALS) return null;
+      const [created] = await tx.insert(schema.goals).values({
       userId, metric: parsed.data.metric, target, baselineRate, status: "active", source: parsed.data.source, note: parsed.data.note ?? null,
     }).returning();
+      return created;
+    });
+    if (!goal) return c.json({ error: "too_many_goals", message: `You can have at most ${MAX_ACTIVE_GOALS} active goals at a time.` }, 409);
     if (parsed.data.source === "coach") {
       await services.logDecision({
         userId, kind: "goal_suggestion", ref: goal!.id, title: describeTarget({ metric: parsed.data.metric, target }),

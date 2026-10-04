@@ -84,6 +84,6 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Exercise real PostgreSQL transactions and read-only preview
-        run: pnpm test apps/api/src/stats/backfill.test.ts --maxWorkers=1
+        run: pnpm test apps/api/src/stats/backfill.test.ts apps/api/src/hardening.test.ts --maxWorkers=1
         env:
           BACKFILL_TEST_DATABASE_URL: postgresql://postgres:isolated-ci-test@127.0.0.1:5432/postgres
