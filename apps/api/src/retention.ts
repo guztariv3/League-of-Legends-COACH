@@ -74,11 +74,16 @@ export async function forgetPlayers(db: Db, puuids: string[]): Promise<void> {
 }
 
 /** Only the deleted account's captured match IDs are eligible. Run in the same
- * transaction as deletion; retain data still used by another linked account. */
+ * transaction as deletion; retain data still used by another linked account.
+ * Two deletions sharing a match would each still see the other's uncommitted link
+ * and both keep it, so the matches are locked first (always in the same order, so
+ * concurrent deletions cannot deadlock): the second waits for the first to commit
+ * and then sees what is really left. */
 export async function purgeDeletedMatches(db:Db,matchIds:string[]):Promise<void>{
-  const ids=[...new Set(matchIds)];
+  const ids=[...new Set(matchIds)].sort();
   for(let offset=0;offset<ids.length;offset+=500){
     const list=sql.join(ids.slice(offset,offset+500).map(id=>sql`${id}`),sql`, `);
+    await db.execute(sql`SELECT match_id FROM raw_matches WHERE match_id IN (${list}) ORDER BY match_id FOR UPDATE`);
     await db.execute(sql`DELETE FROM match_analyses ma WHERE ma.match_id IN (${list})
       AND NOT EXISTS (SELECT 1 FROM account_matches am WHERE am.match_id=ma.match_id)
       AND NOT EXISTS (SELECT 1 FROM riot_accounts ra WHERE ra.puuid=ma.puuid)`);

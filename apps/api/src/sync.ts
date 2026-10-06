@@ -28,6 +28,8 @@ export class SyncService {
   private readonly running = new Map<string, Promise<void>>();
   private readonly progress = new Map<string, SyncProgress>();
   private readonly deleting = new Map<string,number>();
+  /** Background re-analysis (startup) writes analyses too, so deletion waits for it as well. */
+  private readonly reanalyzing = new Map<string, Promise<void>>();
 
   /** Let in-flight writes finish before deletion, and block new local jobs until
    * the deletion transaction commits. A process restart has no jobs to await. */
@@ -35,7 +37,7 @@ export class SyncService {
     const ids=[...new Set(accountIds)];
     for(const id of ids)this.deleting.set(id,(this.deleting.get(id)??0)+1);
     try {
-      await Promise.all(ids.map(id=>this.running.get(id)));
+      await Promise.all(ids.flatMap(id=>[this.running.get(id),this.reanalyzing.get(id)]));
       return await operation();
     } finally {
       for(const id of ids){const n=this.deleting.get(id)!-1;if(n)this.deleting.set(id,n);else this.deleting.delete(id);}
@@ -168,12 +170,22 @@ export class SyncService {
    */
   async reanalyzeAll(): Promise<number> {
     let done = 0;
-    for (const account of await this.db.select().from(schema.riotAccounts)) {
+    for (const { id } of await this.db.select({ id: schema.riotAccounts.id }).from(schema.riotAccounts)) {
+      // Registered before the first await, so a deletion either sees it or blocks it.
+      if (this.deleting.has(id)) continue;
+      const job = (async () => {
+        // The list may be stale: an account deleted since then must not be re-analysed.
+        const [account] = await this.db.select().from(schema.riotAccounts).where(eq(schema.riotAccounts.id, id));
+        if (account) await this.reanalyze(account);
+        return Boolean(account);
+      })();
+      this.reanalyzing.set(id, job.then(() => {}, () => {}));
       try {
-        await this.reanalyze(account);
-        done++;
+        if (await job) done++;
       } catch (err) {
-        console.error(`[sync] re-analysis failed for ${account.id}:`, err);
+        console.error(`[sync] re-analysis failed for ${id}:`, err);
+      } finally {
+        this.reanalyzing.delete(id);
       }
     }
     return done;

@@ -3,6 +3,7 @@ import {generateHistory} from '@coach/synthetic';
 import {eq} from 'drizzle-orm';
 import {openDatabase,schema,type Database} from './db/index.js';
 import {SyncService,MAX_INCREMENTAL} from './sync.js';
+import {forgetPlayers,purgeDeletedMatches} from './retention.js';
 import type {MatchSource} from './sources.js';
 let database:Database;
 beforeAll(async()=>{database=await openDatabase();},30000);
@@ -67,4 +68,41 @@ it('waits for active writes before deleting and blocks a new sync during deletio
  });
  await Promise.resolve();expect(removed).toBe(false);release();await Promise.all([running,deletion]);
  expect(removed).toBe(true);expect(await f.row()).toBeUndefined();
+},30000);
+it('startup reanalysis waits for deletion and never recreates a deleted player analyses',async()=>{
+ const f=await fixture('reanalysis-delete',1);
+ const sync=new SyncService(database.db,f.source);
+ await sync.start(f.account.id);
+ const [matchId]=await f.linked();
+ // Another account keeps the raw match, so the foreign key would accept a late analysis.
+ const [other]=await database.db.insert(schema.users).values({displayName:'reanalysis-keeper'}).returning();
+ const [keeper]=await database.db.insert(schema.riotAccounts).values({userId:other!.id,puuid:'reanalysis-keeper',gameName:'keeper',tagLine:'TEST',platform:'euw1',source:'synthetic'}).returning();
+ await database.db.insert(schema.accountMatches).values({accountId:keeper!.id,matchId:matchId!,startedAt:new Date(f.initial)});
+ const analyses=async()=>database.db.select().from(schema.matchAnalyses).where(eq(schema.matchAnalyses.puuid,'reanalysis-delete'));
+ // An analysis version bump leaves this player's current analysis missing at startup.
+ await database.db.delete(schema.matchAnalyses).where(eq(schema.matchAnalyses.puuid,'reanalysis-delete'));
+ let release!:()=>void;const gate=new Promise<void>(r=>{release=r;});
+ let entered!:()=>void;const started=new Promise<void>(r=>{entered=r;});
+ const proto=SyncService.prototype as unknown as {reanalyze:(a:{id:string})=>Promise<void>};
+ const original=proto.reanalyze;
+ vi.spyOn(proto,'reanalyze').mockImplementation(async function(this:unknown,account){
+  if(account.id===f.account.id){entered();await gate;}
+  return original.call(this,account);
+ });
+ const startup=sync.reanalyzeAll();await started;
+ let removed=false;
+ const deletion=sync.withDeletion([f.account.id],()=>database.db.transaction(async tx=>{
+  await tx.delete(schema.riotAccounts).where(eq(schema.riotAccounts.id,f.account.id));
+  await forgetPlayers(tx,['reanalysis-delete']);
+  await purgeDeletedMatches(tx,[matchId!]);
+  removed=true;
+ }));
+ for(let i=0;i<20;i++)await new Promise(r=>setTimeout(r,5));
+ expect(removed).toBe(false);
+ release();await Promise.all([startup,deletion]);
+ expect(removed).toBe(true);
+ expect(await analyses()).toHaveLength(0);
+ // A reanalysis started after deletion skips the account entirely.
+ await sync.reanalyzeAll();
+ expect(await analyses()).toHaveLength(0);
 },30000);
